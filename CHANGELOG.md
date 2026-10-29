@@ -14,7 +14,7 @@ All notable changes to this project are documented here. The format follows
   lower band and read as a new hit once the cooldown ran out. The kick now re-arms only after the
   whole range has settled. Also in the demo.
 
-## [0.4.0] - 2026-10-29
+## 0.4.0 - 2026-10-29
 
 ### Added
 
@@ -33,7 +33,7 @@ All notable changes to this project are documented here. The format follows
   so a note hitting one band was drowned out. Each band is now checked on its own and any band
   jumping above its recent level fires the kick.
 
-## [0.3.0] - 2026-10-29
+## 0.3.0 - 2026-10-29
 
 ### Added
 
@@ -46,14 +46,14 @@ All notable changes to this project are documented here. The format follows
   watched until a restart. Removing a key or deleting the file now resets to the defaults right
   away instead of keeping the old values, and an invalid file keeps the last good settings.
 
-## [0.2.1] - 2026-10-29
+## 0.2.1 - 2026-10-29
 
 ### Fixed
 
 - After running for hours the ribbons got jerky and changed shape: the ever-growing animation
   time and wave phase lost precision as 32-bit floats in the shader. Both now wrap seamlessly.
 
-## [0.2.0] - 2026-10-29
+## 0.2.0 - 2026-10-29
 
 ### Added
 
@@ -72,7 +72,7 @@ All notable changes to this project are documented here. The format follows
 - Demo: the geometry sliders started at 48/6/14 instead of the real defaults
   (`barThickness` 40, `spacing` 4, `radius` 12).
 
-## [0.1.0] - 2026-10-29
+## 0.1.0 - 2026-10-29
 
 First release.
 
@@ -101,9 +101,4 @@ First release.
   `assets/generate.py`.
 
 [Unreleased]: https://github.com/dotMortis/dms-bar-visualizer/compare/v0.4.1...HEAD
-[0.4.1]: https://github.com/dotMortis/dms-bar-visualizer/compare/v0.4.0...v0.4.1
-[0.4.0]: https://github.com/dotMortis/dms-bar-visualizer/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/dotMortis/dms-bar-visualizer/compare/v0.2.1...v0.3.0
-[0.2.1]: https://github.com/dotMortis/dms-bar-visualizer/compare/v0.2.0...v0.2.1
-[0.2.0]: https://github.com/dotMortis/dms-bar-visualizer/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/dotMortis/dms-bar-visualizer/releases/tag/v0.1.0
+[0.4.1]: https://github.com/dotMortis/dms-bar-visualizer/releases/tag/v0.4.1
