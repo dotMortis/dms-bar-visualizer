@@ -239,10 +239,10 @@ export function createKickDetector(settings) {
                     top[i] = values[i];
                     left[i] = false;
                 }
-                // Power grows with the jump against the peak before this hit, from 0.5 to 1 for a
-                // jump as big as that peak: a hit that rises above the recent kicks gets full power,
-                // so accents stand out at any volume.
-                return { power: 0.5 + 0.5 * Math.min(1, rise / peak) };
+                // Power grows with the rise that fired, against the peak before this hit, from 0.5
+                // to 1 for a rise as big as that peak: a hit that rises above the recent kicks gets
+                // full power, so accents stand out at any volume.
+                return { power: 0.5 + 0.5 * Math.min(1, onset / peak) };
             }
             return null;
         },
