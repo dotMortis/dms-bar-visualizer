@@ -1,4 +1,4 @@
-// The replay's scoring rules (spec #1, "Scoring"), as worked examples.
+// The replay's scoring rules, as worked examples.
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 

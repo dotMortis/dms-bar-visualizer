@@ -5,15 +5,9 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import { CONFIGS, FIXTURES, SCENARIOS, atFrameRate, replay } from "./replay.mjs";
+
 // One cava frame: the fixtures' frames are 16.4 to 16.9 ms apart.
 const FRAME = 0.017;
-
-// Kicks allowed to fire at 120 and 144 Hz but not at 60 fps: none. Until #6 there were three at
-// the sensitive config (tones, zoo2, zoo3): the detector re-armed once a frame's jump fell under
-// half the threshold, and while a frame was repeated its jump kept shrinking towards the running
-// average, from 0.101-0.104 at 60 fps to 0.097-0.100 on the repeat, against 0.1. A repeated frame
-// is no longer measured again.
-const EXTRA = {};
 
 // The kicks with no kick of the other list within a frame.
 function unmatched(kicks, others) {
@@ -31,10 +25,9 @@ for (const fps of [120, 144]) {
                     const at60 = replay(frames, settings).map(k => k.time);
                     const atFps = replay(atFrameRate(frames, fps), settings).map(k => k.time);
                     const missing = unmatched(at60, atFps), extra = unmatched(atFps, at60);
-                    const allowed = EXTRA[config]?.[scenario] ?? 0;
                     assert.deepEqual(missing, [], `kicks at 60 fps that don't fire at ${fps} Hz: ${at(missing)} s`);
-                    assert.ok(extra.length <= allowed, `kicks only at ${fps} Hz: ${at(extra)} s (${allowed} allowed)`);
-                    assert.equal(atFps.length, at60.length + extra.length, "kicks at 60 fps fire more than once");
+                    assert.deepEqual(extra, [], `kicks only at ${fps} Hz: ${at(extra)} s`);
+                    assert.equal(atFps.length, at60.length, "kicks at 60 fps fire more than once");
                 });
             }
         });
