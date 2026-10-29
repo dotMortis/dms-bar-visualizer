@@ -1,7 +1,5 @@
-// Kick detection, shared by the visualizer (shell.qml) and the demo (index.html) so the two can't
-// drift. A plain ECMAScript module with no Quickshell or browser dependencies: QML imports it as a
-// JavaScript module, the demo as a module script, and node loads it as is.
-// It lives in docs/ because GitHub Pages publishes only this directory.
+// Kick detection, shared by the visualizer (shell.qml) and the demo (index.html) so they can't drift.
+// Plain ECMAScript that QML, browsers and node all load. In docs/, as GitHub Pages serves only that.
 
 // cava's layout, which shell.qml configures it with: 32 bands from 30 Hz to 14 kHz, bass first.
 export const BANDS = 32;
@@ -24,9 +22,8 @@ const QUIET = 0.15;
 // One kick per hit: a hit has ended once the range's level has stayed under half its top for this
 // many seconds. A short dip isn't the end: a ringing kick beats against a bass note, 808 tails cancel.
 const SETTLE = 0.2;
-// A kick's pitch falls as it rings, so a new hit can come in above where the last one rings, in the
-// bands it has left: fallen to this fraction of their top. Not half: a 16th note before the beat
-// leaves the bands between at 0.5-0.55 of their top when the beat comes in.
+// A new hit can come in above the band the last one rings in, in bands it has left: fallen to this
+// fraction of their top. Not half: a 16th note before the beat leaves them at 0.5-0.55.
 const FALLEN_TO = 0.6;
 
 // Where cava 1.0 puts its bands (cava_init in cavacore.c): band n adds up the FFT bins first..last
@@ -91,13 +88,11 @@ export function bandAt(hz) {
     return best;
 }
 
-// A detector for the kick settings of config.json: kickThreshold, kickLowHz, kickHighHz and
-// kickCooldown, plus speed (1 if left out), which scales kickCooldown like the rest of the
-// animation. Feed it every frame with push(values, time), at any frame rate: values are the 32 bands
-// in 0..1, time is when the frame came, in real seconds (the wall clock when cava's line arrives in
-// the visualizer, the page clock in the demo). A clock stepping back counts as no time passing.
-// push returns { power } (0.5..1, by how hard the hit is next to the recent kicks) when a kick
-// fires, otherwise null.
+// A detector for config.json's kickThreshold, kickLowHz, kickHighHz and kickCooldown, and speed (1 if
+// left out), which scales kickCooldown. push(values, time) every frame, at any frame rate: the 32 bands
+// in 0..1 and when they came, in real seconds (the wall clock in the visualizer, the page clock in the
+// demo; a step back counts as none). It returns { power } (0.5..1, by how hard the hit is next to the
+// recent kicks) when a kick fires, otherwise null.
 export function createKickDetector(settings) {
     const slow = new Array(BANDS).fill(0);  // each band's running average
     const previous = new Array(BANDS).fill(0);  // the last frame's values, shown until this one
@@ -132,9 +127,8 @@ export function createKickDetector(settings) {
         return hit.quietSince !== null && clock - hit.quietSince >= SETTLE;
     }
 
-    // The largest rise of a new hit while the last one rings, and its band. It comes in above the
-    // band the last one rings in, where a band it has left rises above its average and its low.
-    // A bass note beating against the ringing kick, or its tail, rises at or below that band.
+    // The largest rise of a new hit while the last one rings, and its band: one the last hit has left,
+    // above where it rings (a bass note beating against it, or its tail, rises at or below that).
     function newHit(values, scale, rise, band) {
         // The hit runs down to the band rising most, if by more than a hint.
         if (rise > QUIET * scale)
