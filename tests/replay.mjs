@@ -3,9 +3,7 @@
 // reporting or checking the result against a budget.
 import fs from "node:fs";
 
-import { createKickDetector } from "../docs/kick.mjs";
-
-const BANDS = 32;
+import { BANDS, createKickDetector } from "../docs/kick.mjs";
 
 // The settings the replay tests hold the detector to: the defaults, and a sensitive config.
 export const CONFIGS = {

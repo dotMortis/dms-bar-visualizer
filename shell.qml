@@ -75,10 +75,10 @@ ShellRoot {
     readonly property real bassStretch: config.bassStretch
     // ----------------------------------------------------------------------
 
-    // docs/kick.mjs assumes these three when it maps kickLowHz/kickHighHz to bands.
-    readonly property int bandCount: 32
-    readonly property int lowCutoff: 30      // cava's frequency range, split into log-spaced bands
-    readonly property int highCutoff: 14000
+    // cava's layout, from docs/kick.mjs, which maps kickLowHz/kickHighHz to these bands.
+    readonly property int bandCount: Kick.BANDS
+    readonly property int lowCutoff: Kick.LOW_HZ      // cava's frequency range, split into log-spaced bands
+    readonly property int highCutoff: Kick.HIGH_HZ
     property var values: new Array(bandCount).fill(0)
     property real bass: 0
     property real mid: 0

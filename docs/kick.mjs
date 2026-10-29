@@ -3,11 +3,11 @@
 // JavaScript module, the demo as a module script, and node loads it as is.
 // It lives in docs/ because GitHub Pages publishes only this directory.
 
-// cava's bands, as configured in shell.qml: 32 bands from 30 Hz to 14 kHz, bass first. Its pulse
-// input samples at 44.1 kHz.
-const BANDS = 32;
-const LOW_HZ = 30;
-const HIGH_HZ = 14000;
+// cava's layout: 32 bands from 30 Hz to 14 kHz, bass first. shell.qml configures cava with these;
+// its pulse input samples at 44.1 kHz.
+export const BANDS = 32;
+export const LOW_HZ = 30;
+export const HIGH_HZ = 14000;
 const RATE = 44100;
 
 // Smoothing is defined per second and applied with the frames' timestamps, so the detector does

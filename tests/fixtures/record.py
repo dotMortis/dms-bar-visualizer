@@ -42,7 +42,8 @@ import numpy as np
 OUT = Path(__file__).resolve().parent
 SR = 44100
 
-# shell.qml's cava config, with the input swapped from pulse to a fifo. Keep the two in sync.
+# shell.qml's cava config, with the input swapped from pulse to a fifo. Keep the two in sync, and the
+# layout (bars, cutoffs, sample rate) with docs/kick.mjs.
 CAVA_CONF = """[general]
 framerate=60
 bars=32

@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { createKickDetector } from "../docs/kick.mjs";
+import { BANDS, createKickDetector } from "../docs/kick.mjs";
 import { CONFIGS } from "./replay.mjs";
 
 const FPS = 60;
@@ -11,7 +11,7 @@ const FPS = 60;
 // Two seconds at 60 fps: silence, and a hit in band 2 at 1 s and again at 1.5 s, each dying down
 // within 0.1 s. Both land in the same band, so the second one only fires once the first has ended.
 const HITS = Array.from({ length: 2 * FPS }, (_, n) => {
-    const values = new Array(32).fill(0);
+    const values = new Array(BANDS).fill(0);
     for (const at of [1, 1.5]) {
         if (n >= at * FPS)
             values[2] = 0.8 * Math.exp(-(n / FPS - at) / 0.04);

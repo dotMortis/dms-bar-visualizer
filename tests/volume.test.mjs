@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
+import { BANDS } from "../docs/kick.mjs";
 import { CONFIGS, FIXTURES, SCENARIOS, TRACKS, replay, score } from "./replay.mjs";
 
 // The frames with every band scaled by gain, as if cava showed the music that much quieter.
@@ -109,7 +110,7 @@ describe("kick power", () => {
             // in, in band 4, above where the last one rings. Band 0, below it, can't fire a kick:
             // whether it jumps at the same time or not, the kick is the same.
             const hits = band0 => Array.from({ length: 1.5 * 60 }, (_, n) => {
-                const time = n / 60, values = new Array(32).fill(0);
+                const time = n / 60, values = new Array(BANDS).fill(0);
                 if (time >= 1) {
                     values[1] = 0.8;
                     for (let i = 2; i <= 6; i++)
