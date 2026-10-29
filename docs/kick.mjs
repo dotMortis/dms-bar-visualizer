@@ -194,9 +194,9 @@ export function createKickDetector(settings) {
             // The rise that can fire a kick, and the band it is in: once the last hit has ended, any
             // band's. Until then, only a band that hit has left, above the band it has run down to (the
             // band rising most, if that is more than a hint of a rise). There, a new hit has to rise
-            // above the band's average and above its lowest since the hit left it. A bass note beating
-            // against the ringing kick, or the kick's tail moving into a lower band, rises at or below
-            // that band.
+            // above the band's average and above its lowest since the hit left it, by at least QUIET of
+            // the level at any kickThreshold. A bass note beating against the ringing kick, or the
+            // kick's tail moving into a lower band, rises at or below that band, or by less.
             let onset = armed ? rise : 0, at = band;
             if (!armed) {
                 if (rise > QUIET * scale)
@@ -212,7 +212,7 @@ export function createKickDetector(settings) {
                     if (left[i]) {
                         low[i] = Math.min(low[i], values[i]);
                         const own = Math.min(rises[i], values[i] - low[i]);
-                        if (own > onset) {
+                        if (own > onset && own > QUIET * scale) {
                             onset = own;
                             at = i;
                         }

@@ -31,9 +31,8 @@ describe("one kick per hit", () => {
         });
     }
 
-    // From the top of the demo's slider down to 0.15. Below that, bass notes start to fire as well
-    // (strays), and one that comes just before a kick drum counts towards it.
-    const THRESHOLDS = [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.35, 0.3, 0.25, 0.2, 0.15];
+    // From the top of the demo's slider down to its bottom, every step below 0.15.
+    const THRESHOLDS = [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.35, 0.3, 0.25, 0.2, 0.15, 0.14, 0.13, 0.12, 0.11, 0.1, 0.09];
 
     for (const kickCooldown of [0.1, 0.12]) {
         test(`lowering kickThreshold fires more hits and none twice (kickCooldown ${kickCooldown})`, () => {
