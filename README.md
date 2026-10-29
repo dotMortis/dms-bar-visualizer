@@ -29,7 +29,7 @@ It runs as its own small [Quickshell](https://quickshell.org) config. DMS itself
 - **Layering:** a click-through Wayland layer surface on the `bottom` layer, sized and inset exactly like the DankBar. The DMS bar draws on the `top` layer, so with a transparent bar background the visualizer shows through.
 - **Audio:** [cava](https://github.com/karlstav/cava) provides 32 frequency bands at 60 fps with light smoothing, so transients punch.
 - **Follows the active player:** it tracks the MPRIS player DankBar shows (same selection rules) and captures the monitor of whichever output *that* player's stream plays to. Spotify on Bluetooth while the default output is HDMI just works. With no player, it falls back to the newest playing stream, then the default output.
-- **Beat detection:** any band in the kick range (`kickLowHz` to `kickHighHz`) jumping above its own recent level fires a kick. The jump's size scales the shockwave and particles, and up to 8 kicks play on top of each other instead of cutting each other off.
+- **Beat detection:** any band in the kick range (`kickLowHz` to `kickHighHz`) jumping above its own recent level fires a kick. The jump is measured against the range's recent peak, not on cava's output scale, which cava's auto-sensitivity keeps rescaling: kicks keep firing after a loud passage or a change in volume, and `kickThreshold` means the same at any volume. How hard a hit is next to the recent kicks scales its shockwave and particles, so accents stand out. Up to 8 kicks play on top of each other instead of cutting each other off.
 - **Matches DMS's maximize detection:** with a maximized window on a monitor's active workspace, the visualizer drops its gap and rounding together with the bar.
 
 ## Requirements
@@ -112,7 +112,7 @@ Settings live in `~/.config/bar-visualizer/config.json`. The visualizer creates 
 | `followMaximize` | `true` | Mirror DMS's *maximize detection* |
 | `intensity` | `1.0` | Overall brightness |
 | `speed` | `1.0` | Animation speed |
-| `kickThreshold` | `0.4` | How far (0 to 1) a band must jump above its recent level to fire a kick. Lower = more kicks |
+| `kickThreshold` | `0.4` | How far a band must jump above its recent level to fire a kick, as a fraction (0 to 1) of the kick range's recent peak. Lower = more kicks |
 | `kickDecay` | `6.0` | Higher = shorter impact |
 | `kickLowHz` | `30` | Bottom of the frequency range that fires the kick (shockwave and particles) |
 | `kickHighHz` | `90` | Top of that range. Raise both to hit on snares or claps instead of the kick drum |
@@ -157,7 +157,7 @@ A replay suite holds the kick detector to account. It plays real cava output, re
 node --test
 ```
 
-It prints those numbers per track for the default and a sensitive kick setting. A sine sweep recorded the same way checks that `kickLowHz` and `kickHighHz` select the bands cava puts those frequencies in. `tests/fixtures/record.py` synthesizes and records the tracks; its header says how to re-record them or add one (needs cava, numpy and real time).
+It prints those numbers per track for the default and a sensitive kick setting. Other tests check that the kicks and their power don't depend on the volume, and that kicks come back soon after a 12 dB drop and after a cava restart. A sine sweep recorded the same way checks that `kickLowHz` and `kickHighHz` select the bands cava puts those frequencies in. `tests/fixtures/record.py` synthesizes and records the tracks; its header says how to re-record them or add one (needs cava, numpy and real time).
 
 ## Changelog
 

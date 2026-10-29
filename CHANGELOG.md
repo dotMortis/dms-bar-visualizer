@@ -6,8 +6,24 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `kickThreshold` is now a fraction of the kick range's recent peak instead of a jump on cava's
+  0–1 output scale, so it means the same at any volume. The default stays 0.4. A value tuned
+  against the old detector, such as 0.2, means something else now: re-tune it, starting from the
+  default. Also in the demo, whose slider now runs from 0.05 to 0.9.
+- A kick's shockwave and particles now scale with how hard the hit is next to the recent kicks:
+  a hit above them gets full size, a steady beat a little less. At the default threshold, every
+  kick used to get full size. Also in the demo.
+
 ### Fixed
 
+- Kicks no longer go missing for many seconds at a time in steady music, most often after a louder
+  passage. cava's auto-sensitivity takes over 10 s to catch up after one, and kicks had to clear a
+  fixed jump on its output: in a test track that drops by 12 dB, all 23 kicks after the drop were
+  missed. Kicks now come back within about a second, and within 2 s after cava restarts. The
+  shockwave also lands sooner, since a kick no longer waits for a slow rise to clear that fixed
+  jump. Also in the demo.
 - `kickLowHz` / `kickHighHz` now select the bands cava actually puts those frequencies in. They
   were mapped on a plain log scale, which is up to one band off below 100 Hz: the default 30–90 Hz
   range left out the band 90 Hz lands in, so kicks pitched there fired late or not at all.
