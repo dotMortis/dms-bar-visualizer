@@ -1,12 +1,29 @@
-# dms-bar-visualizer
+<div align="center">
 
-A shader-based audio visualizer that lives **behind the top bar of [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell)** on Hyprland.
+<a href="https://dotmortis.github.io/dms-bar-visualizer/"><img src="assets/hero.svg" alt="Animated preview of dms-bar-visualizer: neon ribbons, shockwaves and sparks behind a top bar" width="100%"></a>
+
+<br>
+
+**A shader-based audio visualizer that lives behind the top bar of [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) on Hyprland.**
+
+[![Hyprland](https://img.shields.io/badge/Hyprland-89b4fa?style=for-the-badge&logo=hyprland&logoColor=11111b)](https://hyprland.org)
+[![Quickshell](https://img.shields.io/badge/Quickshell-cba6f7?style=for-the-badge)](https://quickshell.org)
+[![Catppuccin Mocha](https://img.shields.io/badge/Catppuccin-Mocha-b4befe?style=for-the-badge&labelColor=1e1e2e)](https://catppuccin.com)
+[![Live demo](https://img.shields.io/badge/Live_demo-WebGL-f5c2e7?style=for-the-badge&labelColor=1e1e2e)](https://dotmortis.github.io/dms-bar-visualizer/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-f5c2e7?style=for-the-badge&labelColor=1e1e2e)](LICENSE)
+
+</div>
 
 Neon ribbons shaped by the spectrum, waves pushed outward by the music's energy, and on every kick a chromatic shockwave plus a spray of streaking particles, all in Catppuccin Mocha lavender.
 
 It runs as its own small [Quickshell](https://quickshell.org) config. DMS itself isn't modified, so DMS updates can't break it.
 
+> [!NOTE]
+> The preview above is an SVG re-creation of `shaders/viz.frag` driven by a synthetic 120 bpm loop. For the real shader, try the **[live WebGL demo](https://dotmortis.github.io/dms-bar-visualizer/)**: it runs on a demo beat, a synth loop, your microphone or an audio file, with every tweakable on a slider.
+
 ## How it works
+
+<p align="center"><img src="assets/layers.svg" alt="Layer diagram: the transparent DankBar on the top layer, the visualizer on the bottom layer, the wallpaper below" width="720"></p>
 
 - **Layering:** a click-through Wayland layer surface on the `bottom` layer, sized and inset exactly like the DankBar. The DMS bar draws on the `top` layer, so with a transparent bar background the visualizer shows through.
 - **Audio:** [cava](https://github.com/karlstav/cava) provides 32 frequency bands at 60 fps with light smoothing, so transients punch.
@@ -64,7 +81,7 @@ All settings are at the top of `shell.qml` under `Tweakables`. Quickshell reload
 | `speed` | `1.0` | Animation speed |
 | `kickThreshold` | `0.10` | Lower = more kicks detected |
 | `kickDecay` | `6.0` | Higher = shorter impact |
-| `bassStretch` | `1.8` | Above 1 spreads the bass (centre) wider, so it isn't hidden under centre widgets |
+| `bassStretch` | `1.4` | Above 1 spreads the bass (centre) wider, so it isn't hidden under centre widgets |
 
 To find the right geometry, run `hyprctl layers`. The `dms:bar` surface height equals `barThickness + spacing`.
 
@@ -77,6 +94,12 @@ The look lives in `shaders/viz.frag`: palette, ribbons, shockwave and particles.
 ```
 
 To change colours, edit the `palette()` cycle and the `LAVENDER` / `MAUVE` / `PINK` / `BLUE` constants.
+
+### README animations and demo
+
+The SVGs in `assets/` are generated. After tweaking `assets/generate.py`, run `python3 assets/generate.py`.
+
+`docs/index.html` is the live demo (served by GitHub Pages). It carries a GLSL ES port of `shaders/viz.frag`, so mirror shader changes there.
 
 ## Limitations
 

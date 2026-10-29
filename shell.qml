@@ -23,7 +23,7 @@ ShellRoot {
     readonly property real speed: 1.0       // animation speed multiplier
     readonly property real kickThreshold: 0.10 // lower = more kicks detected
     readonly property real kickDecay: 6.0   // higher = shorter impact flashes
-    readonly property real bassStretch: 1.8 // >1 spreads bass (centre) wider; 1 = linear
+    readonly property real bassStretch: 1.4 // >1 spreads bass (centre) wider; 1 = linear
     // ----------------------------------------------------------------------
 
     readonly property int bandCount: 32
