@@ -10,8 +10,8 @@ All notable changes to this project are documented here. The format follows
 
 - The demo's kicks no longer depend on the display's refresh rate. On a 120 or 144 Hz display it
   fired on other beats than at 60 Hz, so settings tuned there didn't carry over. The detector's
-  smoothing now runs on real time instead of per frame. `kickCooldown` still scales with `speed`.
-  The visualizer's kicks don't change.
+  smoothing, and the demo's stand-in for cava, now run on real time instead of per frame.
+  `kickCooldown` still scales with `speed`. The visualizer's kicks don't change.
 
 ## [0.4.1] - 2026-10-29
 
