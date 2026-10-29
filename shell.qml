@@ -14,7 +14,7 @@ ShellRoot {
 
     // --- Tweakables -------------------------------------------------------
     // Defaults live in the JsonAdapter below; ~/.config/bar-visualizer/config.json overrides any
-    // of them by key and is re-read when it changes.
+    // of them by key and is re-read when it changes. If it's missing, it's created with the defaults.
     // Geometry must match the DMS bar. With a maximized window on a screen's active workspace,
     // DMS drops the spacing and rounding (its "maximize detection"); followMaximize mirrors that.
     FileView {
@@ -22,6 +22,10 @@ ShellRoot {
         watchChanges: true
         printErrors: false  // a missing file just means defaults
         onFileChanged: reload()
+        onLoadFailed: error => {
+            if (error == FileViewError.FileNotFound)
+                writeAdapter();
+        }
 
         JsonAdapter {
             id: config

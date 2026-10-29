@@ -94,7 +94,7 @@ curl -fsSL https://raw.githubusercontent.com/dotMortis/dms-bar-visualizer/main/i
 
 ## Configuration
 
-Put your settings in `~/.config/bar-visualizer/config.json`. List only the keys you want to change; everything else keeps its default. The visualizer picks up changes as soon as you save, no restart needed.
+Settings live in `~/.config/bar-visualizer/config.json`. The visualizer creates it with the defaults on first start (and again if you delete it, which resets everything). Keys you remove from it fall back to their default. The visualizer picks up changes as soon as you save, no restart needed.
 
 ```json
 {
