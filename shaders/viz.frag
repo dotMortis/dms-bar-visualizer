@@ -129,7 +129,7 @@ void main() {
 
     // --- Treble sparks -------------------------------------------------------
     vec2 cell = floor(vec2(p.x * 3.0, p.y * 3.0));
-    float r = hash(cell + floor(t * 12.0));
+    float r = hash(cell + mod(floor(t * 12.0), 256.0));   // keep the sin() in hash() small
     vec2 f = fract(vec2(p.x * 3.0, p.y * 3.0)) - 0.5;
     float spark = step(0.97 - ubuf.treble * 0.15, r) * smoothstep(0.18, 0.0, length(f));
     col += pal(r + t * 0.2, 0.6, 1.0) * spark * (0.4 + 1.6 * ubuf.treble);

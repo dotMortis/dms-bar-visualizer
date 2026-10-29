@@ -138,7 +138,9 @@ ShellRoot {
         running: true
         onTriggered: {
             root.time += frameTime * root.speed;
-            root.flow += frameTime * root.speed * (8 * root.bass + 4 * root.mid + 6 * root.kick);
+            // Wrapped so the shader's 32-bit floats keep their precision; the shader only uses
+            // flow times multiples of 1/20, so every ribbon is periodic in 40π and the wrap is seamless.
+            root.flow = (root.flow + frameTime * root.speed * (8 * root.bass + 4 * root.mid + 6 * root.kick)) % (40 * Math.PI);
             root.kick *= Math.exp(-frameTime * root.kickDecay);
         }
     }
@@ -261,7 +263,9 @@ exec cava -p ${root.confPath} < /dev/null`]
                 height: root.barThickness
                 fragmentShader: Qt.resolvedUrl("shaders/viz.frag.qsb")
 
-                property real time: root.time
+                // Wrapped for 32-bit precision. 1200 s keeps the hue cycles seamless (t*0.05, t*0.2);
+                // only the kick-only plasma haze and shake can jump at the wrap.
+                property real time: root.time % 1200
                 property real bass: root.bass
                 property real mid: root.mid
                 property real treble: root.treble
