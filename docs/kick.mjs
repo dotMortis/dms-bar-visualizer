@@ -108,14 +108,16 @@ function bandAt(hz) {
 // A detector for the kick settings of config.json: kickThreshold, kickLowHz, kickHighHz and
 // kickCooldown, plus speed (1 if left out), which scales kickCooldown like the rest of the
 // animation. Feed it every frame with push(values, time), at any frame rate: values are the 32 bands
-// in 0..1, time is when the frame came, in real seconds (cava's frame time in the visualizer, the
-// page clock in the demo). push returns { power } (0.5..1, by how hard the hit is next to the
-// recent kicks) when a kick fires, otherwise null.
+// in 0..1, time is when the frame came, in real seconds (the wall clock when cava's line arrives in
+// the visualizer, the page clock in the demo). A clock stepping back counts as no time passing.
+// push returns { power } (0.5..1, by how hard the hit is next to the recent kicks) when a kick
+// fires, otherwise null.
 export function createKickDetector(settings) {
     const slow = new Array(BANDS).fill(0);  // per-band running average for onsets
     const shown = new Array(BANDS).fill(0);  // the previous frame's values, shown until this one
     let threshold, cooldown, speed, from, to;  // from the settings, see configure()
     let lastFrame = null;  // the previous frame's time
+    let clock = 0;  // real seconds since the first frame, on which the detector measures time
     let animation = 0;  // the animation clock kickCooldown runs on: real seconds times speed
     let lastKick = -Infinity;  // on the animation clock
     let peak = PEAK_FLOOR;  // the kick range's recent peak level, slowly released
@@ -150,6 +152,7 @@ export function createKickDetector(settings) {
             // back counts as no time passing.
             const dt = lastFrame === null ? 0 : Math.max(0, time - lastFrame);
             lastFrame = time;
+            clock += dt;
             animation += dt * speed;
             const keep = AVERAGE_KEEP ** dt;
             // The kick range's peak level until this frame. Like the averages, it takes in the
@@ -188,14 +191,14 @@ export function createKickDetector(settings) {
             if (repeat)
                 return null;
             // One kick per hit. The last hit has ended once the range's level has stayed under half
-            // its top for SETTLE seconds. On a frame's timestamp, so the same at any frame rate.
+            // its top for SETTLE seconds. On the frames' clock, so the same at any frame rate.
             if (!armed) {
                 hitTop = Math.max(hitTop, level);
                 if (level >= hitTop / 2)
                     fallenSince = null;
                 else if (fallenSince === null)
-                    fallenSince = time;
-                armed = fallenSince !== null && time - fallenSince >= SETTLE;
+                    fallenSince = clock;
+                armed = fallenSince !== null && clock - fallenSince >= SETTLE;
             }
             // The rise that can fire a kick, and the band it is in: once the last hit has ended, that
             // of any band going up (one still above its average on the way down is the tail of
