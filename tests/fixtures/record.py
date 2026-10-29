@@ -227,6 +227,23 @@ for _seed in (1, 2, 3):
         lambda seed=_seed: zoo(seed))
 
 
+@scenario("tones", "a stepped sine sweep from 30 Hz to 960 Hz, 0.4 s per tone: which band cava puts each frequency in")
+def tones():
+    # Eighth-octave steps over the demo's kick range sliders, plus the four tones spec #1 measured.
+    # No kicks: the header's "tones" lists each tone's frequency, start and length for the band test.
+    freqs = sorted({round(30 * 2 ** (k / 8), 1) for k in range(41)} | {35.0, 40.0, 50.0, 90.0})
+    length, step = 0.4, 0.45
+    track = Track(1 + step * len(freqs) + 0.5)
+    t = np.arange(int(length * SR)) / SR
+    env = np.minimum(1, np.minimum(t, length - t) / 0.01)
+    track.info["tones"] = []
+    for n, hz in enumerate(freqs):
+        at = 1 + n * step
+        track.add(0.5 * np.sin(2 * np.pi * hz * t) * env, at)
+        track.info["tones"].append({"hz": hz, "at": round(at, 4), "length": length})
+    return track
+
+
 # --- Recording ---
 
 def record(name):

@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- `kickLowHz` / `kickHighHz` now select the bands cava actually puts those frequencies in. They
+  were mapped on a plain log scale, which is up to one band off below 100 Hz: the default 30–90 Hz
+  range left out the band 90 Hz lands in, so kicks pitched there fired late or not at all.
+  Also in the demo.
 - The demo's kicks no longer depend on the display's refresh rate. On a 120 or 144 Hz display it
   fired on other beats than at 60 Hz, so settings tuned there didn't carry over. The detector's
   smoothing, and the demo's stand-in for cava, now run on real time instead of per frame.
