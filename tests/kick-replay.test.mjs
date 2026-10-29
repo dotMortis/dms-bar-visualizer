@@ -4,12 +4,7 @@
 import assert from "node:assert/strict";
 import { after, describe, test } from "node:test";
 
-import { overBudget, readFixture, replay, report, score } from "./replay.mjs";
-
-const CONFIGS = {
-    defaults: { kickThreshold: 0.4, kickLowHz: 30, kickHighHz: 90, kickCooldown: 0.12 },
-    sensitive: { kickThreshold: 0.2, kickLowHz: 30, kickHighHz: 90, kickCooldown: 0.1 },
-};
+import { CONFIGS, FIXTURES, overBudget, replay, report, score } from "./replay.mjs";
 
 // Measured result per track, not a target: #7's detector (jumps measured against the kick range's
 // recent peak, one kick per hit) on the bands cava puts 30-90 Hz in, replayed on these recordings on
@@ -63,7 +58,7 @@ for (const [config, settings] of Object.entries(CONFIGS)) {
         const rows = [];
         for (const [scenario, budget] of Object.entries(BUDGETS[config])) {
             test(`${scenario} stays within its budget`, () => {
-                const fixture = readFixture(scenario);
+                const fixture = FIXTURES[scenario];
                 const kicks = replay(fixture.frames, settings);
                 const result = score(fixture.onsets, kicks.map(k => k.time));
                 rows.push({ name: scenario, onsets: fixture.onsets.length, kicks: kicks.length, result });

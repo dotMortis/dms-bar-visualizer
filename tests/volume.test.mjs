@@ -2,19 +2,9 @@
 // passage, so the same kick can come out of cava at very different levels. kickThreshold is a
 // fraction of the kick range's recent peak, so it means the same at any level.
 import assert from "node:assert/strict";
-import fs from "node:fs";
 import { describe, test } from "node:test";
 
-import { readFixture, replay, score } from "./replay.mjs";
-
-const CONFIGS = {
-    defaults: { kickThreshold: 0.4, kickLowHz: 30, kickHighHz: 90, kickCooldown: 0.12 },
-    sensitive: { kickThreshold: 0.2, kickLowHz: 30, kickHighHz: 90, kickCooldown: 0.1 },
-};
-const SCENARIOS = fs.readdirSync(new URL("fixtures/", import.meta.url))
-    .filter(f => f.endsWith(".txt")).map(f => f.slice(0, -4)).sort();
-const FIXTURES = Object.fromEntries(SCENARIOS.map(s => [s, readFixture(s)]));
-const TRACKS = SCENARIOS.filter(s => FIXTURES[s].onsets.length);  // all but the tone sweep
+import { CONFIGS, FIXTURES, SCENARIOS, TRACKS, replay, score } from "./replay.mjs";
 
 // The frames with every band scaled by gain, as if cava showed the music that much quieter.
 const scaled = (frames, gain) => frames.map(({ time, values }) => ({ time, values: values.map(v => v * gain) }));

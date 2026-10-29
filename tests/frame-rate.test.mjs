@@ -2,17 +2,9 @@
 // Replays every fixture with its frames repeated the way a faster display shows them, and holds the
 // detector to the kicks it fires at 60 fps.
 import assert from "node:assert/strict";
-import fs from "node:fs";
 import { describe, test } from "node:test";
 
-import { atFrameRate, readFixture, replay } from "./replay.mjs";
-
-const CONFIGS = {
-    defaults: { kickThreshold: 0.4, kickLowHz: 30, kickHighHz: 90, kickCooldown: 0.12 },
-    sensitive: { kickThreshold: 0.2, kickLowHz: 30, kickHighHz: 90, kickCooldown: 0.1 },
-};
-const SCENARIOS = fs.readdirSync(new URL("fixtures/", import.meta.url))
-    .filter(f => f.endsWith(".txt")).map(f => f.slice(0, -4)).sort();
+import { CONFIGS, FIXTURES, SCENARIOS, atFrameRate, replay } from "./replay.mjs";
 // One cava frame: the fixtures' frames are 16.4 to 16.9 ms apart.
 const FRAME = 0.017;
 
@@ -35,7 +27,7 @@ for (const fps of [120, 144]) {
         describe(`at ${fps} Hz, ${config}`, () => {
             for (const scenario of SCENARIOS) {
                 test(`${scenario} fires the kicks it fires at 60 fps, within a frame`, () => {
-                    const { frames } = readFixture(scenario);
+                    const { frames } = FIXTURES[scenario];
                     const at60 = replay(frames, settings).map(k => k.time);
                     const atFps = replay(atFrameRate(frames, fps), settings).map(k => k.time);
                     const missing = unmatched(at60, atFps), extra = unmatched(atFps, at60);

@@ -1,20 +1,9 @@
 // One kick drum hit fires one kick, whatever kickThreshold is set to: lowering it makes more hits
 // fire, and never makes one hit fire twice.
 import assert from "node:assert/strict";
-import fs from "node:fs";
 import { describe, test } from "node:test";
 
-import { readFixture, replay, score } from "./replay.mjs";
-
-const SCENARIOS = fs.readdirSync(new URL("fixtures/", import.meta.url))
-    .filter(f => f.endsWith(".txt")).map(f => f.slice(0, -4)).sort();
-const FIXTURES = Object.fromEntries(SCENARIOS.map(s => [s, readFixture(s)]));
-const TRACKS = SCENARIOS.filter(s => FIXTURES[s].onsets.length);  // all but the tone sweep
-
-const CONFIGS = {
-    defaults: { kickThreshold: 0.4, kickLowHz: 30, kickHighHz: 90, kickCooldown: 0.12 },
-    sensitive: { kickThreshold: 0.2, kickLowHz: 30, kickHighHz: 90, kickCooldown: 0.1 },
-};
+import { CONFIGS, FIXTURES, TRACKS, replay, score } from "./replay.mjs";
 
 describe("one kick per hit", () => {
     for (const [config, settings] of Object.entries(CONFIGS)) {
@@ -40,7 +29,7 @@ describe("one kick per hit", () => {
                 const { onsets, frames } = FIXTURES[scenario];
                 let caught = [];
                 for (const kickThreshold of THRESHOLDS) {
-                    const settings = { kickThreshold, kickLowHz: 30, kickHighHz: 90, kickCooldown };
+                    const settings = { ...CONFIGS.defaults, kickThreshold, kickCooldown };
                     const { missed, doubled } = score(onsets, replay(frames, settings).map(k => k.time));
                     assert.deepEqual(doubled, [], `${scenario} at kickThreshold ${kickThreshold}: onsets that fire twice`);
                     const lost = caught.filter(t => missed.includes(t));

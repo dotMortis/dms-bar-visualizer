@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import { createKickDetector } from "../docs/kick.mjs";
-import { readFixture } from "./replay.mjs";
+import { FIXTURES } from "./replay.mjs";
 
 // The band the detector listens to when the kick range is just this frequency.
 function bandOf(hz) {
@@ -26,7 +26,7 @@ function loudestBand(frames, { at, length }) {
 const EDGE = 0.03;
 
 describe("band mapping", () => {
-    const sweep = readFixture("tones");
+    const sweep = FIXTURES.tones;
 
     test("every tone of the sweep maps to the band cava lit up most", () => {
         const wrong = [];

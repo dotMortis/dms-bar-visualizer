@@ -1,15 +1,27 @@
 // Replay recorded cava output through the kick detector and score its kicks against the true onsets.
-// Shared by the replay tests: read a fixture, replay its frames, score the kicks, and report or
-// check the result against a budget.
+// Shared by the replay tests: the fixtures and configs, replaying frames, scoring the kicks, and
+// reporting or checking the result against a budget.
 import fs from "node:fs";
 
 import { createKickDetector } from "../docs/kick.mjs";
 
 const BANDS = 32;
 
+// The settings the replay tests hold the detector to: the defaults, and a sensitive config.
+export const CONFIGS = {
+    defaults: { kickThreshold: 0.4, kickLowHz: 30, kickHighHz: 90, kickCooldown: 0.12 },
+    sensitive: { kickThreshold: 0.2, kickLowHz: 30, kickHighHz: 90, kickCooldown: 0.1 },
+};
+
+// Every recording in fixtures/, by scenario, and the scenarios with kicks (all but the tone sweep).
+export const SCENARIOS = fs.readdirSync(new URL("fixtures/", import.meta.url))
+    .filter(f => f.endsWith(".txt")).map(f => f.slice(0, -4)).sort();
+export const FIXTURES = Object.fromEntries(SCENARIOS.map(s => [s, readFixture(s)]));
+export const TRACKS = SCENARIOS.filter(s => FIXTURES[s].onsets.length);
+
 // A fixture recorded by fixtures/record.py: its JSON header (scenario, about, cava, onsets, ...)
 // plus frames, [{ time, values }], parsed the way shell.qml parses cava's lines.
-export function readFixture(scenario) {
+function readFixture(scenario) {
     const text = fs.readFileSync(new URL(`fixtures/${scenario}.txt`, import.meta.url), "utf8");
     const [header, ...lines] = text.trimEnd().split("\n");
     const frames = [];
