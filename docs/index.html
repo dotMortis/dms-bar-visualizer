@@ -339,7 +339,7 @@ const cfg = { ...DEFAULTS };
 const BANDS = 32;
 const st = {
   values: new Float32Array(BANDS), bass: 0, mid: 0, treble: 0, kick: 0,
-  time: 0, flow: 0, kickCount: 0, slowBands: new Array(BANDS).fill(0), lastKick: -100,
+  time: 0, flow: 0, kickCount: 0, slowBands: new Array(BANDS).fill(0), lastKick: -100, kickArmed: true,
   // Same ring buffer as kickTimes/kickPowers/kickSeeds in shell.qml.
   kickTimes: new Array(8).fill(-100), kickPowers: new Float32Array(8), kickSeeds: new Float32Array(8),
   inset: cfg.spacing, cornerRadius: cfg.radius,
@@ -360,7 +360,9 @@ function onValues() {
     if (i >= from && i < to && st.values[i] > 0.15) jump = Math.max(jump, st.values[i] - st.slowBands[i]);
     st.slowBands[i] = st.slowBands[i] * 0.92 + st.values[i] * 0.08;
   }
-  if (jump > cfg.kickThreshold && st.time - st.lastKick >= cfg.kickCooldown) {
+  if (jump < cfg.kickThreshold * 0.5) st.kickArmed = true;
+  if (st.kickArmed && jump > cfg.kickThreshold && st.time - st.lastKick >= cfg.kickCooldown) {
+    st.kickArmed = false;
     st.kick = 1;
     st.kickCount = (st.kickCount + 1) % 1000;
     const slot = st.kickCount % 8;

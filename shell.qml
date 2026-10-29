@@ -100,6 +100,7 @@ ShellRoot {
 
     property var _slowBands: new Array(bandCount).fill(0)  // per-band running average for onsets
     property real _lastKick: -100
+    property bool _kickArmed: true
 
     readonly property string confPath: `${Quickshell.env("XDG_RUNTIME_DIR")}/bar-visualizer-cava.conf`
 
@@ -169,7 +170,12 @@ ShellRoot {
                 jump = Math.max(jump, values[i] - _slowBands[i]);
             _slowBands[i] = _slowBands[i] * 0.92 + values[i] * 0.08;
         }
-        if (jump > kickThreshold && time - _lastKick >= kickCooldown) {
+        // One kick per hit: re-arm only once the whole range has settled. A kick's pitch drops as
+        // it rings, so its energy reaches lower bands a window later and reads as a fresh onset.
+        if (jump < kickThreshold * 0.5)
+            _kickArmed = true;
+        if (_kickArmed && jump > kickThreshold && time - _lastKick >= kickCooldown) {
+            _kickArmed = false;
             kick = 1;
             kickCount = (kickCount + 1) % 1000;
             const slot = kickCount % kickSlots;
