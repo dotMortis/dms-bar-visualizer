@@ -26,15 +26,16 @@ const BUDGETS = {
         // The first two kicks after the 12 dB drop, while the peak releases.
         loud_quiet:     { missed:  2, doubled:  0, stray:  0, latency:  85 },
         dnb_808:        { missed:  0, doubled:  0, stray:  0, latency:  67 },
-        // Latency went up with #7 (87 -> 89 ms): 8 of the 11 quarter kicks right after a 16th now fire,
-        // 100-130 ms after their onset, while the 16th still rings in the same bands.
-        double_kick:    { missed:  3, doubled:  0, stray:  0, latency:  89 },
+        // Latency went up with #7 (87 -> 90 ms): the 10 beat kicks right after a 16th now fire too,
+        // 98-121 ms after their onset, while the 16th still rings in the same bands. Every kick that
+        // fired before #7 fires at the same time.
+        double_kick:    { missed:  0, doubled:  0, stray:  0, latency:  90 },
         // zoo1 and zoo2 went up with #7 (missed 1 -> 2 each), at kicks that come while the last one
-        // still rings and rise less than kickThreshold above it. zoo1 at 22.81 s: the kick before rings
-        // on in band 4 at 0.6 of the peak, the new one is pitched lower, and its bands above 4 rise by
-        // only 0.25-0.33. zoo2 at 17.97 s: a soft kick (0.44 of the peak) whose bands above the last
-        // kick's rise by 0.35-0.39, and the level stays under half the last kick's top for 0.17 s
-        // before it, short of the 0.2 s that ends a hit. The old re-arm caught both.
+        // still rings and rise less than kickThreshold in the bands above it. zoo1 at 22.81 s: the kick
+        // before rings on in band 4 at 0.6 of the peak, the new one is pitched lower, and its bands
+        // above 4 rise by at most 0.33. zoo2 at 17.97 s: a soft kick (0.44 of the peak) whose bands
+        // above the last kick's rise by at most 0.39, and the level stays under half the last kick's
+        // top for 0.17 s before it, short of the 0.2 s that ends a hit. The old re-arm caught both.
         zoo1:           { missed:  2, doubled:  0, stray:  0, latency:  93 },
         zoo2:           { missed:  2, doubled:  0, stray:  0, latency: 100 },
         zoo3:           { missed:  0, doubled:  0, stray:  0, latency: 105 },
@@ -49,8 +50,8 @@ const BUDGETS = {
         sustained_bass: { missed:  0, doubled:  0, stray:  1, latency:  78 },
         loud_quiet:     { missed:  0, doubled:  0, stray:  0, latency:  71 },
         dnb_808:        { missed:  0, doubled:  0, stray:  0, latency:  56 },
-        // Latency went up with #7 (77 -> 79 ms), see the defaults.
-        double_kick:    { missed:  3, doubled:  0, stray:  0, latency:  79 },
+        // Latency went up with #7 (77 -> 79 ms): the beat kicks after a 16th fire 81-106 ms after it.
+        double_kick:    { missed:  0, doubled:  0, stray:  0, latency:  79 },
         zoo1:           { missed:  0, doubled:  0, stray:  0, latency:  83 },
         zoo2:           { missed:  0, doubled:  0, stray:  0, latency:  84 },
         zoo3:           { missed:  0, doubled:  0, stray:  0, latency:  88 },
