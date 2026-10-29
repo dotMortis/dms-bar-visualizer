@@ -149,6 +149,16 @@ Kick detection isn't mirrored: `docs/kick.mjs` is the one detector, and both `sh
 python3 -m http.server -d docs
 ```
 
+### Kick detection tests
+
+A replay suite holds the kick detector to account. It plays real cava output, recorded from synthesized tracks with known kick onsets, through `docs/kick.mjs` and fails when a track gets more missed, doubled or stray kicks, or a later median kick, than its budget allows. It needs nothing but node, no install:
+
+```sh
+node --test
+```
+
+It prints those numbers per track for the default and a sensitive kick setting. `tests/fixtures/record.py` synthesizes and records the tracks; its header says how to re-record them or add one (needs cava, numpy and real time).
+
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md). Releases are tagged on [GitHub](https://github.com/dotMortis/dms-bar-visualizer/releases).
