@@ -160,13 +160,23 @@ precision highp float;
 in vec2 qt_TexCoord0;
 out vec4 fragColor;
 
-uniform float time, bass, mid, treble, kick, radius, intensity, bassStretch, flow, kickAge, kickPower, kickSeed;
+uniform float time, bass, mid, treble, kick, radius, intensity, bassStretch, flow;
 uniform vec2 res;
 uniform float bands[32];
+uniform float kickAges[8], kickPowers[8], kickSeeds[8];
 
 const float TAU = 6.28318530718;
+const int KICKS = 8;
 
 float band(int i) { return bands[i]; }
+float kickAge(int i) { return kickAges[i]; }
+float kickPower(int i) { return kickPowers[i]; }
+float kickSeed(int i) { return kickSeeds[i]; }
+
+vec2 shock(int i, float s) {
+    float age = kickAge(i);
+    return vec2(s - (1.0 - exp(-age * 4.5)), kickPower(i) * exp(-age * 2.2));
+}
 
 float spectrum(float s) {
     float f = clamp(s, 0.0, 1.0) * 31.0;
@@ -207,12 +217,12 @@ void main() {
     float cx = res.x / h * 0.5;
     float s = abs(p.x - cx) / cx;
     float t = time;
-    float front = 1.0 - exp(-kickAge * 4.5);
-    float blast = kickPower * exp(-kickAge * 2.2);
-    float ds = s - front;
-
-    float amp = min(1.0, 1.3 * spectrum(pow(s, bassStretch)) * (1.0 + 0.7 * kick)
-                         + 0.6 * blast * exp(-ds * ds / 0.003));
+    float surge = 0.0;
+    for (int j = 0; j < KICKS; j++) {
+        vec2 sw = shock(j, s);
+        surge += sw.y * exp(-sw.x * sw.x / 0.003);
+    }
+    float amp = min(1.0, 1.3 * spectrum(pow(s, bassStretch)) * (1.0 + 0.7 * kick) + 0.6 * surge);
 
     float n = sin(p.x * 0.31 + t * 0.9 + sin(p.y * 4.0 + t * 1.3) * 1.5)
             + sin(p.x * 0.11 - t * 0.6 + bass * 2.0)
@@ -244,24 +254,33 @@ void main() {
     col += pal(r + t * 0.2, 0.6, 1.0) * spark * (0.4 + 1.6 * treble);
 
     float lens = 0.45 + 0.55 * smoothstep(0.6, 0.0, abs(p.y - 0.5));
-    float eL = exp(-ds * ds / 0.0006);
-    float eM = exp(-(ds + 0.018) * (ds + 0.018) / 0.0006);
-    float eB = exp(-(ds + 0.036) * (ds + 0.036) / 0.0006);
-    col += (pow(LAVENDER, vec3(1.6)) * eL + pow(MAUVE, vec3(2.0)) * eM * 0.85 + pow(BLUE, vec3(2.0)) * eB * 0.75)
-           * blast * lens * 1.1;
-    float wake = ds < 0.0 ? exp(ds * 7.0) : 0.0;
-    col += pal(hueBase + 0.3, 0.9, 1.0) * wake * blast * lens * 0.18;
+    vec3 wakeCol = pal(hueBase + 0.3, 0.9, 1.0);
+    for (int j = 0; j < KICKS; j++) {
+        vec2 sw = shock(j, s);
+        float ds = sw.x;
+        float blast = sw.y;
+        float eL = exp(-ds * ds / 0.0006);
+        float eM = exp(-(ds + 0.018) * (ds + 0.018) / 0.0006);
+        float eB = exp(-(ds + 0.036) * (ds + 0.036) / 0.0006);
+        col += (pow(LAVENDER, vec3(1.6)) * eL + pow(MAUVE, vec3(2.0)) * eM * 0.85 + pow(BLUE, vec3(2.0)) * eB * 0.75)
+               * blast * lens * 1.1;
+        float wake = ds < 0.0 ? exp(ds * 7.0) : 0.0;
+        col += wakeCol * wake * blast * lens * 0.18;
+    }
 
-    if (kickAge < 2.0) {
-        float age = kickAge;
+    for (int j = 0; j < KICKS; j++) {
+        float age = kickAge(j);
+        float power = kickPower(j);
+        if (age >= 2.0 || power <= 0.0)
+            continue;
         for (int i = 0; i < 24; i++) {
-            float seed = kickSeed * 31.7 + float(i) * 7.13;
+            float seed = kickSeed(j) * 31.7 + float(i) * 7.13;
             float r1 = hash1(seed);
             float r2 = hash1(seed + 1.7);
             float r3 = hash1(seed + 3.1);
             float r4 = hash1(seed + 5.9);
             float dir = r1 < 0.5 ? -1.0 : 1.0;
-            float rate = (2.0 + 3.0 * r2) * (0.6 + 0.4 * kickPower);
+            float rate = (2.0 + 3.0 * r2) * (0.6 + 0.4 * power);
             float reach = cx * (0.25 + 0.75 * r3);
             float ease = exp(-age * rate);
             float travel = reach * (1.0 - ease);
@@ -272,7 +291,7 @@ void main() {
             float trail = clamp(speed * 0.025, 0.05, 2.5);
             float dy = p.y - pos.y;
             float d2 = q * q / (q > 0.0 ? 0.004 : trail * trail + 0.004) + dy * dy / 0.004;
-            float life = kickPower * exp(-age * (1.4 + 1.6 * r2));
+            float life = power * exp(-age * (1.4 + 1.6 * r2));
             float twinkle = 0.75 + 0.25 * sin(age * 40.0 + r3 * 20.0);
             col += pal(r1 * 0.5 + r4 * 0.5 + hueBase, 0.8, 1.0) * exp(-d2) * life * twinkle * 1.2;
         }
@@ -299,16 +318,17 @@ void main() {
 // ---- Tweakables (defaults from shell.qml) ----------------------------------------
 const DEFAULTS = {
   barThickness: 40, spacing: 4, radius: 12,
-  intensity: 1.0, speed: 1.0, kickThreshold: 0.10, kickDecay: 6.0, kickLowHz: 30, kickHighHz: 90,
-  bassStretch: 1.4,
+  intensity: 1.0, speed: 1.0, kickThreshold: 0.4, kickDecay: 6.0, kickLowHz: 30, kickHighHz: 90,
+  kickCooldown: 0.12, bassStretch: 1.4,
 };
 const SLIDERS = [
   ["intensity", 0.2, 2, 0.05, "Overall brightness"],
   ["speed", 0.2, 2.5, 0.05, "Animation speed"],
-  ["kickThreshold", 0.02, 0.4, 0.01, "Lower = more kicks"],
+  ["kickThreshold", 0.02, 0.8, 0.01, "Lower = more kicks"],
   ["kickDecay", 1, 15, 0.5, "Higher = shorter impact"],
   ["kickLowHz", 30, 500, 5, "Kick listens from this frequency"],
   ["kickHighHz", 40, 1000, 5, "Kick listens up to this frequency"],
+  ["kickCooldown", 0, 0.5, 0.01, "Min seconds between kicks (0 = no limit)"],
   ["bassStretch", 1, 3, 0.1, "Spreads bass from the centre"],
   ["barThickness", 28, 96, 1, "Bar height (px)"],
   ["spacing", 0, 24, 1, "Gap around the bar (px)"],
@@ -319,7 +339,9 @@ const cfg = { ...DEFAULTS };
 const BANDS = 32;
 const st = {
   values: new Float32Array(BANDS), bass: 0, mid: 0, treble: 0, kick: 0,
-  time: 0, flow: 0, kickPower: 0, kickCount: 0, slowKick: 0, lastKick: -100,
+  time: 0, flow: 0, kickCount: 0, slowBands: new Array(BANDS).fill(0), lastKick: -100,
+  // Same ring buffer as kickTimes/kickPowers/kickSeeds in shell.qml.
+  kickTimes: new Array(8).fill(-100), kickPowers: new Float32Array(8), kickSeeds: new Float32Array(8),
   inset: cfg.spacing, cornerRadius: cfg.radius,
 };
 
@@ -333,13 +355,18 @@ function onValues() {
   st.treble = avg(16, BANDS);
   const from = Math.max(0, Math.min(BANDS - 1, bandAt(cfg.kickLowHz)));
   const to = Math.max(from + 1, Math.min(BANDS, bandAt(cfg.kickHighHz)));
-  const level = avg(from, to);
-  st.slowKick = st.slowKick * 0.92 + level * 0.08;
-  const jump = level - st.slowKick;
-  if (jump > cfg.kickThreshold && level > 0.15 && st.time - st.lastKick > 0.12) {
+  let jump = 0;
+  for (let i = 0; i < BANDS; i++) {
+    if (i >= from && i < to && st.values[i] > 0.15) jump = Math.max(jump, st.values[i] - st.slowBands[i]);
+    st.slowBands[i] = st.slowBands[i] * 0.92 + st.values[i] * 0.08;
+  }
+  if (jump > cfg.kickThreshold && st.time - st.lastKick >= cfg.kickCooldown) {
     st.kick = 1;
-    st.kickPower = Math.min(1, 0.5 + jump * 2);
     st.kickCount = (st.kickCount + 1) % 1000;
+    const slot = st.kickCount % 8;
+    st.kickTimes[slot] = st.time;
+    st.kickPowers[slot] = Math.min(1, 0.5 + jump * 2);
+    st.kickSeeds[slot] = st.kickCount;
     st.lastKick = st.time;
   }
 }
@@ -561,7 +588,7 @@ document.getElementById("export").addEventListener("click", () => {
     barThickness: cfg.barThickness, spacing: cfg.spacing, radius: cfg.radius, followMaximize: true,
     intensity: cfg.intensity, speed: cfg.speed, kickThreshold: cfg.kickThreshold,
     kickDecay: cfg.kickDecay, kickLowHz: cfg.kickLowHz, kickHighHz: cfg.kickHighHz,
-    bassStretch: cfg.bassStretch,
+    kickCooldown: cfg.kickCooldown, bassStretch: cfg.bassStretch,
   };
   const url = URL.createObjectURL(new Blob([JSON.stringify(out, null, 4) + "\n"], { type: "application/json" }));
   const a = document.createElement("a");
@@ -610,7 +637,7 @@ if (!gl) {
     gl.enableVertexAttribArray(loc);
     gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
     for (const n of ["time", "bass", "mid", "treble", "kick", "radius", "intensity", "bassStretch", "flow",
-                     "kickAge", "kickPower", "kickSeed", "res", "bands"])
+                     "kickAges", "kickPowers", "kickSeeds", "res", "bands"])
       U[n] = gl.getUniformLocation(prog, n);
   } catch (e) {
     prog = null;
@@ -673,8 +700,8 @@ function frame() {
     gl.uniform1f(U.treble, st.treble); gl.uniform1f(U.kick, st.kick);
     gl.uniform1f(U.radius, st.cornerRadius * dpr); gl.uniform1f(U.intensity, cfg.intensity);
     gl.uniform1f(U.bassStretch, cfg.bassStretch); gl.uniform1f(U.flow, st.flow);
-    gl.uniform1f(U.kickAge, st.time - st.lastKick); gl.uniform1f(U.kickPower, st.kickPower);
-    gl.uniform1f(U.kickSeed, st.kickCount);
+    gl.uniform1fv(U.kickAges, st.kickTimes.map(t => st.time - t));
+    gl.uniform1fv(U.kickPowers, st.kickPowers); gl.uniform1fv(U.kickSeeds, st.kickSeeds);
     gl.uniform2f(U.res, canvas.width, canvas.height);
     gl.uniform1fv(U.bands, st.values);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);

@@ -29,7 +29,7 @@ It runs as its own small [Quickshell](https://quickshell.org) config. DMS itself
 - **Layering:** a click-through Wayland layer surface on the `bottom` layer, sized and inset exactly like the DankBar. The DMS bar draws on the `top` layer, so with a transparent bar background the visualizer shows through.
 - **Audio:** [cava](https://github.com/karlstav/cava) provides 32 frequency bands at 60 fps with light smoothing, so transients punch.
 - **Follows the active player:** it tracks the MPRIS player DankBar shows (same selection rules) and captures the monitor of whichever output *that* player's stream plays to. Spotify on Bluetooth while the default output is HDMI just works. With no player, it falls back to the newest playing stream, then the default output.
-- **Beat detection:** bass jumping above its recent average fires a kick. The kick's strength scales the shockwave and particles.
+- **Beat detection:** any band in the kick range (`kickLowHz` to `kickHighHz`) jumping above its own recent level fires a kick. The jump's size scales the shockwave and particles, and up to 8 kicks play on top of each other instead of cutting each other off.
 - **Matches DMS's maximize detection:** with a maximized window on a monitor's active workspace, the visualizer drops its gap and rounding together with the bar.
 
 ## Requirements
@@ -112,10 +112,11 @@ Settings live in `~/.config/bar-visualizer/config.json`. The visualizer creates 
 | `followMaximize` | `true` | Mirror DMS's *maximize detection* |
 | `intensity` | `1.0` | Overall brightness |
 | `speed` | `1.0` | Animation speed |
-| `kickThreshold` | `0.10` | Lower = more kicks detected |
+| `kickThreshold` | `0.4` | How far (0 to 1) a band must jump above its recent level to fire a kick. Lower = more kicks |
 | `kickDecay` | `6.0` | Higher = shorter impact |
 | `kickLowHz` | `30` | Bottom of the frequency range that fires the kick (shockwave and particles) |
 | `kickHighHz` | `90` | Top of that range. Raise both to hit on snares or claps instead of the kick drum |
+| `kickCooldown` | `0.12` | Minimum seconds between kicks, scaled by `speed`. `0` = no limit (a kick can fire on every cava frame, up to 60 per second) |
 | `bassStretch` | `1.4` | Above 1 spreads the bass (centre) wider, so it isn't hidden under centre widgets |
 
 To find the right geometry, run `hyprctl layers`. The `dms:bar` surface height equals `barThickness + spacing`.
@@ -131,6 +132,8 @@ The look lives in `shaders/viz.frag`: palette, ribbons, shockwave and particles.
 ```sh
 /usr/lib/qt6/bin/qsb --glsl "100 es,120,150" --hlsl 50 --msl 12 -o shaders/viz.frag.qsb shaders/viz.frag
 ```
+
+Then restart the visualizer (`systemctl --user restart bar-visualizer`). Qt caches the compiled shader for the life of the process, so hot reload doesn't pick it up.
 
 To change colours, edit the `palette()` cycle and the `LAVENDER` / `MAUVE` / `PINK` / `BLUE` constants.
 

@@ -24,10 +24,11 @@ ShellRoot {
         followMaximize: true, // match DMS "maximizeDetection"
         intensity: 1.0,       // overall brightness of the effect
         speed: 1.0,           // animation speed multiplier
-        kickThreshold: 0.10,  // lower = more kicks detected
+        kickThreshold: 0.4,   // lower = more kicks detected
         kickDecay: 6.0,       // higher = shorter impact flashes
         kickLowHz: 30,        // frequency range the kick (shockwave + particles) listens to
         kickHighHz: 90,
+        kickCooldown: 0.12,   // min seconds between kicks; 0 = no limit
         bassStretch: 1.4      // >1 spreads bass (centre) wider; 1 = linear
     })
     property var config: defaults
@@ -71,6 +72,7 @@ ShellRoot {
     readonly property real speed: config.speed
     readonly property real kickThreshold: config.kickThreshold
     readonly property real kickDecay: config.kickDecay
+    readonly property real kickCooldown: config.kickCooldown
     readonly property real bassStretch: config.bassStretch
     // ----------------------------------------------------------------------
 
@@ -87,11 +89,16 @@ ShellRoot {
     property real time: 0
     property real flow: 0   // wave phase, advanced by audio energy so motion follows the music
 
-    property real kickPower: 0  // strength of the latest kick, 0.5..1
-    property int kickCount: 0   // seeds a fresh particle spray per kick
-    readonly property real kickAge: time - _lastKick
+    // The last kickSlots kicks, so a new kick's shockwave and particles add to the ones still
+    // playing instead of restarting them. Ring buffer: the newest kick overwrites the oldest.
+    readonly property int kickSlots: 8  // matches KICKS in shaders/viz.frag
+    property var kickTimes: new Array(kickSlots).fill(-100)
+    property var kickPowers: new Array(kickSlots).fill(0)  // 0.5..1 by strength, 0 = empty slot
+    property var kickSeeds: new Array(kickSlots).fill(0)   // a fresh particle spray per kick
+    readonly property var kickAges: kickTimes.map(t => time - t)
+    property int kickCount: 0
 
-    property real _slowKick: 0
+    property var _slowBands: new Array(bandCount).fill(0)  // per-band running average for onsets
     property real _lastKick: -100
 
     readonly property string confPath: `${Quickshell.env("XDG_RUNTIME_DIR")}/bar-visualizer-cava.conf`
@@ -139,8 +146,8 @@ ShellRoot {
         return Math.round(Math.log(hz / lowCutoff) / Math.log(highCutoff / lowCutoff) * bandCount);
     }
 
-    function band4(i) {
-        return Qt.vector4d(values[i], values[i + 1], values[i + 2], values[i + 3]);
+    function quad(arr, i) {
+        return Qt.vector4d(arr[i], arr[i + 1], arr[i + 2], arr[i + 3]);
     }
 
     onActivePlayerChanged: sinkProbe.running = true
@@ -154,14 +161,26 @@ ShellRoot {
         bass = avg(0, 6);
         mid = avg(6, 16);
         treble = avg(16, bandCount);
-        // Kick = the kick range jumping well above its recent average.
-        const level = avg(kickFrom, kickTo);
-        _slowKick = _slowKick * 0.92 + level * 0.08;
-        const jump = level - _slowKick;
-        if (jump > kickThreshold && level > 0.15 && time - _lastKick > 0.12) {
+        // Kick = any band in the kick range jumping well above its own recent average. Per band,
+        // not averaged over the range, so a wide range still catches a note that hits one band.
+        let jump = 0;
+        for (let i = 0; i < bandCount; i++) {
+            if (i >= kickFrom && i < kickTo && values[i] > 0.15)
+                jump = Math.max(jump, values[i] - _slowBands[i]);
+            _slowBands[i] = _slowBands[i] * 0.92 + values[i] * 0.08;
+        }
+        if (jump > kickThreshold && time - _lastKick >= kickCooldown) {
             kick = 1;
-            kickPower = Math.min(1, 0.5 + jump * 2);
             kickCount = (kickCount + 1) % 1000;
+            const slot = kickCount % kickSlots;
+            // Copies, so the bindings that read these arrays see the change.
+            const times = kickTimes.slice(), powers = kickPowers.slice(), seeds = kickSeeds.slice();
+            times[slot] = time;
+            powers[slot] = Math.min(1, 0.5 + jump * 2);
+            seeds[slot] = kickCount;
+            kickTimes = times;
+            kickPowers = powers;
+            kickSeeds = seeds;
             _lastKick = time;
         }
     }
@@ -303,21 +322,24 @@ exec cava -p ${root.confPath} < /dev/null`]
                 property real treble: root.treble
                 property real kick: root.kick
                 property real radius: panel.cornerRadius
-                property real kickAge: root.kickAge
-                property real kickPower: root.kickPower
-                property real kickSeed: root.kickCount
+                property vector4d kickAge0: root.quad(root.kickAges, 0)
+                property vector4d kickAge1: root.quad(root.kickAges, 4)
+                property vector4d kickPower0: root.quad(root.kickPowers, 0)
+                property vector4d kickPower1: root.quad(root.kickPowers, 4)
+                property vector4d kickSeed0: root.quad(root.kickSeeds, 0)
+                property vector4d kickSeed1: root.quad(root.kickSeeds, 4)
                 property real intensity: root.intensity
                 property real bassStretch: root.bassStretch
                 property real flow: root.flow
                 property vector2d res: Qt.vector2d(width, height)
-                property vector4d b0: root.band4(0)
-                property vector4d b1: root.band4(4)
-                property vector4d b2: root.band4(8)
-                property vector4d b3: root.band4(12)
-                property vector4d b4: root.band4(16)
-                property vector4d b5: root.band4(20)
-                property vector4d b6: root.band4(24)
-                property vector4d b7: root.band4(28)
+                property vector4d b0: root.quad(root.values, 0)
+                property vector4d b1: root.quad(root.values, 4)
+                property vector4d b2: root.quad(root.values, 8)
+                property vector4d b3: root.quad(root.values, 12)
+                property vector4d b4: root.quad(root.values, 16)
+                property vector4d b5: root.quad(root.values, 20)
+                property vector4d b6: root.quad(root.values, 24)
+                property vector4d b7: root.quad(root.values, 28)
             }
         }
     }
