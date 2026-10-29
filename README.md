@@ -157,7 +157,7 @@ A replay suite holds the kick detector to account. It plays real cava output, re
 node --test
 ```
 
-It prints those numbers per track for the default and a sensitive kick setting. `tests/fixtures/record.py` synthesizes and records the tracks; its header says how to re-record them or add one (needs cava, numpy and real time).
+It prints those numbers per track for the default and a sensitive kick setting. A sine sweep recorded the same way checks that `kickLowHz` and `kickHighHz` select the bands cava puts those frequencies in. `tests/fixtures/record.py` synthesizes and records the tracks; its header says how to re-record them or add one (needs cava, numpy and real time).
 
 ## Changelog
 

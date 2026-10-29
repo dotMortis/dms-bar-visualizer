@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `kickLowHz` / `kickHighHz` now select the bands cava actually puts those frequencies in. They
+  were mapped on a plain log scale, which is up to one band off below 100 Hz: the default 30–90 Hz
+  range left out the band 90 Hz lands in, so kicks pitched there fired late or not at all.
+  Also in the demo.
+
 ## [0.4.1] - 2026-10-29
 
 ### Fixed

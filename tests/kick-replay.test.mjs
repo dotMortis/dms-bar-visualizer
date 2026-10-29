@@ -12,31 +12,33 @@ const CONFIGS = {
 };
 
 // Today's measured result per track, not a target: the detector of v0.4.1 (docs/kick.mjs as it
-// came out of shell.qml), replayed on these recordings on 2026-10-29. latency is the median
-// onset-to-kick delay in ms. A change may only lower a budget. One that has to raise a budget says
-// why, with numbers, in its PR.
+// came out of shell.qml) listening to the bands cava puts 30-90 Hz in (0-6, was 0-5 before #4),
+// replayed on these recordings on 2026-10-29. latency is the median onset-to-kick delay in ms. A
+// change may only lower a budget. One that has to raise a budget says why, with numbers, in its PR.
 const BUDGETS = {
     defaults: {
-        kick_only:      { missed:  0, doubled:  0, stray:  0, latency: 115 },
-        steady_house:   { missed:  0, doubled:  0, stray:  0, latency: 115 },
-        sustained_bass: { missed:  1, doubled:  0, stray:  1, latency: 118 },
-        loud_quiet:     { missed: 23, doubled:  0, stray:  0, latency: 115 },
-        dnb_808:        { missed:  0, doubled:  0, stray:  0, latency: 105 },
-        double_kick:    { missed: 11, doubled:  0, stray:  0, latency: 118 },
-        zoo1:           { missed:  8, doubled:  0, stray:  0, latency: 144 },
-        zoo2:           { missed:  9, doubled:  0, stray:  0, latency: 138 },
-        zoo3:           { missed:  1, doubled:  0, stray:  0, latency: 151 },
+        kick_only:      { missed:  0, doubled:  0, stray:  0, latency:  90 },
+        steady_house:   { missed:  0, doubled:  0, stray:  0, latency:  94 },
+        sustained_bass: { missed:  1, doubled:  0, stray:  1, latency:  94 },
+        loud_quiet:     { missed: 23, doubled:  0, stray:  0, latency:  87 },
+        dnb_808:        { missed:  0, doubled:  0, stray:  0, latency:  76 },
+        double_kick:    { missed: 11, doubled:  0, stray:  0, latency:  97 },
+        zoo1:           { missed:  6, doubled:  0, stray:  0, latency: 112 },
+        zoo2:           { missed:  6, doubled:  0, stray:  0, latency: 117 },
+        zoo3:           { missed:  0, doubled:  0, stray:  0, latency: 117 },
     },
     sensitive: {
-        kick_only:      { missed:  1, doubled:  0, stray:  0, latency: 100 },
-        steady_house:   { missed:  0, doubled:  0, stray:  0, latency: 100 },
-        sustained_bass: { missed:  1, doubled: 32, stray: 18, latency:  52 },
-        loud_quiet:     { missed:  4, doubled:  0, stray:  0, latency: 111 },
-        dnb_808:        { missed:  0, doubled:  0, stray: 15, latency:  89 },
-        double_kick:    { missed: 11, doubled:  0, stray:  0, latency: 103 },
-        zoo1:           { missed:  2, doubled:  0, stray:  1, latency: 117 },
-        zoo2:           { missed:  1, doubled:  0, stray:  0, latency: 121 },
-        zoo3:           { missed:  0, doubled:  0, stray:  0, latency: 130 },
+        kick_only:      { missed:  1, doubled:  0, stray:  0, latency:  79 },
+        steady_house:   { missed:  0, doubled:  0, stray:  0, latency:  81 },
+        sustained_bass: { missed:  1, doubled: 28, stray: 18, latency:  52 },
+        loud_quiet:     { missed:  3, doubled:  0, stray:  0, latency:  87 },
+        dnb_808:        { missed:  0, doubled:  0, stray: 15, latency:  63 },
+        double_kick:    { missed: 11, doubled:  0, stray:  0, latency:  81 },
+        zoo1:           { missed:  1, doubled:  0, stray:  1, latency:  87 },
+        zoo2:           { missed:  1, doubled:  0, stray:  0, latency:  88 },
+        // missed was 0 with bands 0-5. Band 6 sees the next kick a frame before the last one's tail
+        // has left bands 0-5, so v0.4.1's re-arm (on one frame of small jumps) never comes.
+        zoo3:           { missed:  2, doubled:  0, stray:  0, latency: 102 },
     },
 };
 
