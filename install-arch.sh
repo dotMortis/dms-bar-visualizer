@@ -38,6 +38,8 @@ uninstall() {
 check_system() {
     ((EUID != 0)) || die "run this as your normal user, not root (makepkg refuses to build as root)"
     command -v pacman >/dev/null || die "pacman not found. This script is for Arch Linux; elsewhere use ./install.sh"
+    # pacman runs through sudo, which needs a terminal to ask for the password.
+    [[ -t 0 ]] || sudo -n true 2>/dev/null || die "sudo needs a terminal to ask for your password; run this from a terminal"
     local missing=()
     command -v makepkg >/dev/null && command -v fakeroot >/dev/null || missing+=(base-devel)
     command -v git >/dev/null || missing+=(git)
