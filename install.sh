@@ -54,7 +54,7 @@ bootstrap() {
 }
 
 stop_manual_instances() {
-    pkill -f "^qs -c $NAME\$" 2>/dev/null || true
+    pkill -f "(^|/)qs -c $NAME\$" 2>/dev/null || true
     pkill -f "^cava -p ${XDG_RUNTIME_DIR:-/run/user/$UID}/$NAME-cava.conf" 2>/dev/null || true
 }
 

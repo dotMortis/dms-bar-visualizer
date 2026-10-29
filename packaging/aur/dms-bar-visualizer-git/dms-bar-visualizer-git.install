@@ -12,3 +12,11 @@ MSG
 post_upgrade() {
   echo '==> Restart to pick up the new version: systemctl --user restart bar-visualizer'
 }
+
+# pacman can't reach into user sessions, so a running visualizer would outlive its files.
+pre_remove() {
+  cat <<'MSG'
+==> If the visualizer is running, stop it and disable autostart (as your user):
+      systemctl --user disable --now bar-visualizer
+MSG
+}
