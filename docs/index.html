@@ -408,11 +408,8 @@ function audioCtx() {
 }
 
 // Rough stand-in for cava: per-band magnitude, sqrt compression, auto-sensitivity, light fall-off.
-// Its rates are per 60 fps frame, scaled to this frame's length dt (seconds), so the bands move the
-// same at any display refresh rate. The analyser's smoothing applies once per call, so it is too.
-function fillFromAnalyser(dt) {
-  const frames = dt * 60;
-  analyser.smoothingTimeConstant = 0.35 ** frames;
+// Called once per frame of the 60 Hz band clock, so its rates are per frame, like cava's.
+function fillFromAnalyser() {
   analyser.getFloatFrequencyData(freq);
   let peak = 0;
   const next = new Float32Array(BANDS);
@@ -424,12 +421,11 @@ function fillFromAnalyser(dt) {
     next[i] = Math.sqrt(mag) * sens;
     peak = Math.max(peak, next[i]);
   }
-  if (peak > 1) sens *= 0.98 ** frames; else if (peak > 0.02) sens *= 1.002 ** frames;
+  if (peak > 1) sens *= 0.98; else if (peak > 0.02) sens *= 1.002;
   sens = Math.min(Math.max(sens, 0.05), 200);
-  const keep = 0.78 ** frames;
   for (let i = 0; i < BANDS; i++) {
     const v = Math.min(1, next[i]);
-    st.values[i] = v >= st.values[i] ? v : st.values[i] * keep + v * (1 - keep);
+    st.values[i] = v >= st.values[i] ? v : st.values[i] * 0.78 + v * 0.22;
   }
 }
 
@@ -678,7 +674,7 @@ function readouts() {
 // The bands come 60 times a second on a 60 Hz clock, like cava's frames, at any display refresh
 // rate. Read once per refresh, a 144 Hz display saw the analyser rise in finer steps, so near the
 // threshold it fired on fewer beats than a 60 Hz one.
-let last = performance.now() / 1000, lastBands = last, nextBands = last;
+let last = performance.now() / 1000, nextBands = last;
 function frame() {
   const now = performance.now() / 1000;
   const dt = Math.min(0.1, now - last); last = now;
@@ -686,9 +682,8 @@ function frame() {
   if (now >= nextBands - 0.002) {  // a little early is fine: refreshes jitter
     const t = Math.max(nextBands, now - 0.05);  // after a stall, restart the clock instead of catching up
     if (current === "demo") demo.fill(t);
-    else if (analyser) fillFromAnalyser(Math.min(0.1, t - lastBands));
+    else if (analyser) fillFromAnalyser();
     onValues(t);
-    lastBands = t;
     nextBands = t + 1 / 60;
   }
 
