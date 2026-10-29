@@ -1,5 +1,5 @@
-// One kick drum hit fires one kick, whatever kickThreshold is set to: lowering it makes more hits
-// fire, and never makes one hit fire twice.
+// One kick drum hit fires one kick, at any kickThreshold the demo's slider offers (0.06 to 0.9):
+// lowering it makes more hits fire, and never makes one hit fire twice.
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
@@ -20,7 +20,8 @@ describe("one kick per hit", () => {
         });
     }
 
-    // From the top of the demo's slider down to its bottom, every step below 0.15.
+    // The demo's slider, every step below 0.15. At 0.05, zoo3 loses its onset at 7.81 s: a bass
+    // note swelling by 0.06 of the peak fires just before it, and holds back the kick after it.
     const THRESHOLDS = [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.35, 0.3, 0.25, 0.2, 0.15, 0.14, 0.13, 0.12, 0.11, 0.1, 0.09, 0.08, 0.07, 0.06];
 
     for (const kickCooldown of [0.1, 0.12]) {
