@@ -45,16 +45,27 @@ sudo pacman -S --needed quickshell cava libpulse qt6-shadertools
 
 ## Install
 
-### From the AUR
+> [!IMPORTANT]
+> Whichever way you install, make the bar background transparent: **DMS Settings → Dank Bar → Transparency = 0**.
+
+### Arch Linux (recommended)
 
 ```sh
-yay -S dms-bar-visualizer-git        # or paru, or any AUR helper
-systemctl --user enable --now bar-visualizer
+git clone https://github.com/dotMortis/dms-bar-visualizer
+cd dms-bar-visualizer
+./install-arch.sh
 ```
 
-The package installs to `/usr/share/dms-bar-visualizer` and registers the Quickshell config as `bar-visualizer`, so you can also run it by hand with `qs -c bar-visualizer`.
+The script builds a real pacman package (`dms-bar-visualizer-git`) from [`packaging/aur`](packaging/aur/dms-bar-visualizer-git/PKGBUILD) with `makepkg`, so pacman tracks every file. It:
 
-### From source
+1. installs `base-devel` and `git` if they're missing, and pulls in dependencies through pacman
+2. installs to `/usr/share/dms-bar-visualizer` and registers the Quickshell config as `bar-visualizer`
+3. cleans up a previous `install.sh` setup, which would otherwise shadow the package
+4. enables the systemd user service (skip with `--no-service`, then run `qs -c bar-visualizer`)
+
+Run it again to update to the latest commit. `./install-arch.sh --uninstall` removes it.
+
+### Other distros, or hacking on it
 
 ```sh
 git clone https://github.com/dotMortis/dms-bar-visualizer ~/Projects/dms-bar-visualizer
@@ -70,13 +81,11 @@ The script:
 
 Use `./install.sh --no-service` to skip autostart and run it yourself with `qs -c bar-visualizer`.
 
-Then make the bar background transparent: **DMS Settings → Dank Bar → Transparency = 0**.
-
 ### Uninstall
 
 ```sh
-./install.sh --uninstall                                          # from source
-systemctl --user disable --now bar-visualizer && yay -R dms-bar-visualizer-git   # AUR
+./install-arch.sh --uninstall   # Arch package
+./install.sh --uninstall        # source install
 ```
 
 ## Configuration
