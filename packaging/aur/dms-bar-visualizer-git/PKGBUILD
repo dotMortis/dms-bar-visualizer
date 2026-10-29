@@ -1,7 +1,7 @@
 # Maintainer: dotMortis <nick.koellhofer@braun-its.de>
 pkgname=dms-bar-visualizer-git
 _name=dms-bar-visualizer
-pkgver=r3.2b17edb
+pkgver=0.1.0
 pkgrel=1
 pkgdesc='Shader audio visualizer behind the DankMaterialShell top bar (Quickshell, Hyprland)'
 arch=('any')
@@ -19,7 +19,7 @@ install="$pkgname.install"
 
 pkgver() {
   cd "$_name"
-  printf 'r%s.%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+  git describe --long --tags --abbrev=7 | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
 }
 
 build() {

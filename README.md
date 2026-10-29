@@ -10,6 +10,7 @@
 [![Quickshell](https://img.shields.io/badge/Quickshell-cba6f7?style=for-the-badge)](https://quickshell.org)
 [![Catppuccin Mocha](https://img.shields.io/badge/Catppuccin-Mocha-b4befe?style=for-the-badge&labelColor=1e1e2e)](https://catppuccin.com)
 [![Live demo](https://img.shields.io/badge/Live_demo-WebGL-f5c2e7?style=for-the-badge&labelColor=1e1e2e)](https://dotmortis.github.io/dms-bar-visualizer/)
+[![Release](https://img.shields.io/github/v/release/dotMortis/dms-bar-visualizer?style=for-the-badge&color=89b4fa&labelColor=1e1e2e)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-f5c2e7?style=for-the-badge&labelColor=1e1e2e)](LICENSE)
 
 </div>
@@ -136,6 +137,10 @@ To change colours, edit the `palette()` cycle and the `LAVENDER` / `MAUVE` / `PI
 The SVGs in `assets/` are generated. After tweaking `assets/generate.py`, run `python3 assets/generate.py`.
 
 `docs/index.html` is the live demo (served by GitHub Pages). It carries a GLSL ES port of `shaders/viz.frag`, so mirror shader changes there.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md). Releases are tagged on [GitHub](https://github.com/dotMortis/dms-bar-visualizer/releases).
 
 ## Limitations
 
