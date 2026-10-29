@@ -45,16 +45,19 @@ sudo pacman -S --needed quickshell cava libpulse qt6-shadertools
 
 ## Install
 
+> [!TIP]
+> Piping a script from the internet into `bash` runs it without showing it to you. Both scripts are short; read them first ([install-arch.sh](install-arch.sh), [install.sh](install.sh)) if you like.
+
 > [!IMPORTANT]
 > Whichever way you install, make the bar background transparent: **DMS Settings → Dank Bar → Transparency = 0**.
 
 ### Arch Linux (recommended)
 
 ```sh
-git clone https://github.com/dotMortis/dms-bar-visualizer
-cd dms-bar-visualizer
-./install-arch.sh
+curl -fsSL https://raw.githubusercontent.com/dotMortis/dms-bar-visualizer/main/install-arch.sh | bash
 ```
+
+Or from a clone: `git clone https://github.com/dotMortis/dms-bar-visualizer && cd dms-bar-visualizer && ./install-arch.sh`.
 
 The script builds a real pacman package (`dms-bar-visualizer-git`) from [`packaging/aur`](packaging/aur/dms-bar-visualizer-git/PKGBUILD) with `makepkg`, so pacman tracks every file. It:
 
@@ -63,15 +66,15 @@ The script builds a real pacman package (`dms-bar-visualizer-git`) from [`packag
 3. cleans up a previous `install.sh` setup, which would otherwise shadow the package
 4. enables the systemd user service (skip with `--no-service`, then run `qs -c bar-visualizer`)
 
-Run it again to update to the latest commit. `./install-arch.sh --uninstall` removes it.
+Run it again to update to the latest commit. To remove it, pass `--uninstall` (piped: `... | bash -s -- --uninstall`).
 
 ### Other distros, or hacking on it
 
 ```sh
-git clone https://github.com/dotMortis/dms-bar-visualizer ~/Projects/dms-bar-visualizer
-cd ~/Projects/dms-bar-visualizer
-./install.sh
+curl -fsSL https://raw.githubusercontent.com/dotMortis/dms-bar-visualizer/main/install.sh | bash
 ```
+
+Piped like this, it checks the repo out to `~/.local/share/dms-bar-visualizer` (or updates it there) and runs from that checkout. To hack on it, clone wherever you like and run `./install.sh` from there instead.
 
 The script:
 
@@ -79,13 +82,13 @@ The script:
 2. symlinks the repo to `~/.config/quickshell/bar-visualizer`
 3. enables a systemd user service that starts with your graphical session
 
-Use `./install.sh --no-service` to skip autostart and run it yourself with `qs -c bar-visualizer`.
+Use `--no-service` to skip autostart and run it yourself with `qs -c bar-visualizer`.
 
 ### Uninstall
 
 ```sh
-./install-arch.sh --uninstall   # Arch package
-./install.sh --uninstall        # source install
+curl -fsSL https://raw.githubusercontent.com/dotMortis/dms-bar-visualizer/main/install-arch.sh | bash -s -- --uninstall   # Arch package
+curl -fsSL https://raw.githubusercontent.com/dotMortis/dms-bar-visualizer/main/install.sh | bash -s -- --uninstall        # source install
 ```
 
 ## Configuration
