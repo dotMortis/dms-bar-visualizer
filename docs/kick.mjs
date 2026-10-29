@@ -119,13 +119,19 @@ export function createKickDetector(settings) {
             const keep = AVERAGE_KEEP ** dt;
             // Kick = any band in the kick range jumping well above its own recent average. Per band,
             // not averaged over the range, so a wide range still catches a note that hits one band.
-            let jump = 0;
+            let jump = 0, repeat = true;
             for (let i = 0; i < BANDS; i++) {
                 slow[i] = slow[i] * keep + shown[i] * (1 - keep);
+                repeat = repeat && values[i] === shown[i];
                 shown[i] = values[i];
                 if (i >= from && i < to && values[i] > 0.15)
                     jump = Math.max(jump, values[i] - slow[i]);
             }
+            // The same frame pushed again (a display refreshing faster than the frames come) only
+            // counts towards the averages: it was measured when it came. Measured again as the
+            // averages catch up, its jump shrinks, which re-armed on frames 60 fps never shows.
+            if (repeat)
+                return null;
             // One kick per hit: re-arm only once the whole range has settled. A kick's pitch drops as
             // it rings, so its energy reaches lower bands a window later and reads as a fresh onset.
             if (jump < threshold * 0.5)

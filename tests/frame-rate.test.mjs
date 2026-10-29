@@ -16,14 +16,12 @@ const SCENARIOS = fs.readdirSync(new URL("fixtures/", import.meta.url))
 // One cava frame: the fixtures' frames are 16.4 to 16.9 ms apart.
 const FRAME = 0.017;
 
-// Kicks that fire at 120 and 144 Hz but not at 60 fps, measured on 2026-10-29. The detector
-// re-arms once a frame's jump falls under half the threshold, and while a frame is repeated its
-// jump keeps shrinking towards the running average. All three are re-arms the 60 fps replay misses
-// by a hair: tones at 3.25 s jumps 0.104 at 60 fps and 0.100 on the repeat, zoo2 at 9.79 s 0.102
-// and 0.098, zoo3 at 2.55 s 0.101 and 0.097, against 0.1. A change may only lower these.
-const EXTRA = {
-    sensitive: { tones: 1, zoo2: 1, zoo3: 1 },
-};
+// Kicks allowed to fire at 120 and 144 Hz but not at 60 fps: none. Until #6 there were three at
+// the sensitive config (tones, zoo2, zoo3): the detector re-armed once a frame's jump fell under
+// half the threshold, and while a frame was repeated its jump kept shrinking towards the running
+// average, from 0.101-0.104 at 60 fps to 0.097-0.100 on the repeat, against 0.1. A repeated frame
+// is no longer measured again.
+const EXTRA = {};
 
 // The kicks with no kick of the other list within a frame.
 function unmatched(kicks, others) {
