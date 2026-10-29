@@ -155,7 +155,9 @@ ShellRoot {
         bass = avg(0, 6);
         mid = avg(6, 16);
         treble = avg(16, bandCount);
-        const hit = kickDetector.push(values, time);
+        // Real time, not the animation clock: the detector follows the music at any speed and
+        // scales kickCooldown by config.speed itself.
+        const hit = kickDetector.push(values, Date.now() / 1000);
         if (!hit)
             return;
         kick = 1;

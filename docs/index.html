@@ -349,12 +349,13 @@ const st = {
 
 const avg = (from, to) => { let s = 0; for (let i = from; i < to; i++) s += st.values[i]; return s / (to - from); };
 
-// Same as onValuesChanged in shell.qml.
-function onValues() {
+// Same as onValuesChanged in shell.qml. now is the page clock in seconds: the detector follows the
+// music in real time at any frame rate and speed, and scales kickCooldown by cfg.speed itself.
+function onValues(now) {
   st.bass = avg(0, 6);
   st.mid = avg(6, 16);
   st.treble = avg(16, BANDS);
-  const hit = kickDetector.push(st.values, st.time);
+  const hit = kickDetector.push(st.values, now);
   if (!hit) return;
   st.kick = 1;
   st.kickCount = (st.kickCount + 1) % 1000;
@@ -677,7 +678,7 @@ function frame() {
 
   if (current === "demo") demo.fill(now);
   else if (analyser) fillFromAnalyser();
-  onValues();
+  onValues(now);
 
   st.time += dt * cfg.speed;
   st.flow += dt * cfg.speed * (8 * st.bass + 4 * st.mid + 6 * st.kick);

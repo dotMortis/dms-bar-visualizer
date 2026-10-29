@@ -23,7 +23,8 @@ export function readFixture(scenario) {
     return { ...JSON.parse(header), frames };
 }
 
-// Push frames through a detector with these kick settings; returns its kicks, [{ time, power }].
+// Push frames through a detector with these kick settings (and speed, 1 if left out); returns its
+// kicks, [{ time, power }], on the frames' real-time clock.
 export function replay(frames, settings) {
     const detector = createKickDetector(settings);
     const kicks = [];
@@ -33,6 +34,22 @@ export function replay(frames, settings) {
             kicks.push({ time, ...kick });
     }
     return kicks;
+}
+
+// The frames pushed fps times a second instead of 60, the way the demo pushes one frame per display
+// refresh: each frame repeated as often as an fps Hz display refreshes before the next frame comes
+// (twice at 120 Hz, two or three times at 144 Hz), the repeats spread evenly from the frame's own time.
+export function atFrameRate(frames, fps) {
+    const refreshes = time => Math.floor((time - frames[0].time) * fps + 0.5);
+    const pushed = [];
+    for (let i = 0; i < frames.length; i++) {
+        const { time, values } = frames[i];
+        const next = i + 1 < frames.length ? frames[i + 1].time : time;
+        const repeats = Math.max(1, refreshes(next) - refreshes(time));
+        for (let j = 0; j < repeats; j++)
+            pushed.push({ time: time + (next - time) * j / repeats, values });
+    }
+    return pushed;
 }
 
 // A kick more than this long after its onset doesn't belong to it.
