@@ -1,7 +1,7 @@
 # Maintainer: dotMortis <nick.koellhofer@braun-its.de>
 pkgname=dms-bar-visualizer-git
 _name=dms-bar-visualizer
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
 pkgdesc='Shader audio visualizer behind the DankMaterialShell top bar (Quickshell, Hyprland)'
 arch=('any')
