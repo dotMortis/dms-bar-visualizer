@@ -15,6 +15,17 @@ const RATE = 44100;
 // How much of each band's running average is left after a second: 0.92 per frame at 60 fps.
 const AVERAGE_KEEP = 0.92 ** 60;
 
+// Jumps are measured against the kick range's recent peak level, not on cava's 0..1 scale: cava's
+// autosens keeps rescaling its output, so the same kick comes out louder or quieter.
+// How much of the peak is left after a second once the music gets quieter: it halves in about
+// 1.15 s (0.99 per frame at 60 fps), so kicks come back soon after a drop in volume.
+const PEAK_KEEP = 0.99 ** 60;
+// The peak never falls below this level on cava's scale, so a near-silent range can't fire kicks
+// on noise.
+const PEAK_FLOOR = 0.05;
+// A band below this fraction of the peak is too quiet to fire a kick.
+const QUIET = 0.15;
+
 // Where cava 1.0 puts its bands (cava_init in cavacore.c): band n adds up the FFT bins first..last
 // of an FFT of `size` samples and scales the sum by `gain`.
 const LAYOUT = cavaLayout();
@@ -83,8 +94,8 @@ function bandAt(hz) {
 // kickCooldown, plus speed (1 if left out), which scales kickCooldown like the rest of the
 // animation. Feed it every frame with push(values, time), at any frame rate: values are the 32 bands
 // in 0..1, time is when the frame came, in real seconds (cava's frame time in the visualizer, the
-// page clock in the demo). push returns { power } (0.5..1, by how hard the hit is) when a kick
-// fires, otherwise null.
+// page clock in the demo). push returns { power } (0.5..1, by how hard the hit is next to the
+// recent kicks) when a kick fires, otherwise null.
 export function createKickDetector(settings) {
     const slow = new Array(BANDS).fill(0);  // per-band running average for onsets
     const shown = new Array(BANDS).fill(0);  // the previous frame's values, shown until this one
@@ -93,6 +104,7 @@ export function createKickDetector(settings) {
     let animation = 0;  // the animation clock kickCooldown runs on: real seconds times speed
     let lastKick = -Infinity;  // on the animation clock
     let armed = true;
+    let peak = PEAK_FLOOR;  // the kick range's recent peak level, slowly released
 
     const detector = {
         // The kick range: bands from..to-1.
@@ -117,21 +129,34 @@ export function createKickDetector(settings) {
             lastFrame = time;
             animation += dt * speed;
             const keep = AVERAGE_KEEP ** dt;
-            // Kick = any band in the kick range jumping well above its own recent average. Per band,
-            // not averaged over the range, so a wide range still catches a note that hits one band.
-            let jump = 0, repeat = true;
+            // The kick range's peak level until this frame. Like the averages, it takes in the
+            // previous frame for as long as it was shown, at its full level: it only releases once
+            // the level falls.
+            let level = 0, shownLevel = 0;
+            for (let i = from; i < to; i++) {
+                level = Math.max(level, values[i]);
+                shownLevel = Math.max(shownLevel, shown[i]);
+            }
+            peak = Math.max(shownLevel, peak * PEAK_KEEP ** dt, PEAK_FLOOR);
+            // The level jumps are measured against: the peak, or this frame if it goes higher.
+            const scale = Math.max(peak, level);
+            // Kick = any band in the kick range jumping well above its own recent average, by
+            // kickThreshold times that level. Per band, not averaged over the range, so a wide range
+            // still catches a note that hits one band. Bands far below the peak don't count.
+            let rise = 0, repeat = true;
             for (let i = 0; i < BANDS; i++) {
                 slow[i] = slow[i] * keep + shown[i] * (1 - keep);
                 repeat = repeat && values[i] === shown[i];
                 shown[i] = values[i];
-                if (i >= from && i < to && values[i] > 0.15)
-                    jump = Math.max(jump, values[i] - slow[i]);
+                if (i >= from && i < to && values[i] > QUIET * scale)
+                    rise = Math.max(rise, values[i] - slow[i]);
             }
             // The same frame pushed again (a display refreshing faster than the frames come) only
-            // counts towards the averages: it was measured when it came. Measured again as the
-            // averages catch up, its jump shrinks, which re-armed on frames 60 fps never shows.
+            // counts towards the averages and the peak: it was measured when it came. Measured again
+            // as the averages catch up, its jump shrinks, which re-armed on frames 60 fps never shows.
             if (repeat)
                 return null;
+            const jump = rise / scale;
             // One kick per hit: re-arm only once the whole range has settled. A kick's pitch drops as
             // it rings, so its energy reaches lower bands a window later and reads as a fresh onset.
             if (jump < threshold * 0.5)
@@ -139,7 +164,10 @@ export function createKickDetector(settings) {
             if (armed && jump > threshold && animation - lastKick >= cooldown) {
                 armed = false;
                 lastKick = animation;
-                return { power: Math.min(1, 0.5 + jump * 2) };
+                // Power grows with the jump against the peak before this hit, from 0.5 to 1 for a
+                // jump as big as that peak: a hit that rises above the recent kicks gets full power,
+                // so accents stand out at any volume.
+                return { power: 0.5 + 0.5 * Math.min(1, rise / peak) };
             }
             return null;
         },
