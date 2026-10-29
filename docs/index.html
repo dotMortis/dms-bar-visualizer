@@ -151,8 +151,9 @@
   <a href="https://github.com/dotMortis/dms-bar-visualizer">github.com/dotMortis/dms-bar-visualizer</a> · MIT
 </footer>
 
-<script>
-"use strict";
+<script type="module">
+// The visualizer's own kick detector, shared with shell.qml.
+import { createKickDetector } from "./kick.mjs";
 
 // ---- Shader: viz.frag ported to GLSL ES 3.00 (keep in sync with shaders/viz.frag) ----
 const FRAG = `#version 300 es
@@ -337,9 +338,10 @@ const SLIDERS = [
 const cfg = { ...DEFAULTS };
 
 const BANDS = 32;
+const kickDetector = createKickDetector(cfg);
 const st = {
   values: new Float32Array(BANDS), bass: 0, mid: 0, treble: 0, kick: 0,
-  time: 0, flow: 0, kickCount: 0, slowBands: new Array(BANDS).fill(0), lastKick: -100, kickArmed: true,
+  time: 0, flow: 0, kickCount: 0,
   // Same ring buffer as kickTimes/kickPowers/kickSeeds in shell.qml.
   kickTimes: new Array(8).fill(-100), kickPowers: new Float32Array(8), kickSeeds: new Float32Array(8),
   inset: cfg.spacing, cornerRadius: cfg.radius,
@@ -347,30 +349,19 @@ const st = {
 
 const avg = (from, to) => { let s = 0; for (let i = from; i < to; i++) s += st.values[i]; return s / (to - from); };
 
-// Same as bandAt, kickFrom/kickTo and onValuesChanged in shell.qml.
-const bandAt = hz => Math.round(Math.log(hz / 30) / Math.log(14000 / 30) * BANDS);
+// Same as onValuesChanged in shell.qml.
 function onValues() {
   st.bass = avg(0, 6);
   st.mid = avg(6, 16);
   st.treble = avg(16, BANDS);
-  const from = Math.max(0, Math.min(BANDS - 1, bandAt(cfg.kickLowHz)));
-  const to = Math.max(from + 1, Math.min(BANDS, bandAt(cfg.kickHighHz)));
-  let jump = 0;
-  for (let i = 0; i < BANDS; i++) {
-    if (i >= from && i < to && st.values[i] > 0.15) jump = Math.max(jump, st.values[i] - st.slowBands[i]);
-    st.slowBands[i] = st.slowBands[i] * 0.92 + st.values[i] * 0.08;
-  }
-  if (jump < cfg.kickThreshold * 0.5) st.kickArmed = true;
-  if (st.kickArmed && jump > cfg.kickThreshold && st.time - st.lastKick >= cfg.kickCooldown) {
-    st.kickArmed = false;
-    st.kick = 1;
-    st.kickCount = (st.kickCount + 1) % 1000;
-    const slot = st.kickCount % 8;
-    st.kickTimes[slot] = st.time;
-    st.kickPowers[slot] = Math.min(1, 0.5 + jump * 2);
-    st.kickSeeds[slot] = st.kickCount;
-    st.lastKick = st.time;
-  }
+  const hit = kickDetector.push(st.values, st.time);
+  if (!hit) return;
+  st.kick = 1;
+  st.kickCount = (st.kickCount + 1) % 1000;
+  const slot = st.kickCount % 8;
+  st.kickTimes[slot] = st.time;
+  st.kickPowers[slot] = hit.power;
+  st.kickSeeds[slot] = st.kickCount;
 }
 
 // ---- Audio sources ----------------------------------------------------------------
@@ -574,14 +565,17 @@ for (const [key, min, max, stepv, hint] of SLIDERS) {
   l.innerHTML = `<code>${key}</code><output></output><input type="range" min="${min}" max="${max}" step="${stepv}">`;
   const input = l.querySelector("input"), out = l.querySelector("output");
   input.value = cfg[key]; out.textContent = cfg[key];
-  input.addEventListener("input", () => { cfg[key] = parseFloat(input.value); out.textContent = input.value; layout(); });
+  input.addEventListener("input", () => {
+    cfg[key] = parseFloat(input.value); out.textContent = input.value;
+    kickDetector.configure(cfg); layout();
+  });
   outputs[key] = [input, out];
   sliderBox.appendChild(l);
 }
 document.getElementById("reset").addEventListener("click", () => {
   Object.assign(cfg, DEFAULTS);
   for (const [k, [i, o]] of Object.entries(outputs)) { i.value = cfg[k]; o.textContent = cfg[k]; }
-  layout();
+  kickDetector.configure(cfg); layout();
 });
 // Same keys and order as the defaults in shell.qml. followMaximize has no slider here (the
 // checkbox only simulates a maximized window), so it keeps its default.

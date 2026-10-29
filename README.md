@@ -143,6 +143,12 @@ The SVGs in `assets/` are generated. After tweaking `assets/generate.py`, run `p
 
 `docs/index.html` is the live demo (served by GitHub Pages). It carries a GLSL ES port of `shaders/viz.frag`, so mirror shader changes there.
 
+Kick detection isn't mirrored: `docs/kick.mjs` is the one detector, and both `shell.qml` and the demo import it. It lives in `docs/` because Pages publishes only that directory. Browsers don't load module scripts over `file://`, so to run the demo locally, serve the directory and open http://localhost:8000:
+
+```sh
+python3 -m http.server -d docs
+```
+
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md). Releases are tagged on [GitHub](https://github.com/dotMortis/dms-bar-visualizer/releases).
