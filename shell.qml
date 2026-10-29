@@ -8,6 +8,7 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Services.Mpris
 import Quickshell.Wayland
+import "docs/kick.mjs" as Kick
 
 ShellRoot {
     id: root
@@ -70,17 +71,14 @@ ShellRoot {
     readonly property bool followMaximize: config.followMaximize
     readonly property real intensity: config.intensity
     readonly property real speed: config.speed
-    readonly property real kickThreshold: config.kickThreshold
     readonly property real kickDecay: config.kickDecay
-    readonly property real kickCooldown: config.kickCooldown
     readonly property real bassStretch: config.bassStretch
     // ----------------------------------------------------------------------
 
+    // docs/kick.mjs assumes these three when it maps kickLowHz/kickHighHz to bands.
     readonly property int bandCount: 32
     readonly property int lowCutoff: 30      // cava's frequency range, split into log-spaced bands
     readonly property int highCutoff: 14000
-    readonly property int kickFrom: Math.max(0, Math.min(bandCount - 1, bandAt(config.kickLowHz)))
-    readonly property int kickTo: Math.max(kickFrom + 1, Math.min(bandCount, bandAt(config.kickHighHz)))
     property var values: new Array(bandCount).fill(0)
     property real bass: 0
     property real mid: 0
@@ -98,9 +96,8 @@ ShellRoot {
     readonly property var kickAges: kickTimes.map(t => time - t)
     property int kickCount: 0
 
-    property var _slowBands: new Array(bandCount).fill(0)  // per-band running average for onsets
-    property real _lastKick: -100
-    property bool _kickArmed: true
+    // Shared with the demo, so a detector fix lands in both.
+    readonly property var kickDetector: Kick.createKickDetector(defaults)
 
     readonly property string confPath: `${Quickshell.env("XDG_RUNTIME_DIR")}/bar-visualizer-cava.conf`
 
@@ -142,15 +139,11 @@ ShellRoot {
         return sum / (to - from);
     }
 
-    // Nearest band edge for a frequency.
-    function bandAt(hz) {
-        return Math.round(Math.log(hz / lowCutoff) / Math.log(highCutoff / lowCutoff) * bandCount);
-    }
-
     function quad(arr, i) {
         return Qt.vector4d(arr[i], arr[i + 1], arr[i + 2], arr[i + 3]);
     }
 
+    onConfigChanged: kickDetector.configure(config)
     onActivePlayerChanged: sinkProbe.running = true
 
     onSourceChanged: {
@@ -162,33 +155,20 @@ ShellRoot {
         bass = avg(0, 6);
         mid = avg(6, 16);
         treble = avg(16, bandCount);
-        // Kick = any band in the kick range jumping well above its own recent average. Per band,
-        // not averaged over the range, so a wide range still catches a note that hits one band.
-        let jump = 0;
-        for (let i = 0; i < bandCount; i++) {
-            if (i >= kickFrom && i < kickTo && values[i] > 0.15)
-                jump = Math.max(jump, values[i] - _slowBands[i]);
-            _slowBands[i] = _slowBands[i] * 0.92 + values[i] * 0.08;
-        }
-        // One kick per hit: re-arm only once the whole range has settled. A kick's pitch drops as
-        // it rings, so its energy reaches lower bands a window later and reads as a fresh onset.
-        if (jump < kickThreshold * 0.5)
-            _kickArmed = true;
-        if (_kickArmed && jump > kickThreshold && time - _lastKick >= kickCooldown) {
-            _kickArmed = false;
-            kick = 1;
-            kickCount = (kickCount + 1) % 1000;
-            const slot = kickCount % kickSlots;
-            // Copies, so the bindings that read these arrays see the change.
-            const times = kickTimes.slice(), powers = kickPowers.slice(), seeds = kickSeeds.slice();
-            times[slot] = time;
-            powers[slot] = Math.min(1, 0.5 + jump * 2);
-            seeds[slot] = kickCount;
-            kickTimes = times;
-            kickPowers = powers;
-            kickSeeds = seeds;
-            _lastKick = time;
-        }
+        const hit = kickDetector.push(values, time);
+        if (!hit)
+            return;
+        kick = 1;
+        kickCount = (kickCount + 1) % 1000;
+        const slot = kickCount % kickSlots;
+        // Copies, so the bindings that read these arrays see the change.
+        const times = kickTimes.slice(), powers = kickPowers.slice(), seeds = kickSeeds.slice();
+        times[slot] = time;
+        powers[slot] = hit.power;
+        seeds[slot] = kickCount;
+        kickTimes = times;
+        kickPowers = powers;
+        kickSeeds = seeds;
     }
 
     FrameAnimation {
