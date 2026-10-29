@@ -1,0 +1,13 @@
+[Unit]
+Description=Audio visualizer behind the DankMaterialShell top bar
+PartOf=graphical-session.target
+After=graphical-session.target dms.service
+Requisite=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/qs -c bar-visualizer
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target
