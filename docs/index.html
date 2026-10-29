@@ -676,14 +676,22 @@ function readouts() {
 }
 
 // ---- Frame loop (the FrameAnimation in shell.qml) --------------------------------------------
-let last = performance.now() / 1000;
+// The bands come 60 times a second on a 60 Hz clock, like cava's frames, at any display refresh
+// rate. Read once per refresh, a 144 Hz display saw the analyser rise in finer steps, so near the
+// threshold it fired on fewer beats than a 60 Hz one.
+let last = performance.now() / 1000, lastBands = last, nextBands = last;
 function frame() {
   const now = performance.now() / 1000;
   const dt = Math.min(0.1, now - last); last = now;
 
-  if (current === "demo") demo.fill(now);
-  else if (analyser) fillFromAnalyser(dt);
-  onValues(now);
+  if (now >= nextBands - 0.002) {  // a little early is fine: refreshes jitter
+    const t = Math.max(nextBands, now - 0.05);  // after a stall, restart the clock instead of catching up
+    if (current === "demo") demo.fill(t);
+    else if (analyser) fillFromAnalyser(Math.min(0.1, t - lastBands));
+    onValues(t);
+    lastBands = t;
+    nextBands = t + 1 / 60;
+  }
 
   st.time += dt * cfg.speed;
   st.flow += dt * cfg.speed * (8 * st.bass + 4 * st.mid + 6 * st.kick);
