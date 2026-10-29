@@ -114,11 +114,13 @@ Settings live in `~/.config/bar-visualizer/config.json`. The visualizer creates 
 | `speed` | `1.0` | Animation speed |
 | `kickThreshold` | `0.10` | Lower = more kicks detected |
 | `kickDecay` | `6.0` | Higher = shorter impact |
+| `kickLowHz` | `30` | Bottom of the frequency range that fires the kick (shockwave and particles) |
+| `kickHighHz` | `90` | Top of that range. Raise both to hit on snares or claps instead of the kick drum |
 | `bassStretch` | `1.4` | Above 1 spreads the bass (centre) wider, so it isn't hidden under centre widgets |
 
 To find the right geometry, run `hyprctl layers`. The `dms:bar` surface height equals `barThickness + spacing`.
 
-The defaults themselves live in the `Tweakables` block at the top of `shell.qml`.
+The defaults themselves live in the `Tweakables` block at the top of `shell.qml`. If the file is half-written or not valid JSON, the visualizer keeps its last good settings.
 
 Want to tune by eye first? The [live demo](https://dotmortis.github.io/dms-bar-visualizer/) has a slider for every key.
 

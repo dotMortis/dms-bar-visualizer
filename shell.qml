@@ -13,31 +13,53 @@ ShellRoot {
     id: root
 
     // --- Tweakables -------------------------------------------------------
-    // Defaults live in the JsonAdapter below; ~/.config/bar-visualizer/config.json overrides any
-    // of them by key and is re-read when it changes. If it's missing, it's created with the defaults.
+    // ~/.config/bar-visualizer/config.json overrides any of these by key and is re-read when it
+    // changes; a key removed from it falls back here. If the file is missing, it's created with these.
     // Geometry must match the DMS bar. With a maximized window on a screen's active workspace,
     // DMS drops the spacing and rounding (its "maximize detection"); followMaximize mirrors that.
+    readonly property var defaults: ({
+        barThickness: 40,     // DMS bar body height (from innerPadding/font scale)
+        spacing: 4,           // DMS "spacing"
+        radius: 12,           // DMS cornerRadius
+        followMaximize: true, // match DMS "maximizeDetection"
+        intensity: 1.0,       // overall brightness of the effect
+        speed: 1.0,           // animation speed multiplier
+        kickThreshold: 0.10,  // lower = more kicks detected
+        kickDecay: 6.0,       // higher = shorter impact flashes
+        kickLowHz: 30,        // frequency range the kick (shockwave + particles) listens to
+        kickHighHz: 90,
+        bassStretch: 1.4      // >1 spreads bass (centre) wider; 1 = linear
+    })
+    property var config: defaults
+
+    readonly property string configDir: `${Quickshell.env("XDG_CONFIG_HOME") || Quickshell.env("HOME") + "/.config"}/bar-visualizer`
+
+    // FileView watches the file through its directory, so a directory that doesn't exist yet
+    // (first run) would leave it unwatched until a restart. Create it before handing over the path.
+    Process {
+        running: true
+        command: ["mkdir", "-p", root.configDir]
+        onExited: configFile.path = `${root.configDir}/config.json`
+    }
+
     FileView {
-        path: `${Quickshell.env("XDG_CONFIG_HOME") || Quickshell.env("HOME") + "/.config"}/bar-visualizer/config.json`
+        id: configFile
         watchChanges: true
         printErrors: false  // a missing file just means defaults
         onFileChanged: reload()
-        onLoadFailed: error => {
-            if (error == FileViewError.FileNotFound)
-                writeAdapter();
+        // Merged over the defaults on every load, so removed keys reset. A half-written or broken
+        // file keeps the last good settings.
+        onLoaded: {
+            try {
+                root.config = Object.assign({}, root.defaults, JSON.parse(text()));
+            } catch (e) {
+                console.warn(`config.json: ${e.message}; keeping the previous settings`);
+            }
         }
-
-        JsonAdapter {
-            id: config
-            property int barThickness: 40  // DMS bar body height (from innerPadding/font scale)
-            property int spacing: 4        // DMS "spacing"
-            property int radius: 12        // DMS cornerRadius
-            property bool followMaximize: true // match DMS "maximizeDetection"
-            property real intensity: 1.0   // overall brightness of the effect
-            property real speed: 1.0       // animation speed multiplier
-            property real kickThreshold: 0.10 // lower = more kicks detected
-            property real kickDecay: 6.0   // higher = shorter impact flashes
-            property real bassStretch: 1.4 // >1 spreads bass (centre) wider; 1 = linear
+        onLoadFailed: error => {
+            root.config = root.defaults;
+            if (error == FileViewError.FileNotFound)
+                setText(JSON.stringify(root.defaults, null, 4) + "\n");
         }
     }
 
@@ -53,6 +75,10 @@ ShellRoot {
     // ----------------------------------------------------------------------
 
     readonly property int bandCount: 32
+    readonly property int lowCutoff: 30      // cava's frequency range, split into log-spaced bands
+    readonly property int highCutoff: 14000
+    readonly property int kickFrom: Math.max(0, Math.min(bandCount - 1, bandAt(config.kickLowHz)))
+    readonly property int kickTo: Math.max(kickFrom + 1, Math.min(bandCount, bandAt(config.kickHighHz)))
     property var values: new Array(bandCount).fill(0)
     property real bass: 0
     property real mid: 0
@@ -65,7 +91,7 @@ ShellRoot {
     property int kickCount: 0   // seeds a fresh particle spray per kick
     readonly property real kickAge: time - _lastKick
 
-    property real _slowBass: 0
+    property real _slowKick: 0
     property real _lastKick: -100
 
     readonly property string confPath: `${Quickshell.env("XDG_RUNTIME_DIR")}/bar-visualizer-cava.conf`
@@ -108,6 +134,11 @@ ShellRoot {
         return sum / (to - from);
     }
 
+    // Nearest band edge for a frequency.
+    function bandAt(hz) {
+        return Math.round(Math.log(hz / lowCutoff) / Math.log(highCutoff / lowCutoff) * bandCount);
+    }
+
     function band4(i) {
         return Qt.vector4d(values[i], values[i + 1], values[i + 2], values[i + 3]);
     }
@@ -123,10 +154,11 @@ ShellRoot {
         bass = avg(0, 6);
         mid = avg(6, 16);
         treble = avg(16, bandCount);
-        // Kick = bass jumping well above its recent average.
-        _slowBass = _slowBass * 0.92 + bass * 0.08;
-        const jump = bass - _slowBass;
-        if (jump > kickThreshold && bass > 0.15 && time - _lastKick > 0.12) {
+        // Kick = the kick range jumping well above its recent average.
+        const level = avg(kickFrom, kickTo);
+        _slowKick = _slowKick * 0.92 + level * 0.08;
+        const jump = level - _slowKick;
+        if (jump > kickThreshold && level > 0.15 && time - _lastKick > 0.12) {
             kick = 1;
             kickPower = Math.min(1, 0.5 + jump * 2);
             kickCount = (kickCount + 1) % 1000;
@@ -185,8 +217,8 @@ framerate=60
 bars=${root.bandCount}
 autosens=1
 sleep_timer=5
-lower_cutoff_freq=30
-higher_cutoff_freq=14000
+lower_cutoff_freq=${root.lowCutoff}
+higher_cutoff_freq=${root.highCutoff}
 
 [input]
 method=pulse

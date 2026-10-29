@@ -299,13 +299,16 @@ void main() {
 // ---- Tweakables (defaults from shell.qml) ----------------------------------------
 const DEFAULTS = {
   barThickness: 40, spacing: 4, radius: 12,
-  intensity: 1.0, speed: 1.0, kickThreshold: 0.10, kickDecay: 6.0, bassStretch: 1.4,
+  intensity: 1.0, speed: 1.0, kickThreshold: 0.10, kickDecay: 6.0, kickLowHz: 30, kickHighHz: 90,
+  bassStretch: 1.4,
 };
 const SLIDERS = [
   ["intensity", 0.2, 2, 0.05, "Overall brightness"],
   ["speed", 0.2, 2.5, 0.05, "Animation speed"],
   ["kickThreshold", 0.02, 0.4, 0.01, "Lower = more kicks"],
   ["kickDecay", 1, 15, 0.5, "Higher = shorter impact"],
+  ["kickLowHz", 30, 500, 5, "Kick listens from this frequency"],
+  ["kickHighHz", 40, 1000, 5, "Kick listens up to this frequency"],
   ["bassStretch", 1, 3, 0.1, "Spreads bass from the centre"],
   ["barThickness", 28, 96, 1, "Bar height (px)"],
   ["spacing", 0, 24, 1, "Gap around the bar (px)"],
@@ -316,20 +319,24 @@ const cfg = { ...DEFAULTS };
 const BANDS = 32;
 const st = {
   values: new Float32Array(BANDS), bass: 0, mid: 0, treble: 0, kick: 0,
-  time: 0, flow: 0, kickPower: 0, kickCount: 0, slowBass: 0, lastKick: -100,
+  time: 0, flow: 0, kickPower: 0, kickCount: 0, slowKick: 0, lastKick: -100,
   inset: cfg.spacing, cornerRadius: cfg.radius,
 };
 
 const avg = (from, to) => { let s = 0; for (let i = from; i < to; i++) s += st.values[i]; return s / (to - from); };
 
-// Same as onValuesChanged in shell.qml.
+// Same as bandAt, kickFrom/kickTo and onValuesChanged in shell.qml.
+const bandAt = hz => Math.round(Math.log(hz / 30) / Math.log(14000 / 30) * BANDS);
 function onValues() {
   st.bass = avg(0, 6);
   st.mid = avg(6, 16);
   st.treble = avg(16, BANDS);
-  st.slowBass = st.slowBass * 0.92 + st.bass * 0.08;
-  const jump = st.bass - st.slowBass;
-  if (jump > cfg.kickThreshold && st.bass > 0.15 && st.time - st.lastKick > 0.12) {
+  const from = Math.max(0, Math.min(BANDS - 1, bandAt(cfg.kickLowHz)));
+  const to = Math.max(from + 1, Math.min(BANDS, bandAt(cfg.kickHighHz)));
+  const level = avg(from, to);
+  st.slowKick = st.slowKick * 0.92 + level * 0.08;
+  const jump = level - st.slowKick;
+  if (jump > cfg.kickThreshold && level > 0.15 && st.time - st.lastKick > 0.12) {
     st.kick = 1;
     st.kickPower = Math.min(1, 0.5 + jump * 2);
     st.kickCount = (st.kickCount + 1) % 1000;
@@ -547,13 +554,14 @@ document.getElementById("reset").addEventListener("click", () => {
   for (const [k, [i, o]] of Object.entries(outputs)) { i.value = cfg[k]; o.textContent = cfg[k]; }
   layout();
 });
-// Same keys and order as the JsonAdapter in shell.qml. followMaximize has no slider here (the
+// Same keys and order as the defaults in shell.qml. followMaximize has no slider here (the
 // checkbox only simulates a maximized window), so it keeps its default.
 document.getElementById("export").addEventListener("click", () => {
   const out = {
     barThickness: cfg.barThickness, spacing: cfg.spacing, radius: cfg.radius, followMaximize: true,
     intensity: cfg.intensity, speed: cfg.speed, kickThreshold: cfg.kickThreshold,
-    kickDecay: cfg.kickDecay, bassStretch: cfg.bassStretch,
+    kickDecay: cfg.kickDecay, kickLowHz: cfg.kickLowHz, kickHighHz: cfg.kickHighHz,
+    bassStretch: cfg.bassStretch,
   };
   const url = URL.createObjectURL(new Blob([JSON.stringify(out, null, 4) + "\n"], { type: "application/json" }));
   const a = document.createElement("a");
