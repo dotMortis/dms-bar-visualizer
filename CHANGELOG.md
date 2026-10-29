@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `~/.config/bar-visualizer/config.json` is created with the defaults on first start (and again
+  if you delete it, to reset).
+- Demo: an "Export config.json" button that downloads the current slider values as a ready-to-use
+  settings file.
+- The package now reminds you on removal to run `systemctl --user disable --now bar-visualizer`,
+  since pacman can't stop a running user service.
+
+### Fixed
+
+- `--uninstall` in both scripts didn't stop a visualizer started by systemd
+  (`/usr/bin/qs -c bar-visualizer`), so after a plain `pacman -R` it kept running with its files
+  gone.
+- Demo: the geometry sliders started at 48/6/14 instead of the real defaults
+  (`barThickness` 40, `spacing` 4, `radius` 12).
+
 ## [0.1.0] - 2026-10-29
 
 First release.
