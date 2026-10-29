@@ -59,7 +59,8 @@ stop_manual_instances() {
 }
 
 uninstall() {
-    if systemctl --user list-unit-files "$UNIT" &>/dev/null; then
+    # Only touch our own unit copy; /usr/lib/systemd/user/$UNIT belongs to the Arch package.
+    if [[ -f "$UNIT_DIR/$UNIT" ]]; then
         info "Disabling $UNIT"
         systemctl --user disable --now "$UNIT" 2>/dev/null || true
         rm -f "$UNIT_DIR/$UNIT"
