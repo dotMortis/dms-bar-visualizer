@@ -11,41 +11,49 @@ const CONFIGS = {
     sensitive: { kickThreshold: 0.2, kickLowHz: 30, kickHighHz: 90, kickCooldown: 0.1 },
 };
 
-// Measured result per track, not a target: #6's detector (jumps measured against the kick range's
-// recent peak, re-armed as in v0.4.1) on the bands cava puts 30-90 Hz in, replayed on these
-// recordings on 2026-10-29. Before #6 (v0.4.1's absolute threshold): 48 wrong kicks at the defaults
-// (loud_quiet missed 23, zoo1 and zoo2 6 each), 82 at the sensitive config. latency is the median
+// Measured result per track, not a target: #7's detector (jumps measured against the kick range's
+// recent peak, one kick per hit) on the bands cava puts 30-90 Hz in, replayed on these recordings on
+// 2026-10-29. Before #7 (re-armed once no band jumped by half the threshold for a frame): 17 wrong
+// kicks at the defaults, 83 at the sensitive config (28 doubled, 33 stray). latency is the median
 // onset-to-kick delay in ms. A change may only lower a budget. One that has to raise a budget says
 // why, with numbers, in its PR.
 const BUDGETS = {
     defaults: {
         kick_only:      { missed:  0, doubled:  0, stray:  0, latency:  83 },
         steady_house:   { missed:  0, doubled:  0, stray:  0, latency:  86 },
-        sustained_bass: { missed:  1, doubled:  0, stray:  1, latency:  87 },
+        // The stray is the drone coming in at 1.5 s.
+        sustained_bass: { missed:  0, doubled:  0, stray:  1, latency:  86 },
         // The first two kicks after the 12 dB drop, while the peak releases.
         loud_quiet:     { missed:  2, doubled:  0, stray:  0, latency:  85 },
         dnb_808:        { missed:  0, doubled:  0, stray:  0, latency:  67 },
-        double_kick:    { missed: 11, doubled:  0, stray:  0, latency:  87 },
-        zoo1:           { missed:  1, doubled:  0, stray:  0, latency:  94 },
-        zoo2:           { missed:  1, doubled:  0, stray:  0, latency: 101 },
+        // Latency went up with #7 (87 -> 89 ms): 8 of the 11 quarter kicks right after a 16th now fire,
+        // 100-130 ms after their onset, while the 16th still rings in the same bands.
+        double_kick:    { missed:  3, doubled:  0, stray:  0, latency:  89 },
+        // zoo1 and zoo2 went up with #7 (missed 1 -> 2 each), at kicks that come while the last one
+        // still rings and rise less than kickThreshold above it. zoo1 at 22.81 s: the kick before rings
+        // on in band 4 at 0.6 of the peak, the new one is pitched lower, and its bands above 4 rise by
+        // only 0.25-0.33. zoo2 at 17.97 s: a soft kick (0.44 of the peak) whose bands above the last
+        // kick's rise by 0.35-0.39, and the level stays under half the last kick's top for 0.17 s
+        // before it, short of the 0.2 s that ends a hit. The old re-arm caught both.
+        zoo1:           { missed:  2, doubled:  0, stray:  0, latency:  93 },
+        zoo2:           { missed:  2, doubled:  0, stray:  0, latency: 100 },
         zoo3:           { missed:  0, doubled:  0, stray:  0, latency: 105 },
     },
     sensitive: {
-        kick_only:      { missed:  1, doubled:  0, stray:  0, latency:  72 },
+        kick_only:      { missed:  0, doubled:  0, stray:  0, latency:  72 },
         steady_house:   { missed:  0, doubled:  0, stray:  0, latency:  76 },
-        sustained_bass: { missed:  1, doubled: 26, stray: 17, latency:  49 },
-        loud_quiet:     { missed:  1, doubled:  0, stray:  0, latency:  72 },
-        dnb_808:        { missed:  0, doubled:  0, stray: 15, latency:  56 },
-        double_kick:    { missed: 11, doubled:  0, stray:  0, latency:  77 },
-        zoo1:           { missed:  1, doubled:  0, stray:  1, latency:  83 },
-        // zoo2 and zoo3 went up with #6 (missed 1 -> 3 and 2 -> 4, doubled 0 -> 1 each), all through
-        // v0.4.1's re-arm, which waits for a frame in which no band jumps by half the threshold. As a
-        // kick's pitch falls through bands 3 to 1, its jump against the peak stays above 0.1 (zoo2
-        // at 2.39-2.49 s: 0.19-0.21; zoo3 at 13.15 s: down to 0.100), so the detector stays disarmed
-        // through the next onset. Each double is two kicks with a one-frame dip of the jump between
-        // them (zoo2 at 17.99 and 18.09 s, zoo3 at 13.59 and 13.70 s). #7 replaces this re-arm.
-        zoo2:           { missed:  3, doubled:  1, stray:  0, latency:  86 },
-        zoo3:           { missed:  4, doubled:  1, stray:  0, latency:  97 },
+        // Latency went up with #7 (49 -> 78 ms), as the doubles went (26 -> 0). The old 49 ms were
+        // kicks fired by the drone beating against the last kick's tail in band 2, which landed just
+        // after the next onset by chance, before cava showed that kick: all 31 kicks that fired less
+        // than 65 ms after an onset fired in band 2. Now each onset fires once, when its kick shows.
+        sustained_bass: { missed:  0, doubled:  0, stray:  1, latency:  78 },
+        loud_quiet:     { missed:  0, doubled:  0, stray:  0, latency:  71 },
+        dnb_808:        { missed:  0, doubled:  0, stray:  0, latency:  56 },
+        // Latency went up with #7 (77 -> 79 ms), see the defaults.
+        double_kick:    { missed:  3, doubled:  0, stray:  0, latency:  79 },
+        zoo1:           { missed:  0, doubled:  0, stray:  0, latency:  83 },
+        zoo2:           { missed:  0, doubled:  0, stray:  0, latency:  84 },
+        zoo3:           { missed:  0, doubled:  0, stray:  0, latency:  88 },
     },
 };
 

@@ -26,6 +26,17 @@ const PEAK_FLOOR = 0.05;
 // A band below this fraction of the peak is too quiet to fire a kick.
 const QUIET = 0.15;
 
+// One kick per hit. After a kick the detector waits for the hit to end: the kick range's level has to
+// stay under half the highest level it reached during the hit for this many seconds (real time). A
+// dip of a frame or three isn't the end of a hit: a kick ringing over a bass note beats against it,
+// and two 808 tails cancel each other out for a moment, before coming back up.
+const SETTLE = 0.2;
+// A new hit can also come before the last one has ended, as with a 16th note before the beat. A
+// kick's pitch falls as it rings, so a hit runs down through the bands, and the last one rings in the
+// band it got down to. A new hit comes in above that band, in bands the last hit has left: ones that
+// have fallen to this fraction of the highest value they reached during it.
+const LEFT = 0.5;
+
 // Where cava 1.0 puts its bands (cava_init in cavacore.c): band n adds up the FFT bins first..last
 // of an FFT of `size` samples and scales the sum by `gain`.
 const LAYOUT = cavaLayout();
@@ -103,8 +114,16 @@ export function createKickDetector(settings) {
     let lastFrame = null;  // the previous frame's time
     let animation = 0;  // the animation clock kickCooldown runs on: real seconds times speed
     let lastKick = -Infinity;  // on the animation clock
-    let armed = true;
     let peak = PEAK_FLOOR;  // the kick range's recent peak level, slowly released
+    const rises = new Array(BANDS).fill(0);  // this frame's rise of each band above its average
+    // The hit the last kick fired for, until it has ended (see SETTLE and LEFT):
+    let armed = true;  // whether it has ended
+    let hitTop = 0;  // the kick range's highest level during the hit
+    let fallenSince = null;  // when the level fell under half of hitTop, while it stays there
+    let front = 0;  // the lowest band the hit has run down to
+    const top = new Array(BANDS).fill(0);  // each band's highest value during the hit
+    const left = new Array(BANDS).fill(false);  // the bands the hit has left...
+    const low = new Array(BANDS).fill(0);  // ...and their lowest value since
 
     const detector = {
         // The kick range: bands from..to-1.
@@ -143,27 +162,69 @@ export function createKickDetector(settings) {
             // Kick = any band in the kick range jumping well above its own recent average, by
             // kickThreshold times that level. Per band, not averaged over the range, so a wide range
             // still catches a note that hits one band. Bands far below the peak don't count.
-            let rise = 0, repeat = true;
+            let rise = 0, band = from, repeat = true;  // the largest rise, and the band it is in
             for (let i = 0; i < BANDS; i++) {
                 slow[i] = slow[i] * keep + shown[i] * (1 - keep);
                 repeat = repeat && values[i] === shown[i];
                 shown[i] = values[i];
-                if (i >= from && i < to && values[i] > QUIET * scale)
-                    rise = Math.max(rise, values[i] - slow[i]);
+                rises[i] = i >= from && i < to && values[i] > QUIET * scale ? values[i] - slow[i] : 0;
+                if (rises[i] > rise) {
+                    rise = rises[i];
+                    band = i;
+                }
             }
             // The same frame pushed again (a display refreshing faster than the frames come) only
-            // counts towards the averages and the peak: it was measured when it came. Measured again
-            // as the averages catch up, its jump shrinks, which re-armed on frames 60 fps never shows.
+            // counts towards the averages and the peak: it was measured when it came.
             if (repeat)
                 return null;
-            const jump = rise / scale;
-            // One kick per hit: re-arm only once the whole range has settled. A kick's pitch drops as
-            // it rings, so its energy reaches lower bands a window later and reads as a fresh onset.
-            if (jump < threshold * 0.5)
-                armed = true;
-            if (armed && jump > threshold && animation - lastKick >= cooldown) {
+            // One kick per hit. The last hit has ended once the range's level has stayed under half
+            // its top for SETTLE seconds. On a frame's timestamp, so the same at any frame rate.
+            if (!armed) {
+                hitTop = Math.max(hitTop, level);
+                if (level >= hitTop / 2)
+                    fallenSince = null;
+                else if (fallenSince === null)
+                    fallenSince = time;
+                armed = fallenSince !== null && time - fallenSince >= SETTLE;
+            }
+            // The rise that can fire a kick, and the band it is in: once the last hit has ended, any
+            // band's. Until then, only a band that hit has left, above the band it has run down to (the
+            // band rising most, if that is more than a hint of a rise). There, a new hit has to rise
+            // above the band's average and above its lowest since the hit left it. A bass note beating
+            // against the ringing kick, or the kick's tail moving into a lower band, rises at or below
+            // that band.
+            let onset = armed ? rise : 0, at = band;
+            if (!armed) {
+                if (rise > QUIET * scale)
+                    front = Math.min(front, band);
+                for (let i = from; i < to; i++) {
+                    top[i] = Math.max(top[i], values[i]);
+                    if (i <= front)
+                        continue;
+                    if (!left[i] && values[i] < LEFT * top[i]) {
+                        left[i] = true;
+                        low[i] = values[i];
+                    }
+                    if (left[i]) {
+                        low[i] = Math.min(low[i], values[i]);
+                        const own = Math.min(rises[i], values[i] - low[i]);
+                        if (own > onset) {
+                            onset = own;
+                            at = i;
+                        }
+                    }
+                }
+            }
+            if (onset / scale > threshold && animation - lastKick >= cooldown) {
                 armed = false;
                 lastKick = animation;
+                hitTop = level;
+                fallenSince = null;
+                front = at;
+                for (let i = 0; i < BANDS; i++) {
+                    top[i] = values[i];
+                    left[i] = false;
+                }
                 // Power grows with the jump against the peak before this hit, from 0.5 to 1 for a
                 // jump as big as that peak: a hit that rises above the recent kicks gets full power,
                 // so accents stand out at any volume.
