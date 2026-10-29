@@ -111,6 +111,6 @@ cat <<EOF
 
 Make sure your DankBar background is transparent:
   DMS Settings -> Dank Bar -> Transparency = 0
-If the visualizer doesn't line up with the bar, adjust barThickness / spacing / radius
-at the top of $REPO_DIR/shell.qml (see README).
+If the visualizer doesn't line up with the bar, set barThickness / spacing / radius in
+${XDG_CONFIG_HOME:-$HOME/.config}/bar-visualizer/config.json (see README).
 EOF

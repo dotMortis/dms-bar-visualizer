@@ -45,6 +45,17 @@ sudo pacman -S --needed quickshell cava libpulse qt6-shadertools
 
 ## Install
 
+### From the AUR
+
+```sh
+yay -S dms-bar-visualizer-git        # or paru, or any AUR helper
+systemctl --user enable --now bar-visualizer
+```
+
+The package installs to `/usr/share/dms-bar-visualizer` and registers the Quickshell config as `bar-visualizer`, so you can also run it by hand with `qs -c bar-visualizer`.
+
+### From source
+
 ```sh
 git clone https://github.com/dotMortis/dms-bar-visualizer ~/Projects/dms-bar-visualizer
 cd ~/Projects/dms-bar-visualizer
@@ -64,12 +75,21 @@ Then make the bar background transparent: **DMS Settings → Dank Bar → Transp
 ### Uninstall
 
 ```sh
-./install.sh --uninstall
+./install.sh --uninstall                                          # from source
+systemctl --user disable --now bar-visualizer && yay -R dms-bar-visualizer-git   # AUR
 ```
 
 ## Configuration
 
-All settings are at the top of `shell.qml` under `Tweakables`. Quickshell reloads on save.
+Put your settings in `~/.config/bar-visualizer/config.json`. List only the keys you want to change; everything else keeps its default. The visualizer picks up changes as soon as you save, no restart needed.
+
+```json
+{
+  "barThickness": 44,
+  "spacing": 6,
+  "intensity": 1.2
+}
+```
 
 | Property | Default | What it does |
 | --- | --- | --- |
@@ -84,6 +104,10 @@ All settings are at the top of `shell.qml` under `Tweakables`. Quickshell reload
 | `bassStretch` | `1.4` | Above 1 spreads the bass (centre) wider, so it isn't hidden under centre widgets |
 
 To find the right geometry, run `hyprctl layers`. The `dms:bar` surface height equals `barThickness + spacing`.
+
+The defaults themselves live in the `Tweakables` block at the top of `shell.qml`.
+
+Want to tune by eye first? The [live demo](https://dotmortis.github.io/dms-bar-visualizer/) has a slider for every key.
 
 ### Shader
 

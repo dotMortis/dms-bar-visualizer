@@ -1,0 +1,46 @@
+# Maintainer: dotMortis <nick.koellhofer@braun-its.de>
+pkgname=dms-bar-visualizer-git
+_name=dms-bar-visualizer
+pkgver=r2.1ef3c5e
+pkgrel=1
+pkgdesc='Shader audio visualizer behind the DankMaterialShell top bar (Quickshell, Hyprland)'
+arch=('any')
+url='https://github.com/dotMortis/dms-bar-visualizer'
+license=('MIT')
+depends=('quickshell' 'qt6-declarative' 'cava' 'libpulse')
+makedepends=('git' 'qt6-shadertools')
+optdepends=('dms-shell: the top bar it sits behind'
+            'hyprland: the compositor it is built for')
+provides=("$_name")
+conflicts=("$_name")
+source=("git+$url.git")
+sha256sums=('SKIP')
+install="$pkgname.install"
+
+pkgver() {
+  cd "$_name"
+  printf 'r%s.%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+}
+
+build() {
+  cd "$_name"
+  /usr/lib/qt6/bin/qsb --glsl '100 es,120,150' --hlsl 50 --msl 12 \
+    -o shaders/viz.frag.qsb shaders/viz.frag
+}
+
+package() {
+  cd "$_name"
+  local share="$pkgdir/usr/share/$_name"
+  install -Dm644 shell.qml "$share/shell.qml"
+  install -Dm644 shaders/viz.frag "$share/shaders/viz.frag"
+  install -Dm644 shaders/viz.frag.qsb "$share/shaders/viz.frag.qsb"
+
+  # Quickshell finds configs under the XDG config dirs, so `qs -c bar-visualizer` just works.
+  # A copy in ~/.config/quickshell/bar-visualizer takes precedence for local tweaks.
+  install -dm755 "$pkgdir/etc/xdg/quickshell"
+  ln -s "/usr/share/$_name" "$pkgdir/etc/xdg/quickshell/bar-visualizer"
+
+  install -Dm644 systemd/bar-visualizer.service "$pkgdir/usr/lib/systemd/user/bar-visualizer.service"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$_name/README.md"
+}

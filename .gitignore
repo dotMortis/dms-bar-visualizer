@@ -1,2 +1,8 @@
 # Compiled by install.sh
 *.qsb
+
+# makepkg output
+packaging/aur/*/src/
+packaging/aur/*/pkg/
+packaging/aur/*/dms-bar-visualizer/
+packaging/aur/*/*.pkg.tar.*

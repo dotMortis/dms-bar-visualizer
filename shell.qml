@@ -13,17 +13,39 @@ ShellRoot {
     id: root
 
     // --- Tweakables -------------------------------------------------------
+    // Defaults live in the JsonAdapter below; ~/.config/bar-visualizer/config.json overrides any
+    // of them by key and is re-read when it changes.
     // Geometry must match the DMS bar. With a maximized window on a screen's active workspace,
     // DMS drops the spacing and rounding (its "maximize detection"); followMaximize mirrors that.
-    readonly property int barThickness: 40  // DMS bar body height (from innerPadding/font scale)
-    readonly property int spacing: 4        // DMS "spacing"
-    readonly property int radius: 12        // DMS cornerRadius
-    readonly property bool followMaximize: true // match DMS "maximizeDetection"
-    readonly property real intensity: 1.0   // overall brightness of the effect
-    readonly property real speed: 1.0       // animation speed multiplier
-    readonly property real kickThreshold: 0.10 // lower = more kicks detected
-    readonly property real kickDecay: 6.0   // higher = shorter impact flashes
-    readonly property real bassStretch: 1.4 // >1 spreads bass (centre) wider; 1 = linear
+    FileView {
+        path: `${Quickshell.env("XDG_CONFIG_HOME") || Quickshell.env("HOME") + "/.config"}/bar-visualizer/config.json`
+        watchChanges: true
+        printErrors: false  // a missing file just means defaults
+        onFileChanged: reload()
+
+        JsonAdapter {
+            id: config
+            property int barThickness: 40  // DMS bar body height (from innerPadding/font scale)
+            property int spacing: 4        // DMS "spacing"
+            property int radius: 12        // DMS cornerRadius
+            property bool followMaximize: true // match DMS "maximizeDetection"
+            property real intensity: 1.0   // overall brightness of the effect
+            property real speed: 1.0       // animation speed multiplier
+            property real kickThreshold: 0.10 // lower = more kicks detected
+            property real kickDecay: 6.0   // higher = shorter impact flashes
+            property real bassStretch: 1.4 // >1 spreads bass (centre) wider; 1 = linear
+        }
+    }
+
+    readonly property int barThickness: config.barThickness
+    readonly property int spacing: config.spacing
+    readonly property int radius: config.radius
+    readonly property bool followMaximize: config.followMaximize
+    readonly property real intensity: config.intensity
+    readonly property real speed: config.speed
+    readonly property real kickThreshold: config.kickThreshold
+    readonly property real kickDecay: config.kickDecay
+    readonly property real bassStretch: config.bassStretch
     // ----------------------------------------------------------------------
 
     readonly property int bandCount: 32
