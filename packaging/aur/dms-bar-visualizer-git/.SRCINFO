@@ -1,0 +1,22 @@
+pkgbase = dms-bar-visualizer-git
+	pkgdesc = Shader audio visualizer behind the DankMaterialShell top bar (Quickshell, Hyprland)
+	pkgver = r3.2b17edb
+	pkgrel = 1
+	url = https://github.com/dotMortis/dms-bar-visualizer
+	install = dms-bar-visualizer-git.install
+	arch = any
+	license = MIT
+	makedepends = git
+	makedepends = qt6-shadertools
+	depends = quickshell
+	depends = qt6-declarative
+	depends = cava
+	depends = libpulse
+	optdepends = dms-shell: the top bar it sits behind
+	optdepends = hyprland: the compositor it is built for
+	provides = dms-bar-visualizer
+	conflicts = dms-bar-visualizer
+	source = git+https://github.com/dotMortis/dms-bar-visualizer.git
+	sha256sums = SKIP
+
+pkgname = dms-bar-visualizer-git
