@@ -32,7 +32,7 @@ describe("one kick per hit", () => {
     }
 
     // From the top of the demo's slider down to its bottom, every step below 0.15.
-    const THRESHOLDS = [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.35, 0.3, 0.25, 0.2, 0.15, 0.14, 0.13, 0.12, 0.11, 0.1, 0.09];
+    const THRESHOLDS = [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.35, 0.3, 0.25, 0.2, 0.15, 0.14, 0.13, 0.12, 0.11, 0.1, 0.09, 0.08, 0.07, 0.06];
 
     for (const kickCooldown of [0.1, 0.12]) {
         test(`lowering kickThreshold fires more hits and none twice (kickCooldown ${kickCooldown})`, () => {

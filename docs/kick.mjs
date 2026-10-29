@@ -167,14 +167,20 @@ export function createKickDetector(settings) {
             // kickThreshold times that level. Per band, not averaged over the range, so a wide range
             // still catches a note that hits one band. Bands far below the peak don't count.
             let rise = 0, band = from, repeat = true;  // the largest rise, and the band it is in
+            let rising = 0, risingBand = from;  // the same, of the bands that went up on this frame
             for (let i = 0; i < BANDS; i++) {
                 slow[i] = slow[i] * keep + shown[i] * (1 - keep);
                 repeat = repeat && values[i] === shown[i];
+                const up = values[i] > shown[i];
                 shown[i] = values[i];
                 rises[i] = i >= from && i < to && values[i] > QUIET * scale ? values[i] - slow[i] : 0;
                 if (rises[i] > rise) {
                     rise = rises[i];
                     band = i;
+                }
+                if (up && rises[i] > rising) {
+                    rising = rises[i];
+                    risingBand = i;
                 }
             }
             // The same frame pushed again (a display refreshing faster than the frames come) only
@@ -191,13 +197,14 @@ export function createKickDetector(settings) {
                     fallenSince = time;
                 armed = fallenSince !== null && time - fallenSince >= SETTLE;
             }
-            // The rise that can fire a kick, and the band it is in: once the last hit has ended, any
-            // band's. Until then, only a band that hit has left, above the band it has run down to (the
+            // The rise that can fire a kick, and the band it is in: once the last hit has ended, that
+            // of any band going up (one still above its average on the way down is the tail of
+            // something earlier). Until then, only a band that hit has left, above the band it has run down to (the
             // band rising most, if that is more than a hint of a rise). There, a new hit has to rise
             // above the band's average and above its lowest since the hit left it, by at least QUIET of
             // the level at any kickThreshold. A bass note beating against the ringing kick, or the
             // kick's tail moving into a lower band, rises at or below that band, or by less.
-            let onset = armed ? rise : 0, at = band;
+            let onset = armed ? rising : 0, at = armed ? risingBand : band;
             if (!armed) {
                 if (rise > QUIET * scale)
                     front = Math.min(front, band);
