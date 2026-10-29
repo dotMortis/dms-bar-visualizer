@@ -29,7 +29,7 @@ It runs as its own small [Quickshell](https://quickshell.org) config. DMS itself
 - **Layering:** a click-through Wayland layer surface on the `bottom` layer, sized and inset exactly like the DankBar. The DMS bar draws on the `top` layer, so with a transparent bar background the visualizer shows through.
 - **Audio:** [cava](https://github.com/karlstav/cava) provides 32 frequency bands at 60 fps with light smoothing, so transients punch.
 - **Follows the active player:** it tracks the MPRIS player DankBar shows (same selection rules) and captures the monitor of whichever output *that* player's stream plays to. Spotify on Bluetooth while the default output is HDMI just works. With no player, it falls back to the newest playing stream, then the default output.
-- **Beat detection:** any band in the kick range (`kickLowHz` to `kickHighHz`) jumping above its own recent level fires a kick. The jump is measured against the range's recent peak, not on cava's output scale, which cava's auto-sensitivity keeps rescaling: kicks keep firing after a loud passage or a change in volume, and `kickThreshold` means the same at any volume. How hard a hit is next to the recent kicks scales its shockwave and particles, so accents stand out. Up to 8 kicks play on top of each other instead of cutting each other off.
+- **Beat detection:** any band in the kick range (`kickLowHz` to `kickHighHz`) jumping above its own recent level fires a kick. The jump is measured against the range's recent peak, not on cava's output scale, which cava's auto-sensitivity keeps rescaling: kicks keep firing after a loud passage or a change in volume, and `kickThreshold` means the same at any volume. Each hit fires once: after a kick, the detector waits until the range has stayed under half the hit's level for 0.2 s, so a kick ringing over a sustained bass or a long 808 tail doesn't fire again, at any `kickThreshold`. A kick that comes in while the last one still rings, such as a 16th note before the beat, still fires: a kick's pitch falls as it rings, so a new one shows up in the bands above. How hard a hit is next to the recent kicks scales its shockwave and particles, so accents stand out. Up to 8 kicks play on top of each other instead of cutting each other off.
 - **Matches DMS's maximize detection:** with a maximized window on a monitor's active workspace, the visualizer drops its gap and rounding together with the bar.
 
 ## Requirements
@@ -116,7 +116,7 @@ Settings live in `~/.config/bar-visualizer/config.json`. The visualizer creates 
 | `kickDecay` | `6.0` | Higher = shorter impact |
 | `kickLowHz` | `30` | Bottom of the frequency range that fires the kick (shockwave and particles) |
 | `kickHighHz` | `90` | Top of that range. Raise both to hit on snares or claps instead of the kick drum |
-| `kickCooldown` | `0.12` | Minimum seconds between kicks, scaled by `speed`. `0` = no limit (a kick can fire on every cava frame, up to 60 per second) |
+| `kickCooldown` | `0.12` | Minimum seconds between kicks, scaled by `speed`. `0` = no limit |
 | `bassStretch` | `1.4` | Above 1 spreads the bass (centre) wider, so it isn't hidden under centre widgets |
 
 To find the right geometry, run `hyprctl layers`. The `dms:bar` surface height equals `barThickness + spacing`.

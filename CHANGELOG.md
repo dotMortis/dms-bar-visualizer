@@ -18,6 +18,13 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- One hit no longer fires two or more kicks, even at a low `kickThreshold` or over sustained
+  bass. As a kick rang out over a bass note, beat against it or fell into a lower band, it fired
+  again: in a test track with kicks over a 41 Hz drone, 32 of 50 kicks fired twice at
+  `kickThreshold` 0.2, and long 808 kicks fired again about 0.4 s after the hit. A kick now waits
+  for the hit to die down, and lowering `kickThreshold` only makes more hits fire. A kick that
+  comes in while the last one still rings, such as a 16th note before the beat, now fires too:
+  the beat's kick after it used to be skipped. Also in the demo.
 - Kicks no longer go missing for many seconds at a time in steady music, most often after a louder
   passage. cava's auto-sensitivity takes over 10 s to catch up after one, and kicks had to clear a
   fixed jump on its output: in a test track that drops by 12 dB, all 23 kicks after the drop were
