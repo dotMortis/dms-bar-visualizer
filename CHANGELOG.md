@@ -9,36 +9,29 @@ All notable changes to this project are documented here. The format follows
 ### Changed
 
 - `kickThreshold` is now a fraction of the kick range's recent peak instead of a jump on cava's
-  0–1 output scale, so it means the same at any volume. The default stays 0.4. A value tuned
-  against the old detector, such as 0.2, means something else now: re-tune it, starting from the
-  default. Also in the demo, whose slider now runs from 0.05 to 0.9.
-- A kick's shockwave and particles now scale with how hard the hit is next to the recent kicks:
-  a hit above them gets full size, a steady beat a little less. At the default threshold, every
-  kick used to get full size. Also in the demo.
+  0–1 output scale, so it means the same at any volume. The default stays 0.4. Re-tune a value set
+  for the old detector, such as 0.2, starting from the default. Also in the demo.
+- A kick's shockwave and particles now scale with how hard the hit is next to the recent kicks, so
+  accents stand out. At the default threshold, every kick used to get full size. Also in the demo.
+- Demo: the `kickThreshold` slider runs from 0.06 to 0.9 (was 0.02 to 0.8).
 
 ### Fixed
 
-- One hit no longer fires two or more kicks, even at a low `kickThreshold` or over sustained
-  bass. As a kick rang out over a bass note, beat against it or fell into a lower band, it fired
-  again: in a test track with kicks over a 41 Hz drone, 32 of 50 kicks fired twice at
-  `kickThreshold` 0.2, and long 808 kicks fired again about 0.4 s after the hit. A kick now waits
-  for the hit to die down, and lowering `kickThreshold` only makes more hits fire. A kick that
-  comes in while the last one still rings, such as a 16th note before the beat, now fires too:
-  the beat's kick after it used to be skipped. Also in the demo.
-- Kicks no longer go missing for many seconds at a time in steady music, most often after a louder
-  passage. cava's auto-sensitivity takes over 10 s to catch up after one, and kicks had to clear a
-  fixed jump on its output: in a test track that drops by 12 dB, all 23 kicks after the drop were
-  missed. Kicks now come back within about a second, and within 2 s after cava restarts. The
-  shockwave also lands sooner, since a kick no longer waits for a slow rise to clear that fixed
-  jump. Also in the demo.
-- `kickLowHz` / `kickHighHz` now select the bands cava actually puts those frequencies in. They
-  were mapped on a plain log scale, which is up to one band off below 100 Hz: the default 30–90 Hz
-  range left out the band 90 Hz lands in, so kicks pitched there fired late or not at all.
-  Also in the demo.
-- The demo's kicks no longer depend on the display's refresh rate. On a 120 or 144 Hz display it
-  fired on other beats than at 60 Hz, so settings tuned there didn't carry over. The detector's
-  smoothing now runs on real time instead of per frame, and the demo makes its bands 60 times a
-  second like cava. `kickCooldown` still scales with `speed`. The visualizer's kicks don't change.
+- One hit no longer fires two or more kicks as it rings out over a bass note or falls into a lower
+  band, or as a long 808 tail rings on. Down to a `kickThreshold` of 0.06, lowering it only makes
+  more hits fire. Also in the demo.
+- A kick that comes in while the last one still rings, such as a 16th note before the beat, now
+  fires. The beat's kick after it used to be skipped. Also in the demo.
+- Kicks no longer go missing for many seconds after a louder passage, while cava's
+  auto-sensitivity catches up. They come back within about a second, and within 2 s after cava
+  restarts. Also in the demo.
+- The shockwave lands sooner: a kick no longer waits for a slow rise to clear a fixed jump on
+  cava's output. Also in the demo.
+- `kickLowHz` / `kickHighHz` now select the bands cava actually puts those frequencies in. Below
+  100 Hz they were up to one band off, so the default 30–90 Hz range left out the band 90 Hz lands
+  in. Also in the demo.
+- Demo: kicks no longer depend on the display's refresh rate. At 120 or 144 Hz it fired on other
+  beats than at 60 Hz, so settings tuned there didn't carry over.
 
 ## [0.4.1] - 2026-10-29
 
