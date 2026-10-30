@@ -7,7 +7,7 @@ import { BANDS, createKickDetector } from "../docs/kick.mjs";
 
 // The settings the replay tests hold the detector to: the defaults, and a sensitive config.
 export const CONFIGS = {
-    defaults: { kickThreshold: 0.2, kickLowHz: 30, kickHighHz: 79, kickCooldown: 0.1 },
+    defaults: { kickThreshold: 0.4, kickLowHz: 20, kickHighHz: 90, kickCooldown: 0.1 },
     sensitive: { kickThreshold: 0.2, kickLowHz: 30, kickHighHz: 90, kickCooldown: 0.1 },
 };
 

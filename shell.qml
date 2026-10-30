@@ -25,10 +25,10 @@ ShellRoot {
         followMaximize: true, // match DMS "maximizeDetection"
         intensity: 1.0,       // overall brightness of the effect
         speed: 1.0,           // animation speed multiplier
-        kickThreshold: 0.2,   // lower = more kicks detected
+        kickThreshold: 0.4,   // lower = more kicks detected
         kickDecay: 6.0,       // higher = shorter impact flashes
-        kickLowHz: 30,        // frequency range the kick (shockwave + particles) listens to
-        kickHighHz: 79,
+        kickLowHz: 20,        // frequency range the kick (shockwave + particles) listens to
+        kickHighHz: 90,
         kickCooldown: 0.1,    // min seconds between kicks; 0 = no limit
         bassStretch: 1.4      // >1 spreads bass (centre) wider; 1 = linear
     })

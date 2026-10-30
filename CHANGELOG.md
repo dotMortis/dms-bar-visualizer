@@ -9,13 +9,12 @@ All notable changes to this project are documented here. The format follows
 ### Changed
 
 - `kickThreshold` is now a fraction of the kick range's recent peak instead of a jump on cava's
-  0–1 output scale, so it means the same at any volume. Re-tune a value set for the old detector
-  starting from the new default. Also in the demo.
-- New kick defaults: `kickThreshold` 0.2 (was 0.4), `kickHighHz` 79 (was 90) and `kickCooldown`
-  0.1 s (was 0.12 s). More kicks fire, and the bass notes around 90 Hz no longer do. Also in the
-  demo.
+  0–1 output scale, so it means the same at any volume. The default stays 0.4. Re-tune a value set
+  for the old detector, such as 0.2, starting from the default. Also in the demo.
 - A kick's shockwave and particles now scale with how hard the hit is next to the recent kicks, so
   accents stand out. At the default threshold, every kick used to get full size. Also in the demo.
+- New kick defaults: `kickLowHz` 20 (was 30; cava's lowest band starts at 30 Hz, so this listens
+  to the same bands) and `kickCooldown` 0.1 s (was 0.12 s). Also in the demo.
 - Demo: the `kickThreshold` slider runs from 0.06 to 0.9 (was 0.02 to 0.8).
 
 ### Fixed
@@ -31,7 +30,8 @@ All notable changes to this project are documented here. The format follows
 - The shockwave lands sooner: a kick no longer waits for a slow rise to clear a fixed jump on
   cava's output. Also in the demo.
 - `kickLowHz` / `kickHighHz` now select the bands cava actually puts those frequencies in. Below
-  100 Hz they were up to one band off. Also in the demo.
+  100 Hz they were up to one band off, so the default 30–90 Hz range left out the band 90 Hz lands
+  in. Also in the demo.
 - Demo: kicks no longer depend on the display's refresh rate. At 120 or 144 Hz it fired on other
   beats than at 60 Hz, so settings tuned there didn't carry over.
 

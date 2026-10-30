@@ -319,7 +319,7 @@ void main() {
 // ---- Tweakables (defaults from shell.qml) ----------------------------------------
 const DEFAULTS = {
   barThickness: 40, spacing: 4, radius: 12,
-  intensity: 1.0, speed: 1.0, kickThreshold: 0.2, kickDecay: 6.0, kickLowHz: 30, kickHighHz: 79,
+  intensity: 1.0, speed: 1.0, kickThreshold: 0.4, kickDecay: 6.0, kickLowHz: 20, kickHighHz: 90,
   kickCooldown: 0.1, bassStretch: 1.4,
 };
 const SLIDERS = [
@@ -327,7 +327,7 @@ const SLIDERS = [
   ["speed", 0.2, 2.5, 0.05, "Animation speed"],
   ["kickThreshold", 0.06, 0.9, 0.01, "Jump needed, as a fraction of the recent peak. Lower = more kicks"],
   ["kickDecay", 1, 15, 0.5, "Higher = shorter impact"],
-  ["kickLowHz", 30, 500, 5, "Kick listens from this frequency"],
+  ["kickLowHz", 20, 500, 5, "Kick listens from this frequency"],
   ["kickHighHz", 40, 1000, 5, "Kick listens up to this frequency"],
   ["kickCooldown", 0, 0.5, 0.01, "Min seconds between kicks (0 = no limit)"],
   ["bassStretch", 1, 3, 0.1, "Spreads bass from the centre"],

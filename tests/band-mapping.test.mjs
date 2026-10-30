@@ -45,9 +45,8 @@ describe("band mapping", () => {
     });
 
     test("the kick range listens to every band from kickLowHz's up to and including kickHighHz's", () => {
-        // cava puts 30 Hz in band 0, 79 Hz in band 5 and 90 Hz in band 6.
-        assert.deepEqual(createKickDetector(CONFIGS.defaults).bands, { from: 0, to: 6 });
-        assert.deepEqual(createKickDetector(CONFIGS.sensitive).bands, { from: 0, to: 7 });
+        // The defaults, 30 to 90 Hz: cava puts 30 Hz in band 0 and 90 Hz in band 6.
+        assert.deepEqual(createKickDetector(CONFIGS.defaults).bands, { from: 0, to: 7 });
     });
 
     test("frequencies outside cava's 30 Hz to 14 kHz select its first and last band", () => {
