@@ -32,6 +32,8 @@ package() {
   cd "$_name"
   local share="$pkgdir/usr/share/$_name"
   install -Dm644 shell.qml "$share/shell.qml"
+  # The kick detector, shared with the demo; shell.qml imports it from docs/.
+  install -Dm644 docs/kick.mjs "$share/docs/kick.mjs"
   install -Dm644 shaders/viz.frag "$share/shaders/viz.frag"
   install -Dm644 shaders/viz.frag.qsb "$share/shaders/viz.frag.qsb"
 

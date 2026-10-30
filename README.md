@@ -29,7 +29,7 @@ It runs as its own small [Quickshell](https://quickshell.org) config. DMS itself
 - **Layering:** a click-through Wayland layer surface on the `bottom` layer, sized and inset exactly like the DankBar. The DMS bar draws on the `top` layer, so with a transparent bar background the visualizer shows through.
 - **Audio:** [cava](https://github.com/karlstav/cava) provides 32 frequency bands at 60 fps with light smoothing, so transients punch.
 - **Follows the active player:** it tracks the MPRIS player DankBar shows (same selection rules) and captures the monitor of whichever output *that* player's stream plays to. Spotify on Bluetooth while the default output is HDMI just works. With no player, it falls back to the newest playing stream, then the default output.
-- **Beat detection:** any band in the kick range (`kickLowHz` to `kickHighHz`) jumping above its own recent level fires a kick. The jump's size scales the shockwave and particles, and up to 8 kicks play on top of each other instead of cutting each other off.
+- **Beat detection:** any band in the kick range (`kickLowHz` to `kickHighHz`) jumping above its recent level by `kickThreshold` of the range's recent peak fires a kick, at any volume. Down to 0.06, each hit fires once. Lower values catch softer kicks, and from about 0.15 down bass notes too. Harder hits get bigger shockwaves, and up to 8 play at once.
 - **Matches DMS's maximize detection:** with a maximized window on a monitor's active workspace, the visualizer drops its gap and rounding together with the bar.
 
 ## Requirements
@@ -112,11 +112,11 @@ Settings live in `~/.config/bar-visualizer/config.json`. The visualizer creates 
 | `followMaximize` | `true` | Mirror DMS's *maximize detection* |
 | `intensity` | `1.0` | Overall brightness |
 | `speed` | `1.0` | Animation speed |
-| `kickThreshold` | `0.4` | How far (0 to 1) a band must jump above its recent level to fire a kick. Lower = more kicks |
+| `kickThreshold` | `0.4` | How far a band must jump above its recent level to fire a kick, as a fraction (0 to 1) of the kick range's recent peak. Lower = more kicks |
 | `kickDecay` | `6.0` | Higher = shorter impact |
-| `kickLowHz` | `30` | Bottom of the frequency range that fires the kick (shockwave and particles) |
+| `kickLowHz` | `20` | Bottom of the frequency range that fires the kick (shockwave and particles) |
 | `kickHighHz` | `90` | Top of that range. Raise both to hit on snares or claps instead of the kick drum |
-| `kickCooldown` | `0.12` | Minimum seconds between kicks, scaled by `speed`. `0` = no limit (a kick can fire on every cava frame, up to 60 per second) |
+| `kickCooldown` | `0.1` | Minimum seconds between kicks, scaled by `speed`. `0` = no limit |
 | `bassStretch` | `1.4` | Above 1 spreads the bass (centre) wider, so it isn't hidden under centre widgets |
 
 To find the right geometry, run `hyprctl layers`. The `dms:bar` surface height equals `barThickness + spacing`.
@@ -142,6 +142,22 @@ To change colours, edit the `palette()` cycle and the `LAVENDER` / `MAUVE` / `PI
 The SVGs in `assets/` are generated. After tweaking `assets/generate.py`, run `python3 assets/generate.py`.
 
 `docs/index.html` is the live demo (served by GitHub Pages). It carries a GLSL ES port of `shaders/viz.frag`, so mirror shader changes there.
+
+Kick detection isn't mirrored: `docs/kick.mjs` is the one detector, and both `shell.qml` and the demo import it. It lives in `docs/` because Pages publishes only that directory. Browsers don't load module scripts over `file://`, so to run the demo locally, serve the directory and open http://localhost:8000:
+
+```sh
+python3 -m http.server -d docs
+```
+
+### Kick detection tests
+
+A replay suite holds the kick detector to account. It plays real cava output, recorded from synthesized tracks with known kick onsets, through `docs/kick.mjs` and fails when a track gets more missed, doubled or stray kicks, or a later median kick, than its budget allows. It needs nothing but node, no install:
+
+```sh
+node --test
+```
+
+It prints those numbers per track for the default and a sensitive kick setting. Other tests check that the kicks and their power don't depend on the volume, and that kicks come back soon after a 12 dB drop and after a cava restart. A sine sweep recorded the same way checks that `kickLowHz` and `kickHighHz` select the bands cava puts those frequencies in. `tests/fixtures/record.py` synthesizes and records the tracks; its header says how to re-record them or add one (needs cava, numpy and real time).
 
 ## Changelog
 
