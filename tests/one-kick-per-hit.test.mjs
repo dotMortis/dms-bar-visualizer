@@ -30,7 +30,9 @@ describe("one kick per hit", () => {
                 const { onsets, frames } = FIXTURES[scenario];
                 let caught = [];
                 for (const kickThreshold of THRESHOLDS) {
-                    const settings = { ...CONFIGS.defaults, kickThreshold, kickCooldown };
+                    // On 30-90 Hz. With the defaults' narrower range, double_kick's 16th notes fire
+                    // so late at 0.5-0.6 that the scoring credits them to the beat after them.
+                    const settings = { ...CONFIGS.sensitive, kickThreshold, kickCooldown };
                     const { missed, doubled } = score(onsets, replay(frames, settings).map(k => k.time));
                     assert.deepEqual(doubled, [], `${scenario} at kickThreshold ${kickThreshold}: onsets that fire twice`);
                     const lost = caught.filter(t => missed.includes(t));

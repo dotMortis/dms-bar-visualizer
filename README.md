@@ -112,11 +112,11 @@ Settings live in `~/.config/bar-visualizer/config.json`. The visualizer creates 
 | `followMaximize` | `true` | Mirror DMS's *maximize detection* |
 | `intensity` | `1.0` | Overall brightness |
 | `speed` | `1.0` | Animation speed |
-| `kickThreshold` | `0.4` | How far a band must jump above its recent level to fire a kick, as a fraction (0 to 1) of the kick range's recent peak. Lower = more kicks |
+| `kickThreshold` | `0.2` | How far a band must jump above its recent level to fire a kick, as a fraction (0 to 1) of the kick range's recent peak. Lower = more kicks |
 | `kickDecay` | `6.0` | Higher = shorter impact |
 | `kickLowHz` | `30` | Bottom of the frequency range that fires the kick (shockwave and particles) |
-| `kickHighHz` | `90` | Top of that range. Raise both to hit on snares or claps instead of the kick drum |
-| `kickCooldown` | `0.12` | Minimum seconds between kicks, scaled by `speed`. `0` = no limit |
+| `kickHighHz` | `79` | Top of that range. Raise both to hit on snares or claps instead of the kick drum |
+| `kickCooldown` | `0.1` | Minimum seconds between kicks, scaled by `speed`. `0` = no limit |
 | `bassStretch` | `1.4` | Above 1 spreads the bass (centre) wider, so it isn't hidden under centre widgets |
 
 To find the right geometry, run `hyprctl layers`. The `dms:bar` surface height equals `barThickness + spacing`.

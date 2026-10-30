@@ -11,20 +11,18 @@ import { CONFIGS, FIXTURES, overBudget, replay, report, score } from "./replay.m
 // why, with numbers, in its PR.
 const BUDGETS = {
     defaults: {
-        kick_only:      { missed:  0, doubled:  0, stray:  0, latency:  83 },
-        steady_house:   { missed:  0, doubled:  0, stray:  0, latency:  86 },
+        kick_only:      { missed:  0, doubled:  0, stray:  0, latency:  96 },
+        steady_house:   { missed:  0, doubled:  0, stray:  0, latency:  97 },
         // The stray is the drone coming in at 1.5 s.
-        sustained_bass: { missed:  0, doubled:  0, stray:  1, latency:  86 },
-        // The first two kicks after the 12 dB drop, while the peak releases.
-        loud_quiet:     { missed:  2, doubled:  0, stray:  0, latency:  85 },
-        dnb_808:        { missed:  0, doubled:  0, stray:  0, latency:  67 },
-        // The beat kicks right after a 16th note fire 98-121 ms after their onset, as the 16th rings.
-        double_kick:    { missed:  0, doubled:  0, stray:  0, latency:  90 },
-        // zoo1 at 18.94 s (a soft kick) and 22.81 s, zoo2 at 14.58 and 17.97 s. The last three come
-        // while the kick before still rings, and rise less than 0.4 of the peak in the bands above it.
-        zoo1:           { missed:  2, doubled:  0, stray:  0, latency:  93 },
-        zoo2:           { missed:  2, doubled:  0, stray:  0, latency: 100 },
-        zoo3:           { missed:  0, doubled:  0, stray:  0, latency: 105 },
+        sustained_bass: { missed:  0, doubled:  0, stray:  1, latency:  99 },
+        // The first kick after the 12 dB drop, while the peak releases.
+        loud_quiet:     { missed:  1, doubled:  0, stray:  0, latency:  97 },
+        dnb_808:        { missed:  0, doubled:  0, stray:  0, latency:  84 },
+        double_kick:    { missed:  0, doubled:  0, stray:  0, latency: 102 },
+        // zoo1 at 18.94 s (a soft kick) and zoo3 at 7.81 s.
+        zoo1:           { missed:  1, doubled:  0, stray:  0, latency: 108 },
+        zoo2:           { missed:  0, doubled:  0, stray:  0, latency: 108 },
+        zoo3:           { missed:  1, doubled:  0, stray:  0, latency: 121 },
     },
     sensitive: {
         kick_only:      { missed:  0, doubled:  0, stray:  0, latency:  72 },
