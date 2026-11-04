@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The Lock Ring's hour points flash when a Kick's shockwave reaches them instead of at the
+  instant of the Kick, so the wave visibly travels out and lights them as it passes, brighter on
+  a harder hit. A soft Kick's shockwave stops short of the ring and leaves them dark. The hands
+  still flash on the Kick itself.
+
 ## [0.7.1] - 2026-11-04
 
 ### Fixed

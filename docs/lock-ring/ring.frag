@@ -3,7 +3,7 @@
 // the ribbon is the dial: in silence a thin, faint wave that breathes and drifts around the dial
 // radius, never a fixed circle; music grows it outward with each band's level, mirrored left and
 // right with bass at the bottom, and the ring's radius swells with the music's energy. 12 hour
-// points ride on it. On every Kick a chromatic shockwave expands from the center, bigger on a
+// points ride on it, each flashing as a shockwave's front reaches it. On every Kick a chromatic shockwave expands from the center, bigger on a
 // harder hit, and a spray of sparks flies off the ring; up to KICKS of them play at once. On top,
 // the clock's three floating hands as neon wave ribbons (hand()): they swing, thicken and glow with
 // their bands and whip on every Kick, around a straight axis through the center at the true time.
@@ -59,6 +59,9 @@ const float MAX_REACH = 0.9 * 0.5 / DIAL_RATIO;
 const float KICK_GROW = 4.5;
 const float KICK_FADE = 2.2;
 const float PLAYED_OUT = 3.0;
+// shockwaveCrossing(): how far ahead of and behind a shockwave's front a radius feels it crossing.
+const float CROSSING_LEAD = 0.1;
+const float CROSSING_TRAIL = 0.3;
 
 float band(int i) {
     int v = i / 4;
@@ -71,6 +74,25 @@ float band(int i) {
 float kickAge(int i) { return i < 4 ? ubuf.kickAge0[i] : ubuf.kickAge1[i - 4]; }
 float kickPower(int i) { return i < 4 ? ubuf.kickPower0[i] : ubuf.kickPower1[i - 4]; }
 float kickSeed(int i) { return i < 4 ? ubuf.kickSeed0[i] : ubuf.kickSeed1[i - 4]; }
+
+// How brightly a shockwave's front is crossing radius r (dial radii) right now, 0..1: each kick's
+// strength, shaped by how near its front is; the brightest wins. lock-ring/kicks.mjs
+// shockwaveCrossing().
+float shockwaveCrossing(float r) {
+    float crossing = 0.0;
+    for (int j = 0; j < KICKS; j++) {
+        float age = max(kickAge(j), 0.0);
+        float power = kickPower(j);
+        if (power <= 0.0 || age >= PLAYED_OUT)
+            continue;
+        float reach = KICK_ORIGIN + (MAX_REACH - KICK_ORIGIN) * power;
+        float front = KICK_ORIGIN + (reach - KICK_ORIGIN) * (1.0 - exp(-age * KICK_GROW));
+        float ds = r - front;                 // > 0 ahead of the front, < 0 behind it
+        float near = ds >= 0.0 ? 1.0 - smoothstep(0.0, CROSSING_LEAD, ds) : 1.0 - smoothstep(0.0, CROSSING_TRAIL, -ds);
+        crossing = max(crossing, power * exp(-age * KICK_FADE) * near);
+    }
+    return min(crossing, 1.0);
+}
 
 float hash1(float n) {
     return fract(sin(n * 12.9898) * 43758.5453);
@@ -315,19 +337,22 @@ void main() {
     col *= ubuf.intensity;
 
     // --- Hour points, riding on the ribbon (hourPoints() in lock-ring/ring.mjs) -----------------
-    // Clock marks, so at full brightness whatever the intensity.
+    // Clock marks, so at full brightness whatever the intensity. Each flashes as a shockwave's
+    // front reaches its radius (shockwaveCrossing()), not at the kick's instant.
     for (int i = 0; i < 12; i++) {
         float th = float(i) * TAU / 12.0;
         float ai = abs(th - PI);
         float level = min(1.0, 1.3 * spectrum(pow(ai / PI, ubuf.bassStretch)));
-        vec2 at = ribbonRadius(th, level, 0) * vec2(sin(th), -cos(th));
+        float ri = ribbonRadius(th, level, 0);
+        vec2 at = ri * vec2(sin(th), -cos(th));
         float quarter = i - (i / 3) * 3 == 0 ? 1.0 : 0.0;
-        float glow = mix(0.6, 1.0, quarter) * (0.6 + 0.4 * ubuf.presence) + 0.8 * ubuf.handFlash;
+        float hit = shockwaveCrossing(ri);
+        float glow = mix(0.6, 1.0, quarter) * (0.6 + 0.4 * ubuf.presence) + 0.8 * hit;
         vec2 dq = q - at;
         float d2 = dot(dq, dq);
         float core = exp(-d2 / (POINT_SIZE * POINT_SIZE));
         float halo = 1.0 / (1.0 + d2 / (POINT_SIZE * POINT_SIZE * 9.0)) * smoothstep(0.2, 0.05, sqrt(d2));
-        vec3 c = mix(LAVENDER, vec3(1.0), 0.35 * quarter + 0.3 * ubuf.handFlash);
+        vec3 c = mix(LAVENDER, vec3(1.0), 0.35 * quarter + 0.3 * hit);
         col += (c * core * 1.1 + pow(LAVENDER, vec3(2.0)) * halo * 0.25) * glow;
     }
 

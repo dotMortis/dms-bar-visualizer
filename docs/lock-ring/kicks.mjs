@@ -1,6 +1,7 @@
 // Kicks on the Lock Ring, apart from drawing: how each one's shockwave grows out of the center,
-// and how the hands flash. Plain JS for tests/lock-kicks.test.mjs; shaders/ring.frag mirrors
-// kickAt() and has the same constants (tests/lock-constants.test.mjs). The sparks a kick flings
+// how brightly it crosses a radius as it passes, and how the hands flash. Plain JS for
+// tests/lock-kicks.test.mjs; shaders/ring.frag mirrors kickAt() and shockwaveCrossing() and has
+// the same constants (tests/lock-constants.test.mjs). The sparks a kick flings
 // off the ring are the shader's alone.
 // Distances are in dial radii (1 = the dial), ages in seconds, power is the shared detector's
 // hit strength (0.5..1, docs/kick.mjs).
@@ -46,6 +47,36 @@ export function kickSlots(ages, powers, seeds) {
         slots.seeds.push(live ? (seeds?.[i] ?? 0) : 0);
     }
     return slots;
+}
+
+// How far ahead of a shockwave's front, and how far behind it, a radius still feels it crossing,
+// in dial radii (shockwaveCrossing()).
+export const CROSSING_LEAD = 0.1;
+export const CROSSING_TRAIL = 0.3;
+
+const smoothstep = (e0, e1, x) => {
+    const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
+    return t * t * (3 - 2 * t);
+};
+
+// How brightly a shockwave's front is crossing `radius` (dial radii) right now, 0..1, from the
+// pipeline's last kicks (`ages`, `powers`, any order, as kickSlots() takes them). Each shockwave
+// counts with its strength (kickAt()), shaped by how close its front is: nothing until the front
+// is within CROSSING_LEAD, full strength as it passes, gone once it is CROSSING_TRAIL beyond.
+// Overlapping shockwaves take the brightest. What the hour points flash by as the wave reaches
+// them; shaders/ring.frag's shockwaveCrossing() mirrors it.
+export function shockwaveCrossing(radius, ages, powers) {
+    const slots = kickSlots(ages, powers, []);
+    let crossing = 0;
+    for (let i = 0; i < KICKS; i++) {
+        if (slots.powers[i] <= 0)
+            continue;
+        const { front, strength } = kickAt(Math.max(0, slots.ages[i]), slots.powers[i]);
+        const ds = radius - front;  // > 0 ahead of the front, < 0 behind it
+        const near = ds >= 0 ? 1 - smoothstep(0, CROSSING_LEAD, ds) : 1 - smoothstep(0, CROSSING_TRAIL, -ds);
+        crossing = Math.max(crossing, strength * near);
+    }
+    return Math.min(1, crossing);
 }
 
 // How brightly the hands flash, 0..1, from the same kicks as the shockwaves: every kick lights them

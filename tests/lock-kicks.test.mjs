@@ -8,7 +8,7 @@ import path from "node:path";
 import { describe, test } from "node:test";
 
 import { DEFAULTS } from "../docs/config.mjs";
-import { KICK_ORIGIN, EDGE, KICKS, handFlash, kickAt, kickSlots } from "../lock-ring/kicks.mjs";
+import { KICK_ORIGIN, EDGE, KICKS, handFlash, kickAt, kickSlots, shockwaveCrossing } from "../lock-ring/kicks.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -124,5 +124,71 @@ describe("hand flash", () => {
         const powers = [1, 0.6, 1, ...empty.slice(3)];
         const flash = handFlash(ages, powers, decay);
         assert.ok(flash >= 0.6 && flash <= 1, `flash ${flash}`);
+    });
+});
+
+// How brightly a shockwave's front is crossing a radius right now, 0..1: what the hour points
+// light up by as the wave passes them.
+describe("shockwave crossing", () => {
+    const empty = new Array(KICKS).fill(0);
+    const one = (age, power) => [[age, ...new Array(KICKS - 1).fill(100)], [power, ...empty.slice(1)]];
+
+    test("is 0 with no kicks", () => {
+        for (const r of [0, 0.3, 1, 1.2]) {
+            assert.equal(shockwaveCrossing(r, [], []), 0);
+            assert.equal(shockwaveCrossing(r, new Array(KICKS).fill(100), empty), 0);
+        }
+    });
+
+    test("is 0 where the front hasn't reached yet, and peaks as the front passes", () => {
+        let peak = 0, peakAge = 0;
+        for (let age = 0; age <= 2; age += 0.005) {
+            const value = shockwaveCrossing(1, ...one(age, 1));
+            if (kickAt(age, 1).front < 0.85)
+                assert.equal(value, 0, `at ${age} s, front ${kickAt(age, 1).front}`);
+            if (value > peak)
+                [peak, peakAge] = [value, age];
+        }
+        assert.ok(peak > 0.4, `peak ${peak}`);
+        assert.ok(Math.abs(kickAt(peakAge, 1).front - 1) < 0.02, `peaks with the front at ${kickAt(peakAge, 1).front}`);
+    });
+
+    const peakAt = (radius, ages, powers) => {
+        let peak = 0;
+        for (let t = 0; t <= 3; t += 0.005)
+            peak = Math.max(peak, shockwaveCrossing(radius, ages.map(a => a + t), powers));
+        return peak;
+    };
+
+    test("a harder kick gives a higher peak", () => {
+        for (const r of [0.3, 0.6]) {
+            const soft = peakAt(r, ...one(0, 0.5)), hard = peakAt(r, ...one(0, 1));
+            assert.ok(soft > 0, `a soft kick still crosses ${r}`);
+            assert.ok(hard > soft * 1.3, `at ${r}: hard ${hard}, soft ${soft}`);
+        }
+    });
+
+    test("overlapping shockwaves: the brightest wins, and it never goes above 1", () => {
+        const ages = [0.3, 0.1, 0.05, 0, 0.02, 0.2, 0.15, 0.01];
+        const powers = new Array(KICKS).fill(1);
+        for (let r = 0; r <= 1.4; r += 0.01) {
+            const all = shockwaveCrossing(r, ages, powers);
+            const brightest = Math.max(...ages.map((age, i) => shockwaveCrossing(r, ...one(age, powers[i]))));
+            assert.ok(Math.abs(all - brightest) < 1e-12, `at ${r}: ${all} vs ${brightest}`);
+            assert.ok(all <= 1);
+        }
+    });
+
+    test("fades as the shockwave fades", () => {
+        // A soft kick's front settles at its reach; a radius there keeps being crossed, fading out.
+        const r = kickAt(10, 0.5).front;
+        let last = Infinity;
+        for (const age of [1, 1.5, 2, 2.5]) {
+            const value = shockwaveCrossing(r, ...one(age, 0.5));
+            assert.ok(value < last, `at ${age} s: ${value}`);
+            last = value;
+        }
+        assert.ok(last < 0.01, `${last} by 2.5 s`);
+        assert.equal(shockwaveCrossing(r, ...one(3, 0.5)), 0, "and nothing once it has played out");
     });
 });
