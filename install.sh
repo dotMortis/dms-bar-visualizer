@@ -53,9 +53,14 @@ bootstrap() {
     exec bash "$CLONE_DIR/install.sh" "$@"
 }
 
+# Stops copies started by hand (qs -c bar-visualizer) and their cava. The service's own processes
+# match too, but systemd stops those: killing them behind its back can leave a later restart
+# waiting for the stop timeout.
 stop_manual_instances() {
-    pkill -f "(^|/)qs -c $NAME\$" 2>/dev/null || true
-    pkill -f "^cava -p ${XDG_RUNTIME_DIR:-/run/user/$UID}/$NAME-cava.conf" 2>/dev/null || true
+    local pid
+    for pid in $(pgrep -f "(^|/)qs -c $NAME\$|^cava -p ${XDG_RUNTIME_DIR:-/run/user/$UID}/$NAME-cava.conf"); do
+        grep -qs "/$UNIT\$" "/proc/$pid/cgroup" || kill "$pid" 2>/dev/null || true
+    done
 }
 
 uninstall() {
@@ -145,6 +150,11 @@ main() {
     link_config
 
     if [[ "${1:-}" == "--no-service" ]]; then
+        # stop_manual_instances leaves the service to systemd; stop it here, as it runs the old code.
+        if systemctl --user is-active --quiet "$UNIT" 2>/dev/null; then
+            info "Stopping $UNIT"
+            systemctl --user stop "$UNIT"
+        fi
         info "Done. Start it with: qs -c $NAME"
     else
         install_service

@@ -8,6 +8,8 @@ Requisite=graphical-session.target
 ExecStart=/usr/bin/qs -c bar-visualizer
 Restart=on-failure
 RestartSec=2
+# qs exits on SIGTERM at once; don't let a stuck stop hold up a restart for the default 90 s.
+TimeoutStopSec=5
 
 [Install]
 WantedBy=graphical-session.target

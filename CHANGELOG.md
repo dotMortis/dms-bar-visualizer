@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Updating with `install-arch.sh` could hang for 90 seconds after pacman's "Cleaning up...": the
+  install scripts killed the Bar Visualizer the service runs behind systemd's back, which can
+  leave the following `systemctl --user restart` waiting for the stop timeout. `install-arch.sh`
+  and `install.sh` now stop only copies started by hand and leave the service to systemd (with
+  `--no-service`, they stop it through systemd), and the service's stop timeout is 5 seconds.
+
 ## [0.7.0] - 2026-11-04
 
 ### Changed
