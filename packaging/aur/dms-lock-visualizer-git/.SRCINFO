@@ -1,6 +1,6 @@
 pkgbase = dms-lock-visualizer-git
 	pkgdesc = Lock Ring: a music visualizer clock for the DankMaterialShell lock screen (DMS plugin)
-	pkgver = 0.7.0
+	pkgver = 0.7.1
 	pkgrel = 1
 	url = https://github.com/dotMortis/dms-bar-visualizer
 	install = dms-lock-visualizer-git.install

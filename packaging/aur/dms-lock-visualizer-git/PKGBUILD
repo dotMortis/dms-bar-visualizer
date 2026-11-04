@@ -2,7 +2,7 @@
 pkgname=dms-lock-visualizer-git
 _name=dms-lock-visualizer
 _repo=dms-bar-visualizer
-pkgver=0.7.0
+pkgver=0.7.1
 pkgrel=1
 pkgdesc='Lock Ring: a music visualizer clock for the DankMaterialShell lock screen (DMS plugin)'
 arch=('any')
