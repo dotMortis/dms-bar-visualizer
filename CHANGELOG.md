@@ -19,6 +19,9 @@ All notable changes to this project are documented here. The format follows
   the music stops, it fades back to the faint dial. All Lock Rings on all monitors share one
   capture, so they pulse in sync, and it runs only while a Lock Ring is on screen.
   `install-lock.sh` now compiles the ring's shader, so it needs `qsb` (qt6-shadertools).
+- The Lock Ring's hands react to the music: hour to the bass, minute to the mids, second to the
+  highs. Each thickens, glows and shimmers along its length with its band. The music never moves
+  them: they always point at the true time. In silence they're plain.
 
 ## [0.5.0] - 2026-10-30
 
