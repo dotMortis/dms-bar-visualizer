@@ -4,13 +4,18 @@
 // in DMS's lock-screen font and 12h/24h setting. The hands show the music too (hands.mjs): hour =
 // bass, minute = mids, second = highs, each a neon wave ribbon that swings, thickens and glows
 // with its band (measured against that band's own recent peak) around a straight axis that never
-// moves off the time. The ribbon (ring.mjs) idles
-// in silence as a thin, faint, breathing wave; music grows it into spectrum ribbons that bulge
-// outward, and the ring swells with its energy. shaders/ring.frag draws all of that. On every
-// Kick a chromatic shockwave expands from the center, sparks fly off the ring and all hands whip
-// and flash.
+// moves off the time. The ribbon (ring.mjs) idles in silence as a thin, faint, breathing wave;
+// music grows it into spectrum ribbons that wave around the swelling dial, and the ring swells
+// with its energy. shaders/ring.frag draws all of that. On every Kick a chromatic Shockwave
+// expands from the center (kicks.mjs) as the center punches white-lavender, sparks fly off the
+// ring and all hands flash and get a small push; the ribbons surge and the hour points flash as
+// its front crosses them. The Aura around the ribbons doesn't flash: a Kick only pushes it outward
+// a little. As the front crosses the
+// digital time, drawn here, the time splits into the Shockwave's colors and glows (clock.mjs
+// timeHit()).
 // Every ring on every monitor draws from the one shared capture in LockAudio.
 import QtQuick
+import QtQuick.Effects
 import qs.Common
 import qs.Modules.Plugins
 import "clock.mjs" as Clock
@@ -51,7 +56,7 @@ DesktopPluginComponent {
     readonly property real bassStretch: LockAudio.bassStretch
 
     readonly property real size: Math.min(width, height)
-    // Leaves room around the dial for the ribbons to bulge into (ring.mjs).
+    // Leaves room around the dial for the ribbons to wave into (ring.mjs).
     readonly property real dialRadius: size * Ring.DIAL_RATIO
 
     // Holds the shared capture while this ring exists: from lock to unlock.
@@ -122,18 +127,72 @@ DesktopPluginComponent {
             property vector4d b7: root.quad(LockAudio.values, 28)
         }
 
-        // The digital time, inside the dial below the center.
-        Text {
+        // The digital time, inside the dial below the center. When a Shockwave's front crosses it
+        // (LockAudio.timeCrossing, the same on every ring), it splits into lavender, mauve and blue
+        // copies pushed outward and flares toward white with a glow (clock.mjs timeHit()). The
+        // digits themselves never move.
+        Item {
+            id: time
             anchors.horizontalCenter: parent.horizontalCenter
-            y: dial.height / 2 + root.dialRadius * 0.38
-            text: Clock.formatTime(root.now, {
-                use24Hour: SettingsData.use24HourClock,
-                padHours12Hour: SettingsData.padHours12Hour
-            })
-            color: Qt.alpha(root.lavender, 0.85)
-            font.family: SettingsData.lockScreenFontFamily !== "" ? SettingsData.lockScreenFontFamily : Theme.fontFamily
-            font.pixelSize: Math.max(10, root.size * 0.075)
-            font.weight: Font.Medium
+            y: dial.height / 2 + root.dialRadius * Clock.TIME_TOP
+            width: digits.implicitWidth
+            height: digits.implicitHeight
+
+            readonly property var hit: Clock.timeHit(LockAudio.timeCrossing)
+            readonly property real em: digits.font.pixelSize
+
+            // The source the effects draw; drawn only through them.
+            Text {
+                id: digits
+                visible: false
+                text: Clock.formatTime(root.now, {
+                    use24Hour: SettingsData.use24HourClock,
+                    padHours12Hour: SettingsData.padHours12Hour
+                })
+                color: Qt.alpha(root.lavender, 0.85)
+                font.family: SettingsData.lockScreenFontFamily !== "" ? SettingsData.lockScreenFontFamily : Theme.fontFamily
+                font.pixelSize: Math.max(10, root.size * Clock.TIME_FONT)
+                font.weight: Font.Medium
+            }
+
+            // The chromatic split: the digits in each of the Shockwave's colors, offset outward
+            // (down, away from the center), behind the digits, softened by TIME_HIT.soften.
+            Repeater {
+                model: Clock.TIME_HIT.split.length
+
+                MultiEffect {
+                    required property int index
+                    readonly property var copy: time.hit.copies[index]
+                    source: digits
+                    width: time.width
+                    height: time.height
+                    y: copy.offset * time.em
+                    visible: copy.opacity > 0
+                    opacity: copy.opacity
+                    colorization: 1
+                    colorizationColor: copy.color
+                    blurEnabled: true
+                    blur: 1
+                    blurMax: Math.max(1, Math.round(Clock.TIME_HIT.soften * time.em))
+                }
+            }
+
+            // The digits, flaring toward white with a glow as the front crosses them: the glow at
+            // TIME_HIT.glow's color and radius, its opacity and spread growing with the hit.
+            MultiEffect {
+                source: digits
+                anchors.fill: parent
+                colorization: time.hit.white
+                colorizationColor: "white"
+                shadowEnabled: true
+                shadowColor: Clock.TIME_HIT.glow.color
+                shadowHorizontalOffset: 0
+                shadowVerticalOffset: 0
+                shadowBlur: 1
+                blurMax: Math.max(1, Math.round(Clock.TIME_HIT.glow.radius * time.em))
+                shadowScale: time.hit.glow.scale
+                shadowOpacity: time.hit.glow.opacity
+            }
         }
     }
 }

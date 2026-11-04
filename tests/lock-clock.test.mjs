@@ -3,7 +3,8 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { formatTime, handAngles } from "../lock-ring/clock.mjs";
+import { TIME_FONT, TIME_RADIUS, TIME_TOP, formatTime, handAngles, timeHit } from "../lock-ring/clock.mjs";
+import { DIAL_RATIO } from "../lock-ring/ring.mjs";
 
 // Local wall-clock time on 2026-11-04.
 const at = (h, m, s = 0, ms = 0) => new Date(2026, 10, 4, h, m, s, ms);
@@ -73,5 +74,67 @@ describe("digital time", () => {
     test("12h pads the hour when DMS is set to", () => {
         assert.equal(formatTime(at(9, 5), H12_PADDED), "09:05 AM");
         assert.equal(formatTime(at(12, 0), H12_PADDED), "12:00 PM");
+    });
+});
+
+// Where the digital time sits: a Shockwave hits it where its digits are.
+describe("digital time placement", () => {
+    test("the radius a Shockwave hits it at is within its digits, about their middle", () => {
+        const bottom = TIME_TOP + TIME_FONT / DIAL_RATIO;  // a font size below the top
+        assert.ok(TIME_RADIUS > TIME_TOP && TIME_RADIUS < bottom, `${TIME_TOP} < ${TIME_RADIUS} < ${bottom}`);
+        assert.ok(Math.abs(TIME_RADIUS - (TIME_TOP + bottom) / 2) < 0.02, `${TIME_RADIUS}`);
+    });
+});
+
+// A Shockwave crossing the digital time (kicks.mjs shockwaveCrossing() at TIME_RADIUS, 0..1)
+// splits it into the Shockwave's colors and flares it with a glow. Offsets are in font sizes.
+describe("digital time hit", () => {
+    test("at rest the time shows no split and no glow", () => {
+        const hit = timeHit(0);
+        assert.equal(hit.glow.opacity, 0);
+        assert.equal(hit.glow.scale, 1);
+        assert.equal(hit.white, 0);
+        for (const copy of hit.copies) {
+            assert.equal(copy.offset, 0);
+            assert.equal(copy.opacity, 0);
+        }
+    });
+
+    test("splits into lavender, mauve and blue copies offset outward, in the Shockwave's order", () => {
+        const { copies } = timeHit(1);
+        assert.deepEqual(copies.map(c => c.color), ["#b4befe", "#cba6f7", "#89b4fa"]);
+        for (const copy of copies)
+            assert.ok(copy.offset > 0 && copy.opacity > 0, JSON.stringify(copy));
+        // Lavender leads the front, blue trails it, so lavender is pushed out farthest.
+        assert.ok(copies[0].offset > copies[1].offset && copies[1].offset > copies[2].offset);
+    });
+
+    test("stays a split, not a smear: even the hardest hit moves the copies less than a fifth of a digit", () => {
+        for (const copy of timeHit(1).copies)
+            assert.ok(copy.offset < 0.2, `${copy.color}: ${copy.offset}`);
+    });
+
+    test("a harder crossing splits and glows more, and the faintest one still shows", () => {
+        let last = timeHit(0);
+        for (const crossing of [0.05, 0.3, 0.6, 1]) {
+            const hit = timeHit(crossing);
+            assert.ok(hit.glow.opacity > last.glow.opacity && hit.glow.scale > last.glow.scale, `at ${crossing}`);
+            assert.ok(hit.white > last.white, `at ${crossing}`);
+            for (let i = 0; i < 3; i++)
+                assert.ok(hit.copies[i].offset > last.copies[i].offset && hit.copies[i].opacity > last.copies[i].opacity);
+            last = hit;
+        }
+    });
+
+    test("the hardest hit glows at full strength, a little wider than the digits", () => {
+        const { glow } = timeHit(1);
+        assert.equal(glow.opacity, 1);
+        assert.ok(glow.scale > 1 && glow.scale < 1.2, `${glow.scale}`);
+    });
+
+    test("never goes past the hardest hit's look", () => {
+        assert.deepEqual(timeHit(3), timeHit(1));
+        assert.deepEqual(timeHit(-1), timeHit(0));
+        assert.deepEqual(timeHit(NaN), timeHit(0));
     });
 });

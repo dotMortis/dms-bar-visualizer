@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import { IDLE, createRingMotion, hourPoints, ribbonRadius, spectrumAt, spectrumLevel } from "../lock-ring/ring.mjs";
+import { kickAt, ribbonSurge, shockwaveCrossing } from "../lock-ring/kicks.mjs";
 
 const near = (actual, expected, msg) => assert.ok(Math.abs(actual - expected) < 1e-9, `${msg ?? ""} ${actual} != ${expected}`);
 
@@ -142,7 +143,7 @@ describe("the living ribbon", () => {
 
 describe("the hour points", () => {
     const values = Array.from({ length: 32 }, (_, i) => (i % 5) / 5);
-    const state = { values, flow: 2, time: 7, treble: 0.3, swell: 0.04, presence: 1, bassStretch: 1.4, flash: 0 };
+    const state = { values, flow: 2, time: 7, treble: 0.3, swell: 0.04, presence: 1, bassStretch: 1.4 };
 
     test("there are 12, one at every hour", () => {
         assert.deepEqual(hourPoints(state).map(p => p.angle), [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330]);
@@ -161,15 +162,59 @@ describe("the hour points", () => {
         assert.ok(now.some((p, i) => Math.abs(p.radius - later[i].radius) > 1e-3));
     });
 
-    test("12, 3, 6 and 9 are brighter, and a kick flashes them all", () => {
+    test("12, 3, 6 and 9 are brighter", () => {
         const points = hourPoints(state);
         for (const p of points)
             if (p.angle % 90 !== 0)
                 assert.ok(p.glow < points[0].glow && p.glow > 0, `${p.angle}`);
         for (const i of [3, 6, 9])
             near(points[i].glow, points[0].glow);
-        const kicked = hourPoints(Object.assign({}, state, { flash: 1 }));
-        kicked.forEach((p, i) => assert.ok(p.glow > points[i].glow, `${p.angle}`));
+    });
+
+    // A hard kick, `age` seconds ago: its Shockwave crossing the ring (kicks.mjs).
+    const kicked = age => Object.assign({}, state, { crossing: r => shockwaveCrossing(r, [age], [1]) });
+
+    test("a kick doesn't flash them at its instant, while its Shockwave is still near the center", () => {
+        const points = hourPoints(state);
+        for (const age of [0, 0.05])
+            hourPoints(kicked(age)).forEach((p, i) => near(p.glow, points[i].glow, `${p.angle} at ${age} s`));
+    });
+
+    test("each flashes as the Shockwave's front reaches its radius", () => {
+        const points = hourPoints(state);
+        points.forEach((p, i) => {
+            let age = 0;
+            while (kickAt(age, 1).front < p.radius)
+                age += 0.001;
+            assert.ok(hourPoints(kicked(age))[i].glow > p.glow + 0.2, `${p.angle} at ${age} s`);
+        });
+    });
+
+    // A hard kick whose Shockwave's front is at the ribbon's rest radius (1 + swell): the ribbons
+    // surge there.
+    const surging = (() => {
+        let age = 0;
+        while (kickAt(age, 1).front < 1 + state.swell)
+            age += 0.001;
+        return Object.assign({}, state, { surge: r => ribbonSurge(r, [age], [1]) });
+    })();
+
+    // Each surges where its own strand is before the surge, as the ribbons do in ring.frag.
+    test("they ride the ribbon as a Shockwave surges it, swinging farther with it", () => {
+        assert.ok(surging.surge(1 + state.swell) > 0.2, `the surge at the ring: ${surging.surge(1 + state.swell)}`);
+        const calm = hourPoints(state), surged = hourPoints(surging);
+        surged.forEach((point, i) => {
+            const lift = surging.surge(calm[i].radius);
+            const level = Math.min(1, 1.3 * spectrumLevel(values, spectrumAt(point.angle, 1.4)) + lift);
+            near(point.radius, ribbonRadius(point.angle, Object.assign({}, state, { level, strand: 0 })), `${point.angle}`);
+        });
+        // The points the front is crossing swing farther; the ones it is far from stay put.
+        const swing = p => Math.abs(p.radius - 1 - state.swell);
+        assert.ok(surged.some((p, i) => swing(p) > swing(calm[i]) + 0.01), "a point the front crosses swings farther");
+        surged.forEach((p, i) => {
+            if (surging.surge(calm[i].radius) < 1e-3)
+                near(p.radius, calm[i].radius, `${p.angle}, which the front is far from`);
+        });
     });
 
     test("they stay visible in silence, a little dimmer", () => {
@@ -184,5 +229,99 @@ describe("the spectrum level", () => {
         near(spectrumLevel(values, 0), 0);
         near(spectrumLevel(values, 1), 1);
         near(spectrumLevel(values, 0.5), 0.5);
+    });
+});
+
+// The slope of f at x, from the left and from the right.
+const slopes = (f, x, h = 1e-7) => [(f(x) - f(x - h)) / h, (f(x + h) - f(x)) / h];
+
+describe("the smoothed spectrum", () => {
+    // Uneven bands, with peaks and dips next to each other and at both ends.
+    const values = Array.from({ length: 32 }, (_, i) => [0.9, 0.1, 0.6, 1, 0, 0.35, 0.8][i % 7]);
+
+    test("passes through every band's value", () => {
+        values.forEach((v, i) => near(spectrumLevel(values, i / 31), v, `band ${i}:`));
+    });
+
+    test("stays within 0..1 between the bands", () => {
+        for (let s = 0; s <= 1; s += 1 / 3100) {
+            const level = spectrumLevel(values, s);
+            assert.ok(level >= 0 && level <= 1, `${s}: ${level}`);
+        }
+    });
+
+    test("has no slope jump where one band meets the next", () => {
+        for (let i = 1; i < 31; i++) {
+            const [left, right] = slopes(s => spectrumLevel(values, s), i / 31);
+            assert.ok(Math.abs(left - right) < 0.01, `band ${i}: ${left} vs ${right}`);
+        }
+    });
+});
+
+// With music the ribbons wave like the bar's: each strand swings inward and outward around the
+// swelling dial, as the bar's ribbons swing around its center line.
+describe("the ribbon with music", () => {
+    const playing = { flow: 1.3, time: 5, treble: 0.3, swell: 0.06 };
+    const span = (level, strand) => {
+        let low = Infinity, high = -Infinity;
+        for (let angle = 0; angle < 360; angle += 0.5) {
+            const r = ribbonRadius(angle, { ...playing, level, strand });
+            low = Math.min(low, r);
+            high = Math.max(high, r);
+        }
+        return { low, high };
+    };
+
+    test("swings both inside and outside the swollen dial, beyond its idle wave", () => {
+        const base = 1 + playing.swell;
+        for (let strand = 0; strand < 3; strand++) {
+            const { low, high } = span(0.8, strand);
+            assert.ok(low < base - 2 * IDLE.reach, `strand ${strand} inside: ${low}`);
+            assert.ok(high > base + 2 * IDLE.reach, `strand ${strand} outside: ${high}`);
+        }
+    });
+
+    test("its slope is continuous across 6 and 12 o'clock, where the mirrored halves meet", () => {
+        const values = Array.from({ length: 32 }, (_, i) => [0.9, 0.1, 0.6, 1, 0, 0.35, 0.8][i % 7]);
+        for (const bassStretch of [1, 1.4])
+            for (const flow of [0, 0.7, 2.9])
+                for (let strand = 0; strand < 3; strand++) {
+                    // The whole ribbon: each angle's level from the smoothed spectrum, as drawn.
+                    const at = angle => ribbonRadius(angle, {
+                        ...playing, flow, strand,
+                        level: Math.min(1, 1.3 * spectrumLevel(values, spectrumAt(angle, bassStretch))) * 0.7,
+                    });
+                    for (const angle of [180, 360]) {
+                        const [left, right] = slopes(at, angle, 1e-6);
+                        assert.ok(Math.abs(left - right) < 1e-3, `${angle} strand ${strand} flow ${flow}: ${left} vs ${right}`);
+                    }
+                }
+    });
+
+    test("treble never flattens a crest, nor a trough: every turn of the wave stays round", () => {
+        for (const treble of [0, 0.5, 1])
+            for (let strand = 0; strand < 3; strand++) {
+                const at = angle => ribbonRadius(angle, { ...playing, treble, level: 1, strand });
+                let turns = 0;
+                for (let angle = 0; angle < 360; angle += 0.25) {
+                    const r = at(angle), before = at(angle - 0.25), after = at(angle + 0.25);
+                    // A clamped wave sits still at its crests or troughs: no change on either side.
+                    // (Around 6 and 12 o'clock the halves meet in a rounded turn, left out here.)
+                    const mirror = angle % 180 < 15 || angle % 180 > 165;
+                    if (!mirror && ((r >= before && r >= after) || (r <= before && r <= after))) {
+                        turns++;
+                        const bend = Math.min(Math.abs(r - at(angle - 2)), Math.abs(r - at(angle + 2)));
+                        assert.ok(bend > 1e-4, `treble ${treble} strand ${strand} flat at ${angle}: ${bend}`);
+                    }
+                }
+                assert.ok(turns >= 4, `treble ${treble} strand ${strand}: ${turns} turns`);
+            }
+    });
+
+    test("a louder level swings it farther, both ways", () => {
+        for (let strand = 0; strand < 3; strand++) {
+            const soft = span(0.4, strand), loud = span(0.9, strand);
+            assert.ok(loud.low < soft.low && loud.high > soft.high, `strand ${strand}`);
+        }
     });
 });

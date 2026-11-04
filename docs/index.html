@@ -182,9 +182,9 @@ import { BANDS, HIGH_HZ, LOW_HZ, createKickDetector } from "./kick.mjs";
 import { defaults, ringSide, ringUniforms, setValueAt, slidersFor, valueAt, viewFromHash } from "./demo.mjs";
 import { toWebGL } from "./webgl.mjs";
 import { DIAL_RATIO, createRingMotion } from "./lock-ring/ring.mjs";
-import { handFlash } from "./lock-ring/kicks.mjs";
+import { handFlash, shockwaveCrossing } from "./lock-ring/kicks.mjs";
 import { createHandMotion } from "./lock-ring/hands.mjs";
-import { formatTime } from "./lock-ring/clock.mjs";
+import { TIME_FONT, TIME_HIT, TIME_RADIUS, TIME_TOP, formatTime, timeHit } from "./lock-ring/clock.mjs";
 const RING_FRAG = fetch("./lock-ring/ring.frag").then(r => {
   if (!r.ok) throw new Error(`ring.frag: HTTP ${r.status}`);
   return r.text();
@@ -706,7 +706,7 @@ let ringProg = null;
 const ringU = [];   // { name, type, loc }
 const ringMotion = createRingMotion();
 const handMotion = createHandMotion();
-const ring = { swell: 0, presence: 0, flash: 0, handLevels: { bass: 0, mid: 0, treble: 0 }, handPhases: {} };
+const ring = { swell: 0, presence: 0, flash: 0, timeCrossing: 0, handLevels: { bass: 0, mid: 0, treble: 0 }, handPhases: {} };
 
 function shaderOf(g, type, src) {
   const sh = g.createShader(type);
@@ -759,8 +759,10 @@ function drawRing() {
   rgl.drawArrays(rgl.TRIANGLE_STRIP, 0, 4);
 }
 
-// The digital time LockRing.qml draws over the shader, with its size. The dial (the living
-// ribbon), its hour points and the floating hands are ring.frag's.
+// The digital time LockRing.qml draws over the shader, with its size, and how it takes a
+// Shockwave's hit (clock.mjs timeHit()): copies in the Shockwave's colors pushed outward behind
+// the digits, which flare toward white with a glow and never move. The dial (the living ribbon),
+// its hour points and the floating hands are ring.frag's.
 const face = document.getElementById("face");
 const fctx = face.getContext("2d");
 function drawFace() {
@@ -771,11 +773,40 @@ function drawFace() {
   fctx.save();
   fctx.translate(c.x, c.y);
 
-  const now = new Date();
-  fctx.fillStyle = "rgb(180 190 254 / .85)";
-  fctx.font = `500 ${Math.max(10 * dpr, size * 0.075)}px Inter, "Segoe UI", Roboto, Ubuntu, system-ui, sans-serif`;
+  const text = formatTime(new Date(), { use24Hour });
+  const em = Math.max(10 * dpr, size * TIME_FONT), top = dial * TIME_TOP;
+  const hit = timeHit(ring.timeCrossing);
+  fctx.font = `500 ${em}px Inter, "Segoe UI", Roboto, Ubuntu, system-ui, sans-serif`;
   fctx.textAlign = "center"; fctx.textBaseline = "top";
-  fctx.fillText(formatTime(now, { use24Hour }), 0, dial * 0.38);
+  // The chromatic split, softened as MultiEffect's blur does.
+  fctx.filter = `blur(${TIME_HIT.soften * em}px)`;
+  for (const { color, offset, opacity } of hit.copies) {
+    if (opacity <= 0) continue;
+    fctx.globalAlpha = opacity;
+    fctx.fillStyle = color;
+    fctx.fillText(text, 0, top + offset * em);
+  }
+  fctx.filter = "none";
+  // The digits' glow alone, spread around their middle as MultiEffect's shadowScale does: the
+  // digits are drawn far off to the left and only their shadow is shifted back.
+  if (hit.glow.opacity > 0) {
+    const away = 10 * face.width, mid = top + em / 2;
+    fctx.save();
+    fctx.translate(0, mid);
+    fctx.scale(hit.glow.scale, hit.glow.scale);
+    fctx.globalAlpha = hit.glow.opacity;
+    fctx.fillStyle = "black";
+    fctx.shadowColor = TIME_HIT.glow.color;
+    fctx.shadowBlur = TIME_HIT.glow.radius * em;
+    fctx.shadowOffsetX = away * hit.glow.scale;
+    fctx.fillText(text, -away, -em / 2);
+    fctx.restore();
+  }
+  fctx.globalAlpha = 1;
+  // The digits, mixed toward white.
+  const w = hit.white, mix = (c) => Math.round(c + (255 - c) * w);
+  fctx.fillStyle = `rgb(${mix(180)} ${mix(190)} ${mix(254)} / .85)`;
+  fctx.fillText(text, 0, top);
 
   fctx.restore();
 }
@@ -833,7 +864,9 @@ function frame() {
   ring.swell = m.swell; ring.presence = m.presence;
   const h = handMotion.step(levels, dt, cfg.speed);
   ring.handLevels = h.levels; ring.handPhases = h.phases;
-  ring.flash = handFlash(st.kickTimes.map(t => st.time - t), st.kickPowers, cfg.kickDecay);
+  const kickAges = st.kickTimes.map(t => st.time - t);
+  ring.flash = handFlash(kickAges, st.kickPowers, cfg.kickDecay);
+  ring.timeCrossing = shockwaveCrossing(TIME_RADIUS, kickAges, st.kickPowers, st.kickSeeds, Math.PI);  // the time sits at 6 o'clock
 
   if (view === "ring") {
     drawRing();

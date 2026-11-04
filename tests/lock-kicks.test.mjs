@@ -1,4 +1,4 @@
-// Kicks on the Lock Ring: each one sends a chromatic shockwave out of the center and the hands
+// Kicks on the Lock Ring: each one sends a chromatic Shockwave out of the center and the hands
 // flash. (The sparks it flings off the ring are the shader's alone.) Distances are in dial radii (1 = the dial), ages in seconds.
 // Power is the shared detector's hit strength, 0.5 (a soft hit) to 1 (the hardest next to the
 // recent kicks).
@@ -7,12 +7,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, test } from "node:test";
 
+import { TIME_RADIUS } from "../lock-ring/clock.mjs";
 import { DEFAULTS } from "../docs/config.mjs";
-import { KICK_ORIGIN, EDGE, KICKS, handFlash, kickAt, kickSlots } from "../lock-ring/kicks.mjs";
+import { KICK_ORIGIN, EDGE, KICKS, auraPush, centerPunch, handFlash, kickAt, kickSlots, ribbonSurge, shockwaveCrossing, shockwaveFront } from "../lock-ring/kicks.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
-describe("shockwave", () => {
+describe("Shockwave", () => {
     test("starts at the center", () => {
         assert.equal(kickAt(0, 1).front, KICK_ORIGIN);
         assert.equal(kickAt(0, 0.5).front, KICK_ORIGIN);
@@ -27,7 +28,7 @@ describe("shockwave", () => {
         }
     });
 
-    test("a harder hit makes a bigger shockwave", () => {
+    test("a harder hit makes a bigger Shockwave", () => {
         for (const age of [0.05, 0.2, 0.5, 1, 2])
             assert.ok(kickAt(age, 1).front > kickAt(age, 0.5).front * 1.3, `at ${age} s`);
         assert.ok(kickAt(0.1, 1).strength > kickAt(0.1, 0.5).strength, "and a brighter one");
@@ -104,7 +105,7 @@ describe("hand flash", () => {
         assert.equal(handFlash(...one(0, 0.5)), 0.5);
     });
 
-    test("fires together with the shockwave, from the same kick", () => {
+    test("fires together with the Shockwave, from the same kick", () => {
         for (const power of [0.5, 0.75, 1]) {
             const kick = kickAt(0, power);
             assert.ok(kick.strength > 0 && handFlash(...one(0, power)) > 0, `power ${power}`);
@@ -124,5 +125,277 @@ describe("hand flash", () => {
         const powers = [1, 0.6, 1, ...empty.slice(3)];
         const flash = handFlash(ages, powers, decay);
         assert.ok(flash >= 0.6 && flash <= 1, `flash ${flash}`);
+    });
+});
+
+// How brightly a Shockwave's front is crossing a radius right now, 0..1: what the hour points
+// light up by as the wave passes them.
+describe("Shockwave crossing", () => {
+    const empty = new Array(KICKS).fill(0);
+    const one = (age, power) => [[age, ...new Array(KICKS - 1).fill(100)], [power, ...empty.slice(1)]];
+
+    test("is 0 with no kicks", () => {
+        for (const r of [0, 0.3, 1, 1.2]) {
+            assert.equal(shockwaveCrossing(r, [], []), 0);
+            assert.equal(shockwaveCrossing(r, new Array(KICKS).fill(100), empty), 0);
+        }
+    });
+
+    test("is 0 where the front hasn't reached yet, and peaks as the front passes", () => {
+        let peak = 0, peakAge = 0;
+        for (let age = 0; age <= 2; age += 0.005) {
+            const value = shockwaveCrossing(1, ...one(age, 1));
+            if (kickAt(age, 1).front < 0.85)
+                assert.equal(value, 0, `at ${age} s, front ${kickAt(age, 1).front}`);
+            if (value > peak)
+                [peak, peakAge] = [value, age];
+        }
+        assert.ok(peak > 0.4, `peak ${peak}`);
+        assert.ok(Math.abs(kickAt(peakAge, 1).front - 1) < 0.02, `peaks with the front at ${kickAt(peakAge, 1).front}`);
+    });
+
+    const peakAt = (radius, ages, powers) => {
+        let peak = 0;
+        for (let t = 0; t <= 3; t += 0.005)
+            peak = Math.max(peak, shockwaveCrossing(radius, ages.map(a => a + t), powers));
+        return peak;
+    };
+
+    test("a harder kick gives a higher peak", () => {
+        for (const r of [0.3, 0.6]) {
+            const soft = peakAt(r, ...one(0, 0.5)), hard = peakAt(r, ...one(0, 1));
+            assert.ok(soft > 0, `a soft kick still crosses ${r}`);
+            assert.ok(hard > soft * 1.3, `at ${r}: hard ${hard}, soft ${soft}`);
+        }
+    });
+
+    test("overlapping Shockwaves: the brightest wins, and it never goes above 1", () => {
+        const ages = [0.3, 0.1, 0.05, 0, 0.02, 0.2, 0.15, 0.01];
+        const powers = new Array(KICKS).fill(1);
+        for (let r = 0; r <= 1.4; r += 0.01) {
+            const all = shockwaveCrossing(r, ages, powers);
+            const brightest = Math.max(...ages.map((age, i) => shockwaveCrossing(r, ...one(age, powers[i]))));
+            assert.ok(Math.abs(all - brightest) < 1e-12, `at ${r}: ${all} vs ${brightest}`);
+            assert.ok(all <= 1);
+        }
+    });
+
+    test("reaches the digital time before the ring: the wave hits the time, then the ring", () => {
+        // When each radius is crossed hardest by one kick, at every power.
+        const peakAge = (radius, power) => {
+            let peak = 0, at = 0;
+            for (let age = 0; age <= 3; age += 0.002) {
+                const value = shockwaveCrossing(radius, ...one(age, power));
+                if (value > peak)
+                    [peak, at] = [value, age];
+            }
+            return { peak, at };
+        };
+        assert.ok(TIME_RADIUS > 0.3 && TIME_RADIUS < 0.8, `the time sits inside the dial, at ${TIME_RADIUS}`);
+        for (const power of [0.5, 0.75, 1]) {
+            const time = peakAge(TIME_RADIUS, power);
+            assert.ok(time.peak > 0, `a ${power} kick reaches the time`);
+            if (power === 1) {
+                const ring = peakAge(1, power);
+                assert.ok(time.at < ring.at, `time at ${time.at} s, ring at ${ring.at} s`);
+            }
+        }
+    });
+
+    test("fades as the Shockwave fades", () => {
+        // A soft kick's front settles at its reach; a radius there keeps being crossed, fading out.
+        const r = kickAt(10, 0.5).front;
+        let last = Infinity;
+        for (const age of [1, 1.5, 2, 2.5]) {
+            const value = shockwaveCrossing(r, ...one(age, 0.5));
+            assert.ok(value < last, `at ${age} s: ${value}`);
+            last = value;
+        }
+        assert.ok(last < 0.01, `${last} by 2.5 s`);
+        assert.equal(shockwaveCrossing(r, ...one(3, 0.5)), 0, "and nothing once it has played out");
+    });
+});
+
+// How much a Shockwave's front lifts the ribbons where it crosses them (spectrum level, added to
+// the music's): the bar's surge, bent into a ring.
+describe("ribbon surge", () => {
+    const empty = new Array(KICKS).fill(0);
+    const one = (age, power) => [[age, ...new Array(KICKS - 1).fill(100)], [power, ...empty.slice(1)]];
+    const peakAt = (radius, ages, powers) => {
+        let peak = 0;
+        for (let t = 0; t <= 3; t += 0.002)
+            peak = Math.max(peak, ribbonSurge(radius, ages.map(a => a + t), powers));
+        return peak;
+    };
+
+    test("is 0 with no kicks", () => {
+        for (const r of [0.3, 1, 1.2]) {
+            assert.equal(ribbonSurge(r, [], []), 0);
+            assert.equal(ribbonSurge(r, new Array(KICKS).fill(100), empty), 0);
+        }
+    });
+
+    test("is 0 before the front arrives and after it has passed, and peaks as it passes", () => {
+        let peak = 0, peakAge = 0;
+        for (let age = 0; age <= 2; age += 0.002) {
+            const value = ribbonSurge(1, ...one(age, 1));
+            if (Math.abs(kickAt(age, 1).front - 1) > 0.3)
+                assert.ok(value < 1e-3, `at ${age} s, front ${kickAt(age, 1).front}: ${value}`);
+            if (value > peak)
+                [peak, peakAge] = [value, age];
+        }
+        assert.ok(peak > 0.2, `peak ${peak}`);
+        assert.ok(Math.abs(kickAt(peakAge, 1).front - 1) < 0.02, `peaks with the front at ${kickAt(peakAge, 1).front}`);
+    });
+
+    test("a harder kick surges more", () => {
+        for (const r of [0.6, 1]) {
+            const soft = peakAt(r, ...one(0, 0.7)), hard = peakAt(r, ...one(0, 1));
+            assert.ok(hard > soft * 1.3, `at ${r}: hard ${hard}, soft ${soft}`);
+        }
+    });
+
+    test("overlapping surges add up", () => {
+        const [ages] = one(0.25, 1);
+        ages[1] = 0.26;
+        const powers = [1, 1, ...empty.slice(2)];
+        const both = ribbonSurge(1, ages, powers);
+        const first = ribbonSurge(1, ...one(0.25, 1)), second = ribbonSurge(1, ...one(0.26, 1));
+        assert.ok(first > 0.05 && second > 0.05, `${first}, ${second}`);
+        assert.ok(Math.abs(both - (first + second)) < 1e-12, `${both} vs ${first} + ${second}`);
+    });
+});
+
+// The center punch: a white-lavender flash at the center as each Shockwave is born, 0..1, from
+// that Kick's own power: every Kick punches, a soft one faintly, a hard one strongly.
+describe("center punch", () => {
+    const empty = new Array(KICKS).fill(0);
+    const one = (age, power) => [[age, ...new Array(KICKS - 1).fill(100)], [power, ...empty.slice(1)]];
+
+    test("is dark without kicks", () => {
+        assert.equal(centerPunch([], []), 0);
+        assert.equal(centerPunch(new Array(KICKS).fill(100), empty), 0);
+    });
+
+    test("every Kick punches as its Shockwave is born, at that Kick's power", () => {
+        assert.ok(Math.abs(centerPunch(...one(0, 1)) - 1) < 1e-9);
+        assert.ok(Math.abs(centerPunch(...one(0, 0.5)) - 0.5) < 1e-9, "a soft Kick still punches, faintly");
+    });
+
+    test("is a punch, not a glow: gone within a quarter second, while the Shockwave flies on", () => {
+        assert.ok(centerPunch(...one(0.25, 1)) < 0.05, `${centerPunch(...one(0.25, 1))}`);
+        assert.ok(kickAt(0.25, 1).strength > 0.5);
+    });
+
+    test("a new Kick punches again, and overlapping punches never go past full", () => {
+        const ages = [0.4, 0, ...new Array(KICKS - 2).fill(100)];
+        const powers = [1, 0.6, ...empty.slice(2)];
+        assert.ok(Math.abs(centerPunch(ages, powers) - 0.6) < 0.01);
+        assert.ok(centerPunch(new Array(KICKS).fill(0), new Array(KICKS).fill(1)) <= 1);
+    });
+});
+
+// A Kick pushes the Aura outward and eases it back: slow enough to see, as far as the Kick's power.
+describe("Aura push", () => {
+    const empty = new Array(KICKS).fill(0);
+    const one = (age, power) => [[age, ...new Array(KICKS - 1).fill(100)], [power, ...empty.slice(1)]];
+    const peak = power => Math.max(...Array.from({ length: 100 }, (_, i) => auraPush(...one(i / 200, power))));
+
+    test("is still without kicks", () => {
+        assert.equal(auraPush([], []), 0);
+        assert.equal(auraPush(new Array(KICKS).fill(100), empty), 0);
+    });
+
+    test("eases out instead of jumping: nothing at the Kick itself", () => {
+        assert.equal(auraPush(...one(0, 1)), 0);
+        assert.ok(auraPush(...one(0.02, 1)) < auraPush(...one(0.1, 1)));
+    });
+
+    test("is a push you can see: still out a tenth of a second on, back within a second", () => {
+        assert.ok(auraPush(...one(0.1, 1)) > 0.5, `${auraPush(...one(0.1, 1))}`);
+        assert.ok(auraPush(...one(1, 1)) < 0.05, `${auraPush(...one(1, 1))}`);
+    });
+
+    test("a soft Kick pushes less than a hard one, and overlapping pushes never go past full", () => {
+        assert.ok(peak(0.5) < 0.6 * peak(1));
+        assert.ok(auraPush(new Array(KICKS).fill(0.1), new Array(KICKS).fill(1)) <= 1);
+    });
+});
+
+// Each Shockwave has its own shape: not a perfect circle but a soft, wobbly front, brighter on one
+// side, different for every Kick (its seed) and the same on every monitor (ADR 0002).
+describe("Shockwave shape", () => {
+    const TAU = 2 * Math.PI;
+    const angles = Array.from({ length: 72 }, (_, i) => i * TAU / 72);
+    const frontAt = (seed, angle, age = 0.4) => shockwaveFront(age, 1, seed, angle).front;
+
+    test("is not a perfect circle", () => {
+        const fronts = angles.map(a => frontAt(7, a));
+        assert.ok(Math.max(...fronts) - Math.min(...fronts) > 0.03, `spread ${Math.max(...fronts) - Math.min(...fronts)}`);
+    });
+
+    test("differs from Kick to Kick", () => {
+        const diff = Math.max(...angles.map(a => Math.abs(frontAt(7, a) - frontAt(8, a))));
+        assert.ok(diff > 0.02, `largest difference ${diff}`);
+    });
+
+    test("is the same for the same Kick, so every ring draws the same wave", () => {
+        for (const a of angles)
+            assert.equal(frontAt(42, a), frontAt(42, a));
+    });
+
+    test("is born round and only wobbles as it travels, staying near the round front", () => {
+        for (const a of angles) {
+            assert.ok(Math.abs(frontAt(3, a, 0) - KICK_ORIGIN) < 1e-9);
+            const round = kickAt(0.4, 1).front;
+            assert.ok(Math.abs(frontAt(3, a) - round) <= 0.22 * round, `angle ${a}`);
+        }
+    });
+
+    // Its edge is ragged, not only a few soft lobes: it turns back and forth many times around.
+    test("has a ragged edge", () => {
+        const fine = Array.from({ length: 720 }, (_, i) => frontAt(7, i * TAU / 720));
+        let turns = 0;
+        for (let i = 0; i < fine.length; i++) {
+            const prev = fine[(i + fine.length - 1) % fine.length], next = fine[(i + 1) % fine.length];
+            if ((fine[i] - prev) * (next - fine[i]) < 0)
+                turns++;
+        }
+        assert.ok(turns > 14, `${turns} turns`);
+    });
+
+    // The ragged edge flickers: at one angle it brightens and dims as the front travels.
+    test("flickers along its edge as it travels", () => {
+        const ages = Array.from({ length: 40 }, (_, i) => 0.05 + i * 0.02);
+        const rel = ages.map(t => shockwaveFront(t, 1, 5, 1.1).strength / kickAt(t, 1).strength);
+        assert.ok(Math.max(...rel) - Math.min(...rel) > 0.15, `flicker ${Math.max(...rel) - Math.min(...rel)}`);
+    });
+
+    // A soft Kick's front stays nearly round and steady; a hard one's is ragged (Q8 of the
+    // Shockwave grilling: soft hits calm, drops wild).
+    test("is calmer on a soft Kick than on a hard one", () => {
+        const stray = power => {
+            const round = kickAt(0.4, power).front - KICK_ORIGIN;
+            return Math.max(...angles.map(a => Math.abs(shockwaveFront(0.4, power, 7, a).front - KICK_ORIGIN - round) / round));
+        };
+        assert.ok(stray(0.5) < 0.4 * stray(1), `soft ${stray(0.5)}, hard ${stray(1)}`);
+    });
+
+    test("is brighter on one side, but never past the round wave's strength by much", () => {
+        const s = angles.map(a => shockwaveFront(0.2, 1, 5, a).strength);
+        assert.ok(Math.max(...s) - Math.min(...s) > 0.2);
+        assert.ok(Math.max(...s) <= 1.35 * kickAt(0.2, 1).strength);
+    });
+
+    test("the crossing and surge follow the shaped front in a direction", () => {
+        const angle = 1.3, seed = 11, age = 0.4;
+        const front = shockwaveFront(age, 1, seed, angle).front;
+        assert.ok(shockwaveCrossing(front, [age], [1], [seed], angle) > shockwaveCrossing(front + 0.12, [age], [1], [seed], angle));
+        assert.ok(ribbonSurge(front, [age], [1], [seed], angle) > 2 * ribbonSurge(front + 0.15, [age], [1], [seed], angle));
+        assert.ok(shockwaveCrossing(front, [age], [1], [seed], angle) <= 1);
+    });
+
+    test("without a direction the Shockwave is the round one", () => {
+        assert.equal(shockwaveCrossing(0.6, [0.3], [1], [9]), shockwaveCrossing(0.6, [0.3], [1]));
     });
 });
