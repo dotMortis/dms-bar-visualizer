@@ -137,7 +137,7 @@ After removing the Lock Ring, run `dms restart` so DMS drops it.
 
 ## Configuration
 
-Settings live in `~/.config/bar-visualizer/config.json`. The visualizer creates it with the defaults on first start (and again if you delete it, which resets everything). Keys you remove from it fall back to their default. The visualizer picks up changes as soon as you save, no restart needed.
+Settings live in `~/.config/bar-visualizer/config.json`. The visualizer creates it with the defaults on first start (and again if you delete it, which resets everything). Keys you remove from it fall back to their default. The visualizer picks up changes as soon as you save, no restart needed. The Lock Ring reads every setting below except the bar's geometry from the same file (see [Lock Ring settings](#lock-ring-settings)).
 
 ```json
 {
@@ -164,7 +164,7 @@ Settings live in `~/.config/bar-visualizer/config.json`. The visualizer creates 
 
 To find the right geometry, run `hyprctl layers`. The `dms:bar` surface height equals `barThickness + spacing`.
 
-The defaults themselves live in the `Tweakables` block at the top of `shell.qml`. If the file is half-written or not valid JSON, the visualizer keeps its last good settings.
+The defaults themselves live in `docs/config.mjs` (all but the geometry, which is in the `Tweakables` block at the top of `shell.qml`). A value of the wrong type falls back to its default. If the file is half-written or not valid JSON, the visualizer keeps its last good settings.
 
 Want to tune by eye first? The [live demo](https://dotmortis.github.io/dms-bar-visualizer/) has a slider for every key.
 
@@ -210,24 +210,18 @@ To install it and set it up, see [Install](#install) and [Set up the Lock Ring](
 
 ### Lock Ring settings
 
-Its settings are in DMS's plugin settings, under the widget's options in Settings → Lock Screen. They apply right away and to every Lock Ring at once, since all rings share one capture ([why](docs/adr/0002-lock-ring-settings-are-plugin-wide.md)). It doesn't read the Bar Visualizer's `config.json`. The ones the bar has too default to the Bar Visualizer's values:
+The settings both visualizers have (`intensity`, `speed`, `kickThreshold`, `kickDecay`, `kickLowHz`, `kickHighHz`, `kickCooldown` and `bassStretch`) come from the Bar Visualizer's `~/.config/bar-visualizer/config.json` (see [Configuration](#configuration)), so you tune them once for both ([why](docs/adr/0004-lock-ring-reads-the-shared-settings-from-config-json.md)). The Lock Ring picks up a save right away and never writes the file. Without the Bar Visualizer it runs on the defaults; create the file by hand to change them (then `dms restart` if `~/.config/bar-visualizer/` didn't exist yet).
+
+Its own settings are in DMS's plugin settings, under the widget's options in Settings → Lock Screen. They apply right away and to every Lock Ring at once, since all rings share one capture ([why](docs/adr/0002-lock-ring-settings-are-plugin-wide.md)):
 
 | Setting | Key | Default | What it does |
 | --- | --- | --- | --- |
-| Intensity | `intensity` | `100 %` | Overall brightness of the ring |
-| Speed | `speed` | `100 %` | Animation speed |
-| Kick threshold | `kickThreshold` | `40 %` | How sharply the kick range must jump, as a share of its recent peak. Lower = more kicks |
-| Kick decay | `kickDecay` | `60` | How fast a kick's flash fades, in tenths. Higher = shorter |
-| Kick range from | `kickLowHz` | `20 Hz` | The lowest frequency the kick listens to |
-| Kick range to | `kickHighHz` | `90 Hz` | The highest frequency the kick listens to |
-| Kick cooldown | `kickCooldown` | `100 ms` | Shortest time between two kicks. `0` = no limit |
-| Bass stretch | `bassStretch` | `140 %` | Spreads the bass over more of the ring. `100 %` = linear |
-| Hand waves | `handWaves` | `100 %` | How far the hands swing with the music and on kicks. `0 %` = straight hands. Lock Ring only |
-| Ring size | `ringSize` | `40 %` | The widget's default size, as a share of the screen height (20 to 80 %). Resizing the widget under Edit widgets still works. Lock Ring only |
+| Hand waves | `handWaves` | `100 %` | How far the hands swing with the music and on kicks. `0 %` = straight hands |
+| Ring size | `ringSize` | `40 %` | The widget's default size, as a share of the screen height (20 to 80 %). Resizing the widget under Edit widgets still works |
 
-DMS stores each as the integer its slider shows, under `lockRing` in `plugin_settings.json`.
+DMS stores each as the integer its slider shows, under `lockRing` in `plugin_settings.json`. Values an older version stored there for the shared settings are ignored.
 
-To tune it without locking the screen, open the [live demo's Lock Ring view](https://dotmortis.github.io/dms-bar-visualizer/#ring). Its sliders are these settings, in the same units.
+To tune it without locking the screen, open the [live demo's Lock Ring view](https://dotmortis.github.io/dms-bar-visualizer/#ring). Its sliders are the shared settings, as `config.json` has them, and the Lock Ring's own, in its units.
 
 > [!NOTE]
 > DMS keeps a loaded plugin in memory, so after updating the Lock Ring (with either script, or by pulling the checkout), restart DMS to see the new version: `dms restart`.

@@ -8,6 +8,7 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
 import "audio"
+import "docs/config.mjs" as Config
 
 ShellRoot {
     id: root
@@ -15,22 +16,16 @@ ShellRoot {
     // --- Tweakables -------------------------------------------------------
     // ~/.config/bar-visualizer/config.json overrides any of these by key and is re-read when it
     // changes; a key removed from it falls back here. If the file is missing, it's created with these.
+    // The bar's geometry is its own; the rest (docs/config.mjs) the Lock Ring reads from the same
+    // file (ADR 0004).
     // Geometry must match the DMS bar. With a maximized window on a screen's active workspace,
     // DMS drops the spacing and rounding (its "maximize detection"); followMaximize mirrors that.
-    readonly property var defaults: ({
+    readonly property var defaults: Object.assign({
         barThickness: 40,     // DMS bar body height (from innerPadding/font scale)
         spacing: 4,           // DMS "spacing"
         radius: 12,           // DMS cornerRadius
-        followMaximize: true, // match DMS "maximizeDetection"
-        intensity: 1.0,       // overall brightness of the effect
-        speed: 1.0,           // animation speed multiplier
-        kickThreshold: 0.4,   // lower = more kicks detected
-        kickDecay: 6.0,       // higher = shorter impact flashes
-        kickLowHz: 20,        // frequency range the kick (shockwave + particles) listens to
-        kickHighHz: 90,
-        kickCooldown: 0.1,    // min seconds between kicks; 0 = no limit
-        bassStretch: 1.4      // >1 spreads bass (centre) wider; 1 = linear
-    })
+        followMaximize: true  // match DMS "maximizeDetection"
+    }, Config.DEFAULTS)
     property var config: defaults
 
     readonly property string configDir: `${Quickshell.env("XDG_CONFIG_HOME") || Quickshell.env("HOME") + "/.config"}/bar-visualizer`
@@ -52,7 +47,7 @@ ShellRoot {
         // file keeps the last good settings.
         onLoaded: {
             try {
-                root.config = Object.assign({}, root.defaults, JSON.parse(text()));
+                root.config = Config.parseConfig(text(), root.defaults);
             } catch (e) {
                 console.warn(`config.json: ${e.message}; keeping the previous settings`);
             }

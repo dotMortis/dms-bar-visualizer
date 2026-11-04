@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The Lock Ring reads the settings it shares with the Bar Visualizer (`intensity`, `speed`,
+  `kickThreshold`, `kickDecay`, `kickLowHz`, `kickHighHz`, `kickCooldown`, `bassStretch`) from
+  `~/.config/bar-visualizer/config.json`, so you tune them once for both. Its DMS settings page
+  keeps only its own: hand waves and ring size. Values set there before for the shared settings
+  are ignored: copy any you changed into `config.json`. The defaults are defined once, in
+  `docs/config.mjs`.
+- The Lock Ring's ribbons are as crisp as the Bar Visualizer's: their glow is measured in pixels,
+  as on the bar, instead of growing with the ring's size.
+- Kicks hit the Lock Ring as hard as the bar: the ribbons widen, swing further and brighten on
+  each kick, and the shockwave is brighter and crisper. The hands' white-hot glow is toned down,
+  so they no longer outshine the ring.
+- Each Lock Ring hand now shows its own band clearly: the hour hand the bass, the minute hand the
+  mids, the second hand the highs, each measured against that band's own recent peak (the highs
+  are far quieter than the bass, so the second hand barely moved). Each hand's wave also travels
+  at its own band's pace instead of the bass's.
+
 ## [0.6.0] - 2026-11-04
 
 ### Added

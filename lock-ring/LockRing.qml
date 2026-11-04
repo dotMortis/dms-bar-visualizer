@@ -3,7 +3,8 @@
 // that always point at the true time (the second hand sweeps), and a small HH:MM below the center
 // in DMS's lock-screen font and 12h/24h setting. The hands show the music too (hands.mjs): hour =
 // bass, minute = mids, second = highs, each a neon wave ribbon that swings, thickens and glows
-// with its band around a straight axis that never moves off the time. The ribbon (ring.mjs) idles
+// with its band (measured against that band's own recent peak) around a straight axis that never
+// moves off the time. The ribbon (ring.mjs) idles
 // in silence as a thin, faint, breathing wave; music grows it into spectrum ribbons that bulge
 // outward, and the ring swells with its energy. shaders/ring.frag draws all of that. On every
 // Kick a chromatic shockwave expands from the center, sparks fly off the ring and all hands whip
@@ -38,16 +39,14 @@ DesktopPluginComponent {
     // Each hand's angle (from the time alone) and look (from its band, the kick flash and the
     // handWaves setting). The look's parameters, and each hand's band and shape, are in
     // hands.mjs; ring.frag draws them in its colors.
-    readonly property var poses: Hands.handPoses(now, {
-        bass: LockAudio.bass,
-        mid: LockAudio.mid,
-        treble: LockAudio.treble
-    }, {
+    // Each band as a share of its own recent peak (LockAudio.handLevels), so the quiet highs move
+    // the second hand as much as the bass moves the hour hand.
+    readonly property var poses: Hands.handPoses(now, LockAudio.handLevels, {
         flash: LockAudio.flash,
         strength: LockAudio.handWaves
     })
 
-    // Look settings, shared by every ring (LockAudio, settings.mjs).
+    // Look settings, shared by every ring (LockAudio: the bar's config.json, ADR 0004).
     readonly property real intensity: LockAudio.intensity
     readonly property real bassStretch: LockAudio.bassStretch
 
@@ -94,10 +93,13 @@ DesktopPluginComponent {
             property vector4d handAmp: root.perHand("amplitude", 1)
             property vector4d handWidth: root.perHand("width", 1)
             property vector4d handGlow: root.perHand("glow", 1)
+            // How far each hand's wave has travelled, at its own band's pace (hands.mjs).
+            property vector4d handPhase: Qt.vector4d(LockAudio.handPhases.hour, LockAudio.handPhases.minute, LockAudio.handPhases.second, 0)
 
             // Wrapped for 32-bit precision; 1200 s keeps the hue cycle (t*0.05) seamless.
             property real time: LockAudio.time % 1200
             property real flow: LockAudio.flow
+            property real kick: LockAudio.kick
             property real treble: LockAudio.treble
             property real swell: LockAudio.swell
             property real presence: LockAudio.presence

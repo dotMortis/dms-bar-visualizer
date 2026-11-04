@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { HANDS, handPoses, waveEnvelope, waveOffset } from "../lock-ring/hands.mjs";
+import { HANDS, LEVEL, PHASE_WRAP, createHandMotion, handPoses, waveEnvelope, waveOffset } from "../lock-ring/hands.mjs";
 
 // Local wall-clock time on 2026-11-04.
 const at = (h, m, s = 0, ms = 0) => new Date(2026, 10, 4, h, m, s, ms);
@@ -180,5 +180,69 @@ describe("the wave bends a hand around its axis", () => {
             const degrees = Math.atan2(hand.amplitude * waveEnvelope(1), hand.length) * 180 / Math.PI;
             assert.ok(degrees > 0 && degrees <= 5, `${name}: ${degrees.toFixed(2)} degrees`);
         }
+    });
+});
+
+// Each hand shows its own band. In cava's output the highs sit far below the bass, so the hands
+// measure each band against its own recent peak, and run their waves at their own band's pace.
+describe("hand motion", () => {
+    const run = (motion, levels, seconds, speed = 1) => {
+        let out;
+        for (let i = 0; i < Math.round(seconds * 60); i++)
+            out = motion.step(levels, 1 / 60, speed);
+        return out;
+    };
+
+    test("quiet highs move the second hand as much as loud bass moves the hour hand", () => {
+        const motion = createHandMotion();
+        run(motion, { bass: 0.4, mid: 0.15, treble: 0.06 }, 1);
+        const { levels } = run(motion, { bass: 0.3, mid: 0.11, treble: 0.045 }, 0.1);
+        assert.ok(Math.abs(levels.treble - levels.bass) < 0.05, `bass ${levels.bass}, treble ${levels.treble}`);
+        assert.ok(Math.abs(levels.mid - levels.bass) < 0.05, `bass ${levels.bass}, mid ${levels.mid}`);
+    });
+
+    test("each band only moves its own hand", () => {
+        const motion = createHandMotion();
+        run(motion, { bass: 0.4, mid: 0.15, treble: 0.06 }, 1);
+        const { levels } = run(motion, { bass: 0.4, mid: 0, treble: 0 }, 0.1);
+        assert.equal(levels.mid, 0);
+        assert.equal(levels.treble, 0);
+        const poses = handPoses(at(10, 10), levels);
+        assert.equal(poses.minute.amplitude, 0);
+        assert.equal(poses.second.amplitude, 0);
+        assert.ok(poses.hour.amplitude > 0);
+    });
+
+    test("a near-silent band stays near silent instead of being scaled up to full", () => {
+        const { levels } = run(createHandMotion(), { bass: 0, mid: 0, treble: LEVEL.floor / 4 }, 2);
+        assert.ok(levels.treble <= 0.25, `treble ${levels.treble}`);
+    });
+
+    test("after a loud stretch, a quieter one grows back to full as the peak fades", () => {
+        const motion = createHandMotion();
+        run(motion, { bass: 0.8, mid: 0, treble: 0 }, 1);
+        const soon = run(motion, { bass: 0.4, mid: 0, treble: 0 }, 0.1).levels.bass;
+        const later = run(motion, { bass: 0.4, mid: 0, treble: 0 }, LEVEL.halfLife * 2).levels.bass;
+        assert.ok(soon < 0.6, `right after: ${soon}`);
+        assert.equal(later, 1);
+    });
+
+    test("a hand's wave travels faster the louder its band, and with the speed setting", () => {
+        const phase = (levels, speed) => run(createHandMotion(), levels, 1, speed).phases;
+        const p = phase({ bass: 0.4, mid: 0, treble: 0 }, 1);
+        assert.ok(p.hour > p.minute * 1.5, `hour ${p.hour}, minute ${p.minute}`);
+        assert.equal(p.minute, p.second, "both silent: the same calm pace");
+        assert.ok(phase({ bass: 0.4, mid: 0, treble: 0 }, 2).hour > p.hour * 1.9);
+    });
+
+    // ring.frag runs the strands at the phase times 1, 1.5 and 2, and the ripple at those times 1.7.
+    test("the phase wraps where every strand's wave is whole, so the wrap is seamless", () => {
+        for (const m of [1, 1.5, 2, 1.7, 2.55, 3.4]) {
+            const turns = (m * PHASE_WRAP) / (2 * Math.PI);
+            assert.ok(Math.abs(turns - Math.round(turns)) < 1e-9, `x${m}: ${turns} turns`);
+        }
+        const { phases } = run(createHandMotion(), { bass: 1, mid: 1, treble: 1 }, 30);
+        for (const p of Object.values(phases))
+            assert.ok(p >= 0 && p < PHASE_WRAP, `phase ${p}`);
     });
 });

@@ -90,14 +90,16 @@ describe("ring uniforms in the demo", () => {
     const state = {
         values: Array.from({ length: 32 }, (_, i) => i / 31), time: 1300, flow: 2, treble: 0.3,
         swell: 0.05, presence: 1, intensity: 1.2, bassStretch: 1.4,
-        kickAges: [0.5, 9], kickPowers: [0.8, 1], kickSeeds: [3, 4],
-        now: new Date(2026, 10, 4, 3, 0, 0), bass: 0.8, mid: 0.2, flash: 0.5, handWaves: 1, dialRadius: 200,
+        kickAges: [0.5, 9], kickPowers: [0.8, 1], kickSeeds: [3, 4], kick: 0.4,
+        now: new Date(2026, 10, 4, 3, 0, 0), flash: 0.5, handWaves: 1, dialRadius: 200,
+        handLevels: { bass: 0.8, mid: 0.2, treble: 0.3 }, handPhases: { hour: 1, minute: 2, second: 3 },
     };
+    const silence = { bass: 0, mid: 0, treble: 0 };
 
     test("the hands point at the true time, whatever the music", () => {
         const u = ringUniforms(state);
         assert.deepEqual(u.handAngle, [Math.PI / 2, 0, 0, 0]);
-        const quiet = ringUniforms({ ...state, bass: 0, mid: 0, treble: 0, flash: 0 });
+        const quiet = ringUniforms({ ...state, handLevels: silence, flash: 0 });
         assert.deepEqual(quiet.handAngle, u.handAngle);
     });
 
@@ -106,9 +108,15 @@ describe("ring uniforms in the demo", () => {
         assert.equal(u.handFlash, 0.5);
         assert.ok(u.handAmp[0] > u.handAmp[1] / 0.78 * 0.52, "the bass swings the hour hand hardest, for its length");
         assert.deepEqual(ringUniforms({ ...state, handWaves: 0 }).handAmp, [0, 0, 0, 0]);
-        const silent = ringUniforms({ ...state, bass: 0, mid: 0, treble: 0, flash: 0 });
+        const silent = ringUniforms({ ...state, handLevels: silence, flash: 0 });
         assert.deepEqual(silent.handAmp, [0, 0, 0, 0]);
         assert.deepEqual(silent.handGlow, [0, 0, 0, 0]);
+    });
+
+    test("each hand's wave runs at its own phase, and the ribbons get the kick", () => {
+        const u = ringUniforms(state);
+        assert.deepEqual(u.handPhase, [1, 2, 3, 0]);
+        assert.equal(u.kick, 0.4);
     });
 
     test("the hands float: each starts out from the center", () => {

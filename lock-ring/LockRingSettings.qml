@@ -1,5 +1,6 @@
 // The Lock Ring's page in DMS's plugin settings, opened from the widget's options under
-// Settings -> Lock Screen. A slider per setting in settings.mjs.
+// Settings -> Lock Screen. A slider per setting in settings.mjs: the Lock Ring's own. The ones the
+// Bar Visualizer has too are read from its config.json (ADR 0004).
 //
 // DMS hands a desktop plugin's settings page a pluginService that stores into that one widget's
 // config. The tweakables drive the one capture all rings share, so this page routes them to the
@@ -97,7 +98,7 @@ Item {
 
             StyledText {
                 width: parent.width
-                text: "These settings apply to every Lock Ring, on every monitor: they all share one audio capture."
+                text: "These settings apply to every Lock Ring, on every monitor: they all share one audio capture. Intensity, speed, bass stretch and the kick settings are shared with the Bar Visualizer: set them in ~/.config/bar-visualizer/config.json."
                 font.pixelSize: Theme.fontSizeSmall
                 color: Theme.surfaceVariantText
                 wrapMode: Text.WordWrap

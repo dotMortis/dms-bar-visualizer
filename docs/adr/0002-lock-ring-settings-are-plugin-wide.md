@@ -10,3 +10,5 @@ DMS stores a desktop plugin's settings per widget, but every Lock Ring draws fro
 ## Consequences
 
 Changing a setting from any Lock Ring widget's options changes it for all of them, and the settings page says so. The page works around DMS's per-widget settings service, so DMS changes to how desktop-plugin settings are stored can break it.
+
+The settings the Lock Ring shares with the Bar Visualizer have since moved to the bar's `config.json` ([ADR 0004](0004-lock-ring-reads-the-shared-settings-from-config-json.md)); this decision still holds for its own settings.

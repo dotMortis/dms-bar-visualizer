@@ -5,7 +5,6 @@
 // Distances are in dial radii (1 = the dial), ages in seconds, power is the shared detector's
 // hit strength (0.5..1, docs/kick.mjs).
 import { DIAL_RATIO } from "./ring.mjs";
-import { SETTINGS } from "./settings.mjs";
 
 // Where a shockwave starts (a small round at the center; the hands float around it) and the
 // widget's edge, in dial radii.
@@ -49,13 +48,10 @@ export function kickSlots(ages, powers, seeds) {
     return slots;
 }
 
-// The kickDecay setting's default (settings.mjs).
-const DEFAULT_DECAY = SETTINGS.find(s => s.key === "kickDecay").default;
-
 // How brightly the hands flash, 0..1, from the same kicks as the shockwaves: every kick lights them
-// at its power and fades at `decay` per second (the kickDecay setting). Overlapping kicks take the
-// brightest, so a new hit flashes again.
-export function handFlash(ages, powers, decay = DEFAULT_DECAY) {
+// at its power and fades at `decay` per second (the kickDecay setting, docs/config.mjs). Overlapping
+// kicks take the brightest, so a new hit flashes again.
+export function handFlash(ages, powers, decay) {
     const slots = kickSlots(ages, powers, []);
     let flash = 0;
     for (let i = 0; i < KICKS; i++)

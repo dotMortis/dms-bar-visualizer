@@ -147,14 +147,14 @@
   </section>
 
   <section class="card">
-    <h2>Tweakables <span style="text-transform:none;letter-spacing:0" class="bar-only">· same names as in shell.qml</span><span style="text-transform:none;letter-spacing:0" class="ring-only">· the Lock Ring's settings in DMS, in its units</span></h2>
+    <h2>Tweakables <span style="text-transform:none;letter-spacing:0" class="bar-only">· same names as in shell.qml</span><span style="text-transform:none;letter-spacing:0" class="ring-only">· config.json's shared settings, then the Lock Ring's own in DMS</span></h2>
     <div class="grid" id="sliders"></div>
     <div class="row">
       <label class="check bar-only"><input type="checkbox" id="maximized"><span>Maximized window (mirrors DMS <em>maximize detection</em>)</span></label>
       <label class="check ring-only"><input type="checkbox" id="use24" checked><span>24-hour clock (DMS's <em>use 24-hour clock</em>)</span></label>
       <div class="seg">
         <button class="btn" id="reset">Reset</button>
-        <button class="btn bar-only" id="export">Export config.json</button>
+        <button class="btn" id="export">Export config.json</button>
         <button class="btn ring-only" id="exportRing">Export lockRing settings</button>
       </div>
     </div>
@@ -184,6 +184,7 @@ import { DEFAULTS, pluginSettings, ringSettings, ringSide, ringUniforms, setting
 import { toWebGL } from "./webgl.mjs";
 import { DIAL_RATIO, createRingMotion } from "./lock-ring/ring.mjs";
 import { handFlash } from "./lock-ring/kicks.mjs";
+import { createHandMotion } from "./lock-ring/hands.mjs";
 import { formatTime } from "./lock-ring/clock.mjs";
 const RING_FRAG = fetch("./lock-ring/ring.frag").then(r => {
   if (!r.ok) throw new Error(`ring.frag: HTTP ${r.status}`);
@@ -638,8 +639,8 @@ document.getElementById("exportRing").addEventListener("click", () => {
   a.href = url; a.download = "lockRing-settings.json"; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   document.getElementById("exportHint").textContent =
-    "These are the numbers DMS stores for the Lock Ring (under lockRing in its plugin_settings.json). " +
-    "Or set the same values in a Lock Ring widget's options under Settings → Lock Screen.";
+    "These are the numbers DMS stores for the Lock Ring's own settings (under lockRing in its plugin_settings.json). " +
+    "Or set the same values in a Lock Ring widget's options under Settings → Lock Screen. The rest are in config.json.";
 });
 // Same keys and order as the defaults in shell.qml. followMaximize has no slider here (the
 // checkbox only simulates a maximized window), so it keeps its default.
@@ -655,7 +656,7 @@ document.getElementById("export").addEventListener("click", () => {
   a.href = url; a.download = "config.json"; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   document.getElementById("exportHint").textContent =
-    "Save it as ~/.config/bar-visualizer/config.json. The visualizer picks it up right away.";
+    "Save it as ~/.config/bar-visualizer/config.json. Both visualizers pick it up right away.";
 });
 const maxBox = document.getElementById("maximized");
 maxBox.addEventListener("change", layout);
@@ -723,7 +724,8 @@ const rgl = ringCanvas.getContext("webgl2", { premultipliedAlpha: true, alpha: t
 let ringProg = null;
 const ringU = [];   // { name, type, loc }
 const ringMotion = createRingMotion();
-const ring = { swell: 0, presence: 0, flash: 0 };
+const handMotion = createHandMotion();
+const ring = { swell: 0, presence: 0, flash: 0, handLevels: { bass: 0, mid: 0, treble: 0 }, handPhases: {} };
 
 function shaderOf(g, type, src) {
   const sh = g.createShader(type);
@@ -759,10 +761,10 @@ function drawRing() {
   rgl.clearColor(0, 0, 0, 0); rgl.clear(rgl.COLOR_BUFFER_BIT);
   const settings = tuned();
   const values = ringUniforms({
-    values: st.values, time: st.time, flow: st.flow, treble: st.treble,
+    values: st.values, time: st.time, flow: st.flow, treble: st.treble, kick: st.kick,
     swell: ring.swell, presence: ring.presence, intensity: settings.intensity, bassStretch: settings.bassStretch,
     kickAges: st.kickTimes.map(t => st.time - t), kickPowers: st.kickPowers, kickSeeds: st.kickSeeds,
-    now: new Date(), bass: st.bass, mid: st.mid, flash: ring.flash, handWaves: settings.handWaves,
+    now: new Date(), handLevels: ring.handLevels, handPhases: ring.handPhases, flash: ring.flash, handWaves: settings.handWaves,
     dialRadius: Math.min(ringCanvas.width, ringCanvas.height) * DIAL_RATIO,
   });
   values.qt_Opacity = 1;
@@ -845,11 +847,13 @@ function frame() {
   st.cornerRadius += (targetR - st.cornerRadius) * (1 - Math.exp(-dt * 18));
   document.getElementById("bar").style.borderRadius = `${st.cornerRadius}px`;
 
-  // The Lock Ring's motion and hand flash, as LockAudio.qml steps them.
-  const m = ringMotion.step({ bass: st.bass, mid: st.mid, treble: st.treble }, dt);
+  // The Lock Ring's motion, hand motion and hand flash, as LockAudio.qml steps them.
+  const levels = { bass: st.bass, mid: st.mid, treble: st.treble };
+  const m = ringMotion.step(levels, dt);
   ring.swell = m.swell; ring.presence = m.presence;
-  // At kickDecay as the plugin stores it, so the flash matches the plugin's.
-  ring.flash = handFlash(st.kickTimes.map(t => st.time - t), st.kickPowers, ringSettings(cfg).kickDecay);
+  const h = handMotion.step(levels, dt, cfg.speed);
+  ring.handLevels = h.levels; ring.handPhases = h.phases;
+  ring.flash = handFlash(st.kickTimes.map(t => st.time - t), st.kickPowers, cfg.kickDecay);
 
   if (view === "ring") {
     drawRing();

@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, test } from "node:test";
 
+import { DEFAULTS } from "../docs/config.mjs";
 import { KICK_ORIGIN, EDGE, KICKS, handFlash, kickAt, kickSlots } from "../lock-ring/kicks.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -89,12 +90,13 @@ describe("kick slots", () => {
 
 // One value, 0..1, that all three hands brighten by.
 describe("hand flash", () => {
+    const decay = DEFAULTS.kickDecay;
     const empty = new Array(KICKS).fill(0);
-    const one = (age, power) => [[age, ...new Array(KICKS - 1).fill(100)], [power, ...empty.slice(1)]];
+    const one = (age, power) => [[age, ...new Array(KICKS - 1).fill(100)], [power, ...empty.slice(1)], decay];
 
     test("is dark without kicks", () => {
-        assert.equal(handFlash([], []), 0);
-        assert.equal(handFlash(new Array(KICKS).fill(100), empty), 0);
+        assert.equal(handFlash([], [], decay), 0);
+        assert.equal(handFlash(new Array(KICKS).fill(100), empty, decay), 0);
     });
 
     test("lights up the moment a kick fires, brighter for a harder hit", () => {
@@ -114,13 +116,13 @@ describe("hand flash", () => {
     });
 
     test("a higher kickDecay makes it shorter", () => {
-        assert.ok(handFlash(...one(0.1, 1), 12) < handFlash(...one(0.1, 1), 6));
+        assert.ok(handFlash(...one(0.1, 1).slice(0, 2), 12) < handFlash(...one(0.1, 1).slice(0, 2), 6));
     });
 
     test("overlapping kicks: a new hit flashes again, and it never goes past full", () => {
         const ages = [0.3, 0, 0.05, ...new Array(KICKS - 3).fill(100)];
         const powers = [1, 0.6, 1, ...empty.slice(3)];
-        const flash = handFlash(ages, powers);
+        const flash = handFlash(ages, powers, decay);
         assert.ok(flash >= 0.6 && flash <= 1, `flash ${flash}`);
     });
 });

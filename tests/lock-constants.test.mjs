@@ -60,6 +60,11 @@ describe("ring.frag's constants match their modules", () => {
             close(frag[`WAVE_${key.toUpperCase()}`], value, `WAVE_${key.toUpperCase()}`);
     });
 
+    // hands.mjs PHASE_WRAP is seamless only for these strand multiples (tests/lock-hands.test.mjs).
+    test("the hands' strands run at their hand's phase times 1, 1.5 and 2", () => {
+        assert.match(read("lock-ring/shaders/ring.frag"), /float phase = wave \* \(1\.0 \+ 0\.5 \* fk\)/);
+    });
+
     test("ring.frag spells out no other copy of the dial ratio", () => {
         const code = read("lock-ring/shaders/ring.frag").replace(/\/\/.*$/gm, "");
         assert.equal(code.match(/0\.34\b/g)?.length, 1, "only in DIAL_RATIO");
