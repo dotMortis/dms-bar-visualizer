@@ -9,20 +9,26 @@ pragma Singleton
 //   Component.onDestruction: LockAudio.leave(ring)
 import QtQuick
 import Quickshell
+import qs.Common
 import "audio"
 import "share.mjs" as Share
 import "ring.mjs" as Ring
 import "docs/kick.mjs" as Kick
+import "settings.mjs" as Settings
 
 Singleton {
     id: root
 
     // --- Inputs -----------------------------------------------------------
-    // The pipeline's kick and animation settings (see AudioPipeline). Its defaults until the
-    // Lock Ring gets settings of its own.
-    property var settings: ({})
+    // The Lock Ring's settings (settings.mjs), in real units: one plugin-wide set from DMS's
+    // plugin settings, so every ring runs the same kick detector (ADR 0002). DMS replaces
+    // pluginSettings on every change, so edits apply live. Never the bar's config.json.
+    readonly property var settings: Settings.resolve(SettingsData.pluginSettings[Settings.PLUGIN_ID])
 
     // --- Outputs ----------------------------------------------------------
+    // The look settings, the same for every ring.
+    readonly property real intensity: settings.intensity
+    readonly property real bassStretch: settings.bassStretch
     readonly property bool running: pipeline !== null
     readonly property int bandCount: Kick.BANDS
     readonly property var values: pipeline?.values ?? new Array(bandCount).fill(0)

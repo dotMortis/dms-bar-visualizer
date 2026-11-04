@@ -19,6 +19,11 @@ All notable changes to this project are documented here. The format follows
   the music stops, it fades back to the faint dial. All Lock Rings on all monitors share one
   capture, so they pulse in sync, and it runs only while a Lock Ring is on screen.
   `install-lock.sh` now compiles the ring's shader, so it needs `qsb` (qt6-shadertools).
+- Lock Ring settings in DMS: open a Lock Ring widget's options under Settings → Lock Screen to
+  set intensity, speed, kick threshold, kick decay, kick range, kick cooldown and bass stretch.
+  The defaults are the Bar Visualizer's. They apply right away, and to every Lock Ring at once,
+  because all rings share one capture. The Lock Ring never reads the Bar Visualizer's
+  `config.json`.
 
 ## [0.5.0] - 2026-10-30
 

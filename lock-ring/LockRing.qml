@@ -31,9 +31,9 @@ DesktopPluginComponent {
     property var now: new Date()
     readonly property var angles: Clock.handAngles(now)
 
-    // Look settings, at the Bar Visualizer's defaults.
-    readonly property real intensity: 1.0
-    readonly property real bassStretch: 1.4
+    // Look settings, shared by every ring (LockAudio, settings.mjs).
+    readonly property real intensity: LockAudio.intensity
+    readonly property real bassStretch: LockAudio.bassStretch
 
     readonly property real size: Math.min(width, height)
     // Leaves room around the dial for the ribbons to bulge into.
