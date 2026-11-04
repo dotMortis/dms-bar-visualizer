@@ -22,6 +22,9 @@ All notable changes to this project are documented here. The format follows
 - The Lock Ring's hands react to the music: hour to the bass, minute to the mids, second to the
   highs. Each thickens, glows and shimmers along its length with its band. The music never moves
   them: they always point at the true time. In silence they're plain.
+- Kicks on the Lock Ring, detected exactly like the Bar Visualizer's: each one sends a chromatic
+  shockwave out of the center hub, sparks fly off the ring, and all hands flash. Harder hits make
+  bigger, brighter shockwaves, and up to 8 kicks play on top of each other.
 - On Arch, `install-lock-arch.sh` builds and installs the Lock Ring as the pacman package
   `dms-lock-visualizer-git`, into DMS's system plugin dir. Run it again to update, and pass
   `--uninstall` to remove it. It's independent of the Bar Visualizer's package: either one

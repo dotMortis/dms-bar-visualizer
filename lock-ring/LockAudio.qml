@@ -12,6 +12,7 @@ import Quickshell
 import "audio"
 import "share.mjs" as Share
 import "ring.mjs" as Ring
+import "kicks.mjs" as Kicks
 import "docs/kick.mjs" as Kick
 
 Singleton {
@@ -37,6 +38,10 @@ Singleton {
     readonly property var kickPowers: pipeline?.kickPowers ?? []
     readonly property var kickSeeds: pipeline?.kickSeeds ?? []
     readonly property int kickCount: pipeline?.kickCount ?? 0
+    // The same kicks as the ring shader's slots (lock-ring/kicks.mjs): { ages, powers, seeds }, 8 each.
+    readonly property var kickSlots: Kicks.kickSlots(kickAges, kickPowers, kickSeeds)
+    // 0..1, how brightly all hands flash: lit by every kick together with its shockwave and sparks.
+    readonly property real flash: Kicks.handFlash(kickAges, kickPowers, pipeline?.effective.kickDecay ?? 6)
     // The ring's motion (lock-ring/ring.mjs): radius growth as a fraction of the dial radius, and
     // how strongly the ribbons show (0 = only the faint dial).
     property real swell: 0
