@@ -6,3 +6,6 @@ packaging/aur/*/src/
 packaging/aur/*/pkg/
 packaging/aur/*/dms-bar-visualizer/
 packaging/aur/*/*.pkg.tar.*
+.10x-dave
+.gitmodules
+.claude

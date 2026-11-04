@@ -111,7 +111,7 @@ export function createHandMotion() {
 //   amplitude  the wave's sideways reach in dial radii (0 = a straight line)
 //   thicken    the factor on its plain thickness (1 = plain)
 //   glow       how much neon halo it has, 0..1
-//   flash      how white-hot it flashes, 0..1
+//   flash      how brightly it flashes, 0..1
 export function handLook(length, level, flash = 0, strength = 1, whip = 1) {
     const l = clamp01(LOOK.boost * clamp01(level));
     const f = clamp01(flash);

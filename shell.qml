@@ -14,28 +14,20 @@ ShellRoot {
     id: root
 
     // --- Tweakables -------------------------------------------------------
-    // ~/.config/bar-visualizer/config.json overrides any of these by key and is re-read when it
-    // changes; a key removed from it falls back here. If the file is missing, it's created with these.
-    // The bar's geometry is its own; the rest (docs/config.mjs) the Lock Ring reads from the same
-    // file (ADR 0004).
-    // Geometry must match the DMS bar. With a maximized window on a screen's active workspace,
-    // DMS drops the spacing and rounding (its "maximize detection"); followMaximize mirrors that.
-    readonly property var defaults: Object.assign({
-        barThickness: 40,     // DMS bar body height (from innerPadding/font scale)
-        spacing: 4,           // DMS "spacing"
-        radius: 12,           // DMS cornerRadius
-        followMaximize: true  // match DMS "maximizeDetection"
-    }, Config.DEFAULTS)
+    // All in ~/.config/bar-visualizer/config.json, with their defaults in docs/config.mjs: one
+    // file for both visualizers (ADR 0004). It's re-read when it changes, and a key removed from
+    // it falls back to its default. If the file is missing, it's created with the defaults.
+    readonly property var defaults: Config.DEFAULTS
     property var config: defaults
 
-    readonly property string configDir: `${Quickshell.env("XDG_CONFIG_HOME") || Quickshell.env("HOME") + "/.config"}/bar-visualizer`
+    readonly property string configDir: Config.configDir(Quickshell.env("XDG_CONFIG_HOME"), Quickshell.env("HOME"))
 
     // FileView watches the file through its directory, so a directory that doesn't exist yet
     // (first run) would leave it unwatched until a restart. Create it before handing over the path.
     Process {
         running: true
         command: ["mkdir", "-p", root.configDir]
-        onExited: configFile.path = `${root.configDir}/config.json`
+        onExited: configFile.path = Config.configPath(Quickshell.env("XDG_CONFIG_HOME"), Quickshell.env("HOME"))
     }
 
     FileView {
@@ -47,7 +39,7 @@ ShellRoot {
         // file keeps the last good settings.
         onLoaded: {
             try {
-                root.config = Config.parseConfig(text(), root.defaults);
+                root.config = Config.parseConfig(text());
             } catch (e) {
                 console.warn(`config.json: ${e.message}; keeping the previous settings`);
             }

@@ -18,28 +18,24 @@ import "kicks.mjs" as Kicks
 import "hands.mjs" as Hands
 import "docs/kick.mjs" as Kick
 import "docs/config.mjs" as Config
-import "settings.mjs" as Settings
 
 Singleton {
     id: root
 
     // --- Inputs -----------------------------------------------------------
-    // The settings both visualizers have (intensity, speed, kick*, bassStretch: docs/config.mjs),
-    // read from the Bar Visualizer's config.json, so they're tuned in one place (ADR 0004). Its
-    // defaults while there is none; the Lock Ring never writes it.
-    property var shared: Config.DEFAULTS
-    // Plus the Lock Ring's own (settings.mjs), in real units: one plugin-wide set from DMS's plugin
-    // settings (ADR 0002). DMS replaces pluginSettings on every change, and config.json is
-    // watched, so edits apply live.
-    readonly property var settings: Object.assign({}, shared, Settings.resolve(SettingsData.pluginSettings[Settings.PLUGIN_ID]))
+    // Every setting from the Bar Visualizer's config.json (docs/config.mjs): the bar's, which the
+    // Lock Ring shares, and its own in the lockRing section. One file for both, tuned in one place
+    // (ADR 0004). Its defaults while there is none; the Lock Ring never writes it. Watched, so an
+    // edit applies by the next lock.
+    property var settings: Config.DEFAULTS
 
     // --- Outputs ----------------------------------------------------------
     // The look settings, the same for every ring.
     readonly property real intensity: settings.intensity
     readonly property real bassStretch: settings.bassStretch
-    readonly property real handWaves: settings.handWaves
+    readonly property real handWaves: settings.lockRing.handWaves
     // The widget's default size, as a share of the screen height.
-    readonly property real ringSize: settings.ringSize
+    readonly property real ringSize: settings.lockRing.ringSize
     readonly property bool running: pipeline !== null
     readonly property int bandCount: Kick.BANDS
     readonly property var values: pipeline?.values ?? new Array(bandCount).fill(0)
@@ -95,8 +91,7 @@ Singleton {
         handLevels = ({ bass: 0, mid: 0, treble: 0 });
     }
 
-    // The bar's config.json. Watched, so a save applies right away; missing or broken means the
-    // defaults, or the last good settings.
+    // config.json. Missing means the defaults, broken the last good settings.
     FileView {
         path: Config.configPath(Quickshell.env("XDG_CONFIG_HOME"), Quickshell.env("HOME"))
         watchChanges: true
@@ -104,12 +99,12 @@ Singleton {
         onFileChanged: reload()
         onLoaded: {
             try {
-                root.shared = Config.parseConfig(text());
+                root.settings = Config.parseConfig(text());
             } catch (e) {
                 console.warn(`lockRing: config.json: ${e.message}; keeping the previous settings`);
             }
         }
-        onLoadFailed: root.shared = Config.DEFAULTS
+        onLoadFailed: root.settings = Config.DEFAULTS
     }
 
     LazyLoader {

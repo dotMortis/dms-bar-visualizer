@@ -133,17 +133,20 @@ After removing the Lock Ring, run `dms restart` so DMS drops it.
 1. **Enable it:** the Lock Ring is a desktop plugin, so DMS loads it on its own, with no toggle. If it doesn't show up under **DMS Settings → Plugins**, restart DMS: `dms restart`.
 2. **Add the widget:** **DMS Settings → Lock Screen → Add widget → Lock Ring**.
 3. **Move the password field:** the ring and DMS's password field both start in the centre of the screen. Under **DMS Settings → Lock Screen → Edit widgets**, drag the password field below the ring. You can move and resize the ring there too.
-4. **Check it runs:** play some music and lock the screen. Its settings are under the widget's options in **Settings → Lock Screen** (see [Lock Ring settings](#lock-ring-settings)).
+4. **Check it runs:** play some music and lock the screen. Its settings are in the Bar Visualizer's `config.json`, under `lockRing` (see [Lock Ring settings](#lock-ring-settings)).
 
 ## Configuration
 
-Settings live in `~/.config/bar-visualizer/config.json`. The visualizer creates it with the defaults on first start (and again if you delete it, which resets everything). Keys you remove from it fall back to their default. The visualizer picks up changes as soon as you save, no restart needed. The Lock Ring reads every setting below except the bar's geometry from the same file (see [Lock Ring settings](#lock-ring-settings)).
+Both visualizers read their settings from one file, `~/.config/bar-visualizer/config.json`. The Bar Visualizer creates it with the defaults on first start (and again if you delete it, which resets everything). Keys you remove from it fall back to their default. The Bar Visualizer picks up changes as soon as you save, no restart needed, and the Lock Ring by the next lock. The Lock Ring uses every setting below except the bar's geometry, and has its own in the `lockRing` section (see [Lock Ring settings](#lock-ring-settings)).
 
 ```json
 {
   "barThickness": 44,
   "spacing": 6,
-  "intensity": 1.2
+  "intensity": 1.2,
+  "lockRing": {
+    "ringSize": 0.5
+  }
 }
 ```
 
@@ -164,7 +167,7 @@ Settings live in `~/.config/bar-visualizer/config.json`. The visualizer creates 
 
 To find the right geometry, run `hyprctl layers`. The `dms:bar` surface height equals `barThickness + spacing`.
 
-The defaults themselves live in `docs/config.mjs` (all but the geometry, which is in the `Tweakables` block at the top of `shell.qml`). A value of the wrong type falls back to its default. If the file is half-written or not valid JSON, the visualizer keeps its last good settings.
+The defaults of every key live in `docs/config.mjs`. A value of the wrong type falls back to its default, and keys it doesn't know are ignored. If the file is half-written or not valid JSON, both visualizers keep their last good settings.
 
 Want to tune by eye first? The [live demo](https://dotmortis.github.io/dms-bar-visualizer/) has a slider for every key.
 
@@ -210,18 +213,16 @@ To install it and set it up, see [Install](#install) and [Set up the Lock Ring](
 
 ### Lock Ring settings
 
-The settings both visualizers have (`intensity`, `speed`, `kickThreshold`, `kickDecay`, `kickLowHz`, `kickHighHz`, `kickCooldown` and `bassStretch`) come from the Bar Visualizer's `~/.config/bar-visualizer/config.json` (see [Configuration](#configuration)), so you tune them once for both ([why](docs/adr/0004-lock-ring-reads-the-shared-settings-from-config-json.md)). The Lock Ring picks up a save right away and never writes the file. Without the Bar Visualizer it runs on the defaults; create the file by hand to change them (then `dms restart` if `~/.config/bar-visualizer/` didn't exist yet).
+The Lock Ring reads all its settings from the Bar Visualizer's `~/.config/bar-visualizer/config.json` (see [Configuration](#configuration)), so you tune both visualizers in one file ([why](docs/adr/0004-both-visualizers-read-one-config-json.md)). It uses the bar's look and audio settings (`intensity`, `speed`, `kickThreshold`, `kickDecay`, `kickLowHz`, `kickHighHz`, `kickCooldown` and `bassStretch`) as they are. Its own are in the `lockRing` section:
 
-Its own settings are in DMS's plugin settings, under the widget's options in Settings → Lock Screen. They apply right away and to every Lock Ring at once, since all rings share one capture ([why](docs/adr/0002-lock-ring-settings-are-plugin-wide.md)):
+| Key | Default | What it does |
+| --- | --- | --- |
+| `lockRing.handWaves` | `1.0` | How far the hands swing with the music and on kicks. `0` = straight hands |
+| `lockRing.ringSize` | `0.4` | The widget's default size, as a share of the screen height. Resizing the widget under Edit widgets still works |
 
-| Setting | Key | Default | What it does |
-| --- | --- | --- | --- |
-| Hand waves | `handWaves` | `100 %` | How far the hands swing with the music and on kicks. `0 %` = straight hands |
-| Ring size | `ringSize` | `40 %` | The widget's default size, as a share of the screen height (20 to 80 %). Resizing the widget under Edit widgets still works |
+They apply to every Lock Ring at once, since all rings share one capture ([why](docs/adr/0002-lock-ring-settings-are-plugin-wide.md)). The Lock Ring never writes the file. A `config.json` from before the `lockRing` section existed works as it is: add the section to change those two. Without the Bar Visualizer the Lock Ring runs on the defaults; create the file by hand to change them (then `dms restart` if `~/.config/bar-visualizer/` didn't exist yet).
 
-DMS stores each as the integer its slider shows, under `lockRing` in `plugin_settings.json`. Values an older version stored there for the shared settings are ignored.
-
-To tune it without locking the screen, open the [live demo's Lock Ring view](https://dotmortis.github.io/dms-bar-visualizer/#ring). Its sliders are the shared settings, as `config.json` has them, and the Lock Ring's own, in its units.
+To tune it without locking the screen, open the [live demo's Lock Ring view](https://dotmortis.github.io/dms-bar-visualizer/#ring). Its sliders have the names `config.json` has, and **Export config.json** downloads the whole file.
 
 > [!NOTE]
 > DMS keeps a loaded plugin in memory, so after updating the Lock Ring (with either script, or by pulling the checkout), restart DMS to see the new version: `dms restart`.

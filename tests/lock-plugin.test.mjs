@@ -122,37 +122,31 @@ describe("lock ring plugin", () => {
         assert.match(fs.readFileSync(path.join(PLUGIN, "LockAudio.qml"), "utf8"), /^pragma Singleton$/m);
     });
 
-    // DMS opens it from the widget's options under Settings -> Lock Screen. Without
-    // settings_write, DMS shows an error instead of the settings.
-    test("plugin.json names a settings page that exists, and may write settings", () => {
+    // Its settings are all in config.json (ADR 0004), so DMS shows no settings page for it.
+    test("plugin.json has no settings page, and asks for no settings permissions", () => {
         const m = manifest();
-        assert.ok(m.settings, "plugin.json has settings");
-        const settings = path.normalize(m.settings);
-        assert.ok(!settings.startsWith(".."), settings);
-        assert.ok(fs.existsSync(path.join(PLUGIN, settings)), settings);
-        assert.ok(m.permissions.includes("settings_write"));
+        assert.equal(m.settings, undefined);
+        assert.equal(m.permissions, undefined);
+        assert.ok(!fs.existsSync(path.join(PLUGIN, "LockRingSettings.qml")));
     });
 
-    // The settings both visualizers have are tuned in one place, the bar's config.json (ADR 0004).
-    // The Lock Ring only reads it: the file is the bar's, and without it the ring runs on the
-    // defaults.
-    test("reads the shared settings from the Bar Visualizer's config.json, and never writes it", () => {
+    // One file for both visualizers, the bar's config.json, with the Lock Ring's own settings in its
+    // lockRing section (ADR 0004). The Lock Ring only reads it: the file is the bar's, and without
+    // it the ring runs on the defaults.
+    test("reads every setting from the Bar Visualizer's config.json, and never writes it", () => {
         const stripComments = text => text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
         const audio = stripComments(fs.readFileSync(path.join(PLUGIN, "LockAudio.qml"), "utf8"));
         assert.match(audio, /path: Config\.configPath\(Quickshell\.env\("XDG_CONFIG_HOME"\), Quickshell\.env\("HOME"\)\)/);
         assert.match(audio, /watchChanges: true/);
-        assert.match(audio, /root\.shared = Config\.parseConfig\(text\(\)\)/);
-        assert.match(audio, /onLoadFailed: root\.shared = Config\.DEFAULTS/);
+        assert.match(audio, /root\.settings = Config\.parseConfig\(text\(\)\)/);
+        assert.match(audio, /onLoadFailed: root\.settings = Config\.DEFAULTS/);
+        assert.match(audio, /handWaves: settings\.lockRing\.handWaves/);
+        assert.match(audio, /ringSize: settings\.lockRing\.ringSize/);
+        assert.doesNotMatch(audio, /pluginSettings|PluginService/, "nothing comes from DMS's plugin settings");
         const files = importGraph(PLUGIN).map(i => i.target).filter(t => /\.(qml|m?js)$/.test(t));
         for (const file of files) {
             const code = stripComments(fs.readFileSync(path.join(PLUGIN, file), "utf8"));
             assert.doesNotMatch(code, /setText|mkdir/, `${file} must not write the bar's config`);
         }
-    });
-
-    test("the settings page shows only the Lock Ring's own settings", () => {
-        const page = fs.readFileSync(path.join(PLUGIN, "LockRingSettings.qml"), "utf8");
-        assert.match(page, /model: Settings\.SETTINGS/);
-        assert.match(page, /config\.json/, "it says where the other settings are");
     });
 });
