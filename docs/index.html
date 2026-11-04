@@ -180,9 +180,9 @@
 import { BANDS, HIGH_HZ, LOW_HZ, createKickDetector } from "./kick.mjs";
 // The views, their sliders and the Lock Ring's settings (demo.mjs). The Lock Ring view runs the
 // plugin's own modules and shader (lock-ring/), which live here because Pages publishes only docs/.
-import { DEFAULTS, pluginSettings, ringSettings, ringUniforms, settingText, slidersFor, viewFromHash } from "./demo.mjs";
+import { DEFAULTS, pluginSettings, ringSettings, ringSide, ringUniforms, settingText, slidersFor, viewFromHash } from "./demo.mjs";
 import { toWebGL } from "./webgl.mjs";
-import { createRingMotion } from "./lock-ring/ring.mjs";
+import { DIAL_RATIO, createRingMotion } from "./lock-ring/ring.mjs";
 import { handFlash } from "./lock-ring/kicks.mjs";
 import { formatTime } from "./lock-ring/clock.mjs";
 const RING_FRAG = fetch("./lock-ring/ring.frag").then(r => {
@@ -665,9 +665,9 @@ function layout() {
   const maximized = maxBox.checked;
   root.style.setProperty("--bar-h", `${cfg.barThickness}px`);
   root.style.setProperty("--inset", `${maximized ? 0 : cfg.spacing}px`);
-  // The Lock Ring widget is square (LockRing.qml forceSquare); keep it inside narrow screens.
+  // The Lock Ring widget is square (LockRing.qml forceSquare), sized by the ring size setting.
   const lock = document.getElementById("lock");
-  const side = Math.min(cfg.ringSize, window.innerWidth - 24);
+  const side = ringSide(ringSettings(cfg).ringSize, window.innerWidth, window.innerHeight);
   lock.style.width = lock.style.height = `${side}px`;
 }
 window.addEventListener("resize", layout);
@@ -763,7 +763,7 @@ function drawRing() {
     swell: ring.swell, presence: ring.presence, intensity: settings.intensity, bassStretch: settings.bassStretch,
     kickAges: st.kickTimes.map(t => st.time - t), kickPowers: st.kickPowers, kickSeeds: st.kickSeeds,
     now: new Date(), bass: st.bass, mid: st.mid, flash: ring.flash, handWaves: settings.handWaves,
-    dialRadius: Math.min(ringCanvas.width, ringCanvas.height) * 0.34,
+    dialRadius: Math.min(ringCanvas.width, ringCanvas.height) * DIAL_RATIO,
   });
   values.qt_Opacity = 1;
   for (const { name, type, loc } of ringU) {
@@ -784,7 +784,7 @@ const fctx = face.getContext("2d");
 function drawFace() {
   const dpr = resize(face);
   const size = Math.min(face.width, face.height), c = { x: face.width / 2, y: face.height / 2 };
-  const dial = size * 0.34;
+  const dial = size * DIAL_RATIO;
   fctx.clearRect(0, 0, face.width, face.height);
   fctx.save();
   fctx.translate(c.x, c.y);
@@ -848,7 +848,8 @@ function frame() {
   // The Lock Ring's motion and hand flash, as LockAudio.qml steps them.
   const m = ringMotion.step({ bass: st.bass, mid: st.mid, treble: st.treble }, dt);
   ring.swell = m.swell; ring.presence = m.presence;
-  ring.flash = handFlash(st.kickTimes.map(t => st.time - t), st.kickPowers, cfg.kickDecay);
+  // At kickDecay as the plugin stores it, so the flash matches the plugin's.
+  ring.flash = handFlash(st.kickTimes.map(t => st.time - t), st.kickPowers, ringSettings(cfg).kickDecay);
 
   if (view === "ring") {
     drawRing();

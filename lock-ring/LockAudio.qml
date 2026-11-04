@@ -31,6 +31,8 @@ Singleton {
     readonly property real intensity: settings.intensity
     readonly property real bassStretch: settings.bassStretch
     readonly property real handWaves: settings.handWaves
+    // The widget's default size, as a share of the screen height.
+    readonly property real ringSize: settings.ringSize
     readonly property bool running: pipeline !== null
     readonly property int bandCount: Kick.BANDS
     readonly property var values: pipeline?.values ?? new Array(bandCount).fill(0)
@@ -39,16 +41,14 @@ Singleton {
     readonly property real treble: pipeline?.treble ?? 0
     readonly property real time: pipeline?.time ?? 0
     readonly property real flow: pipeline?.flow ?? 0
-    // Kicks, for the shockwave and flashing hands: the decaying flash, and the last kickSlots kicks.
-    readonly property real kick: pipeline?.kick ?? 0
+    // Kicks, for the shockwave and flashing hands: the last kickSlots kicks.
     readonly property var kickAges: pipeline?.kickAges ?? []
     readonly property var kickPowers: pipeline?.kickPowers ?? []
     readonly property var kickSeeds: pipeline?.kickSeeds ?? []
-    readonly property int kickCount: pipeline?.kickCount ?? 0
     // The same kicks as the ring shader's slots (lock-ring/kicks.mjs): { ages, powers, seeds }, 8 each.
     readonly property var kickSlots: Kicks.kickSlots(kickAges, kickPowers, kickSeeds)
     // 0..1, how brightly all hands flash: lit by every kick together with its shockwave and sparks.
-    readonly property real flash: Kicks.handFlash(kickAges, kickPowers, pipeline?.effective.kickDecay ?? 6)
+    readonly property real flash: Kicks.handFlash(kickAges, kickPowers, settings.kickDecay)
     // The ring's motion (lock-ring/ring.mjs): radius growth as a fraction of the dial radius, and
     // how much music the ribbon shows (0 = only its calm idle wave).
     property real swell: 0

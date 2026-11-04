@@ -34,6 +34,11 @@ export const SETTINGS = [
     { key: "handWaves", label: "Hand waves",
         description: "How far the hands swing with the music and on kicks. 0% = straight hands.",
         default: 1.0, min: 0, max: 2, scale: 100, unit: "%", lockOnly: true },
+    // The Lock Ring's own: the widget's default size (LockRing.qml defaultWidth/defaultHeight), as a
+    // share of the screen height. Resizing the widget in DMS still sets its size.
+    { key: "ringSize", label: "Ring size",
+        description: "The widget's default size, as a share of the screen height. Resizing the widget still works.",
+        default: 0.4, min: 0.2, max: 0.8, scale: 100, unit: "%", lockOnly: true },
 ];
 
 const BY_KEY = new Map(SETTINGS.map(s => [s.key, s]));

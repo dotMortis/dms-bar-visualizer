@@ -25,10 +25,10 @@ layout(std140, binding = 0) uniform buf {
     float dial;         // the dial's radius, as a fraction of half the item's size
     float intensity;
     float bassStretch;
-    // The hands (lock-ring/hands.mjs handPoses()), x = hour, y = minute, z = second, w unused.
-    // Angles in radians, clockwise from 12 o'clock; everything else in dial radii.
     float pixel;        // one pixel, in dial radii (for antialiasing)
     float handFlash;    // 0..1, how white-hot all hands flash on a kick (kicks.mjs handFlash())
+    // The hands (lock-ring/hands.mjs handPoses()), x = hour, y = minute, z = second, w unused.
+    // Angles in radians, clockwise from 12 o'clock; everything else in dial radii.
     vec4 handAngle;     // where each hand points: from the time alone (clock.mjs)
     vec4 handInner;     // where the hand starts, from the center: the hands float
     vec4 handLength;    // from the center to the tip
@@ -46,9 +46,17 @@ const float PI = 3.14159265359;
 const float TAU = 6.28318530718;
 const int KICKS = 8;  // matches kickSlots in audio/AudioPipeline.qml and KICKS in lock-ring/kicks.mjs
 
+// These constants are lock-ring/ring.mjs's, kicks.mjs's and hands.mjs's, checked by
+// tests/lock-constants.test.mjs.
+// The dial's radius as a share of the item's side (ring.mjs DIAL_RATIO, LockRing.qml's dialRadius).
+const float DIAL_RATIO = 0.34;
 // In dial radii, as in lock-ring/kicks.mjs: where a shockwave starts, and how far the hardest hit reaches.
-const float HUB = 0.014 / 0.34;
-const float MAX_REACH = 0.9 * 0.5 / 0.34;
+const float KICK_ORIGIN = 0.014 / DIAL_RATIO;
+const float MAX_REACH = 0.9 * 0.5 / DIAL_RATIO;
+// kickAt(): how fast a shockwave grows and fades, per second, and when a kick has played out.
+const float KICK_GROW = 4.5;
+const float KICK_FADE = 2.2;
+const float PLAYED_OUT = 3.0;
 
 float band(int i) {
     int v = i / 4;
@@ -236,28 +244,29 @@ void main() {
     col += pal(hueBase + 0.5 + s * 0.8, 0.8, 1.0) * aura * amp * 0.35 * ubuf.presence;
 
     // --- Kick shockwaves: a chromatic ring expanding from the center, one per kick ----------------
-    // kickAt() in lock-ring/kicks.mjs: front and strength.
+    // kickAt() in lock-ring/kicks.mjs: front and strength (blast).
     vec3 wakeCol = pal(hueBase + 0.3, 0.9, 1.0);
     for (int j = 0; j < KICKS; j++) {
         float age = kickAge(j);
         float power = kickPower(j);
-        if (power <= 0.0 || age >= 3.0)
+        if (power <= 0.0 || age >= PLAYED_OUT)
             continue;
-        float reach = HUB + (MAX_REACH - HUB) * power;
-        float front = HUB + (reach - HUB) * (1.0 - exp(-age * 4.5));
-        float blast = power * exp(-age * 2.2);
+        float reach = KICK_ORIGIN + (MAX_REACH - KICK_ORIGIN) * power;
+        float front = KICK_ORIGIN + (reach - KICK_ORIGIN) * (1.0 - exp(-age * KICK_GROW));
+        float blast = power * exp(-age * KICK_FADE);
         float ds = r - front;                 // > 0 ahead of the front, < 0 behind it
         float eL = exp(-ds * ds / 0.0012);
         float eM = exp(-(ds + 0.025) * (ds + 0.025) / 0.0012);
         float eB = exp(-(ds + 0.05) * (ds + 0.05) / 0.0012);
         col += (pow(LAVENDER, vec3(1.6)) * eL + pow(MAUVE, vec3(2.0)) * eM * 0.85 + pow(BLUE, vec3(2.0)) * eB * 0.75)
                * blast * 1.1;
-        float wake = ds < 0.0 && r > HUB ? exp(ds * 6.0) : 0.0;
+        float wake = ds < 0.0 && r > KICK_ORIGIN ? exp(ds * 6.0) : 0.0;
         col += wakeCol * wake * blast * 0.12;
     }
 
     // --- Kick sparks: a spray flung off the ring, streaking outward, one per kick ---------------
-    // kickAt() in lock-ring/kicks.mjs: sparks (the spray's outer edge) and sparkLife.
+    // The shader's own: each spark flies from the swelling ring out to its share of the hardest
+    // hit's reach (MAX_REACH), farther on a harder hit, and burns out within 2 s.
     for (int j = 0; j < KICKS; j++) {
         float age = kickAge(j);
         float power = kickPower(j);

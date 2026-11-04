@@ -14,6 +14,7 @@ import qs.Common
 import qs.Modules.Plugins
 import "clock.mjs" as Clock
 import "hands.mjs" as Hands
+import "ring.mjs" as Ring
 
 DesktopPluginComponent {
     id: root
@@ -21,9 +22,10 @@ DesktopPluginComponent {
     // Declared so DMS injects the screen; sizes the default.
     property var screen: null
 
-    // Square, about 40% of the screen height. DMS centers plugin widgets by default.
+    // Square, the ring size setting's share of the screen height (40% by default), live. DMS uses
+    // it until the widget is resized, and centers plugin widgets by default.
     readonly property bool forceSquare: true
-    readonly property real defaultWidth: Math.round((screen?.height ?? 1080) * 0.4)
+    readonly property real defaultWidth: Math.round((screen?.height ?? 1080) * LockAudio.ringSize)
     readonly property real defaultHeight: defaultWidth
     minWidth: 160
     minHeight: 160
@@ -34,8 +36,8 @@ DesktopPluginComponent {
     // Read fresh every frame, so the second hand sweeps and the clock is right again after suspend.
     property var now: new Date()
     // Each hand's angle (from the time alone) and look (from its band, the kick flash and the
-    // handWaves setting). The look's parameters, and each hand's band, color and shape, are in
-    // hands.mjs; ring.frag draws them.
+    // handWaves setting). The look's parameters, and each hand's band and shape, are in
+    // hands.mjs; ring.frag draws them in its colors.
     readonly property var poses: Hands.handPoses(now, {
         bass: LockAudio.bass,
         mid: LockAudio.mid,
@@ -50,8 +52,8 @@ DesktopPluginComponent {
     readonly property real bassStretch: LockAudio.bassStretch
 
     readonly property real size: Math.min(width, height)
-    // Leaves room around the dial for the ribbons to bulge into.
-    readonly property real dialRadius: size * 0.34
+    // Leaves room around the dial for the ribbons to bulge into (ring.mjs).
+    readonly property real dialRadius: size * Ring.DIAL_RATIO
 
     // Holds the shared capture while this ring exists: from lock to unlock.
     Component.onCompleted: LockAudio.join(root)

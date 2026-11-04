@@ -4,6 +4,10 @@
 // tests/lock-ring.test.mjs; LockAudio.qml runs the motion, shaders/ring.frag mirrors
 // spectrumAt(), spectrumLevel(), ribbonRadius() and hourPoints().
 
+// The dial's radius as a share of the widget's side (LockRing.qml's dialRadius), leaving room
+// around it for the ribbons to bulge into. ring.frag's DIAL_RATIO.
+export const DIAL_RATIO = 0.34;
+
 // Position on the spectrum, 0 (lowest band) to 1 (highest), at `angle` clockwise degrees from
 // 12 o'clock. Bass at the bottom, highs meeting at the top, the left half mirroring the right.
 // bassStretch > 1 spreads the bass over more of the ring, as the bar's bassStretch does; 1 = linear.

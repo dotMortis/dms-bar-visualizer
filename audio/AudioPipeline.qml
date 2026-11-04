@@ -49,7 +49,7 @@ Scope {
 
     // The last kickSlots kicks, so a new kick's shockwave and particles add to the ones still
     // playing instead of restarting them. Ring buffer: the newest kick overwrites the oldest.
-    readonly property int kickSlots: 8  // matches KICKS in shaders/viz.frag
+    readonly property int kickSlots: 8  // matches KICKS in shaders/viz.frag and docs/lock-ring/ring.frag
     property var kickTimes: new Array(kickSlots).fill(-100)
     property var kickPowers: new Array(kickSlots).fill(0)  // 0.5..1 by strength, 0 = empty slot
     property var kickSeeds: new Array(kickSlots).fill(0)   // a fresh particle spray per kick

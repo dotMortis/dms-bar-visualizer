@@ -1,5 +1,5 @@
-// Kicks on the Lock Ring: each one sends a chromatic shockwave out of the center, sparks fly
-// off the ring, and the hands flash. Distances are in dial radii (1 = the dial), ages in seconds.
+// Kicks on the Lock Ring: each one sends a chromatic shockwave out of the center and the hands
+// flash. (The sparks it flings off the ring are the shader's alone.) Distances are in dial radii (1 = the dial), ages in seconds.
 // Power is the shared detector's hit strength, 0.5 (a soft hit) to 1 (the hardest next to the
 // recent kicks).
 import assert from "node:assert/strict";
@@ -7,14 +7,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, test } from "node:test";
 
-import { HUB, EDGE, KICKS, handFlash, kickAt, kickSlots } from "../lock-ring/kicks.mjs";
+import { KICK_ORIGIN, EDGE, KICKS, handFlash, kickAt, kickSlots } from "../lock-ring/kicks.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
 describe("shockwave", () => {
     test("starts at the center", () => {
-        assert.equal(kickAt(0, 1).front, HUB);
-        assert.equal(kickAt(0, 0.5).front, HUB);
+        assert.equal(kickAt(0, 1).front, KICK_ORIGIN);
+        assert.equal(kickAt(0, 0.5).front, KICK_ORIGIN);
     });
 
     test("expands outward as it ages", () => {
@@ -75,7 +75,7 @@ describe("kick slots", () => {
     test("a kick that has played out is an empty slot, so silence draws nothing", () => {
         const { powers } = kickSlots([2.9, 3, 50], [1, 1, 1], [1, 2, 3]);
         assert.deepEqual(powers.slice(0, 3), [1, 0, 0]);
-        assert.ok(kickAt(3, 1).strength < 0.01 && kickAt(3, 1).sparkLife < 0.01, "nothing left to see by then");
+        assert.ok(kickAt(3, 1).strength < 0.01, "nothing left to see by then");
     });
 
     test("the shader and the pipeline both have 8 slots", () => {
@@ -84,28 +84,6 @@ describe("kick slots", () => {
         assert.match(frag, /^const int KICKS = 8;/m);
         const pipeline = fs.readFileSync(path.join(ROOT, "audio/AudioPipeline.qml"), "utf8");
         assert.match(pipeline, /readonly property int kickSlots: 8\b/);
-    });
-});
-
-describe("sparks", () => {
-    test("start on the ring and fly outward", () => {
-        assert.equal(kickAt(0, 1).sparks, 1);
-        let last = 1;
-        for (let age = 0.05; age <= 2; age += 0.05) {
-            const { sparks } = kickAt(age, 0.8);
-            assert.ok(sparks > last, `sparks ${sparks} at ${age} s`);
-            last = sparks;
-        }
-    });
-
-    test("fly farther on a harder hit, but stay inside the widget", () => {
-        assert.ok(kickAt(0.3, 1).sparks > kickAt(0.3, 0.5).sparks);
-        assert.ok(kickAt(10, 1).sparks < EDGE);
-    });
-
-    test("burn out within two seconds", () => {
-        assert.ok(kickAt(0, 0.7).sparkLife > 0.6);
-        assert.ok(kickAt(2, 1).sparkLife < 0.03);
     });
 });
 
@@ -124,10 +102,10 @@ describe("hand flash", () => {
         assert.equal(handFlash(...one(0, 0.5)), 0.5);
     });
 
-    test("fires together with the shockwave and the sparks, from the same kick", () => {
+    test("fires together with the shockwave, from the same kick", () => {
         for (const power of [0.5, 0.75, 1]) {
             const kick = kickAt(0, power);
-            assert.ok(kick.strength > 0 && kick.sparkLife > 0 && handFlash(...one(0, power)) > 0, `power ${power}`);
+            assert.ok(kick.strength > 0 && handFlash(...one(0, power)) > 0, `power ${power}`);
         }
     });
 

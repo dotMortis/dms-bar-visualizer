@@ -7,17 +7,17 @@
 // as DMS stores them (ringSettings), so it reacts to a slider exactly as the plugin does.
 import { handPoses } from "./lock-ring/hands.mjs";
 import { kickSlots } from "./lock-ring/kicks.mjs";
+import { DIAL_RATIO } from "./lock-ring/ring.mjs";
 import { SETTINGS, resolve } from "./lock-ring/settings.mjs";
 
 export const VIEWS = ["bar", "ring"];
 
-// The bar's defaults from shell.qml, plus the ring's own: its size (DMS sizes the widget; the
-// demo picks one that fits the page) and DMS's 12h/24h clock setting.
+// The bar's geometry from shell.qml, the plugin's settings at their defaults (the ones the bar has
+// too are the bar's, tests/lock-settings.test.mjs), and DMS's 12h/24h clock setting.
 export const DEFAULTS = {
     barThickness: 40, spacing: 4, radius: 12,
-    intensity: 1.0, speed: 1.0, kickThreshold: 0.4, kickDecay: 6.0, kickLowHz: 20, kickHighHz: 90,
-    kickCooldown: 0.1, bassStretch: 1.4, handWaves: 1.0,
-    ringSize: 360, use24Hour: true,
+    ...Object.fromEntries(SETTINGS.map(s => [s.key, s.default])),
+    use24Hour: true,
 };
 
 const slider = (key, min, max, step, hint) => ({ key, min, max, step, hint });
@@ -39,11 +39,8 @@ const BAR = [
 const BAR_BY_KEY = new Map(BAR.map(s => [s.key, s]));
 
 // The ring view's sliders: the plugin's settings, in its order and with its descriptions (the
-// Lock Ring's own, like handWaves, in 5% steps), then the ones only the ring has.
-const RING = [
-    ...SETTINGS.map(s => ({ ...(BAR_BY_KEY.get(s.key) ?? slider(s.key, s.min, s.max, 0.05)), min: s.min, max: s.max, hint: s.description })),
-    slider("ringSize", 160, 640, 10, "The widget's size (px). DMS sizes it when you resize the widget"),
-];
+// Lock Ring's own, like handWaves and ringSize, in 5% steps).
+const RING = SETTINGS.map(s => ({ ...(BAR_BY_KEY.get(s.key) ?? slider(s.key, s.min, s.max, 0.05)), min: s.min, max: s.max, hint: s.description }));
 
 // The view a URL hash opens: #ring for the Lock Ring, anything else the Bar Visualizer.
 export function viewFromHash(hash) {
@@ -71,15 +68,19 @@ export function ringSettings(values) {
 
 // A ring slider's value as the plugin's settings page shows it: "40 %", "250 ms", "30 Hz".
 export function settingText(key, value) {
-    if (key === "ringSize")
-        return `${value} px`;
     const s = SETTINGS.find(s => s.key === key);
     const stored = Math.round(value * s.scale);
     return s.unit ? `${stored} ${s.unit}` : String(stored);
 }
 
-// The dial's radius as a fraction of half the widget (LockRing.qml: dialRadius = size * 0.34).
-export const DIAL = 0.34 / 0.5;
+// The Lock Ring widget's side in pixels at `ringSize` (the setting: a share of the screen height),
+// with the page standing in for the screen. It stays inside a narrow page.
+export function ringSide(ringSize, pageWidth, pageHeight) {
+    return Math.min(Math.round(pageHeight * ringSize), pageWidth - 24);
+}
+
+// The dial's radius as a fraction of half the widget (LockRing.qml: dialRadius = size * DIAL_RATIO).
+export const DIAL = DIAL_RATIO / 0.5;
 
 // The ring shader's uniforms, by name, as LockRing.qml binds them, from the pipeline's state:
 // bands (32, bass first), time, flow, treble, the last kicks (kickAges/kickPowers/kickSeeds),

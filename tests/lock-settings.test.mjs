@@ -28,6 +28,7 @@ describe("lock ring settings", () => {
             kickCooldown: 0.1,
             bassStretch: 1.4,
             handWaves: 1.0,
+            ringSize: 0.4,
         });
     });
 
@@ -41,8 +42,27 @@ describe("lock ring settings", () => {
             assert.equal(defaults[key], bar[key], key);
     });
 
-    test("only the hands' wave strength is the Lock Ring's own", () => {
-        assert.deepEqual(SETTINGS.filter(s => s.lockOnly).map(s => s.key), ["handWaves"]);
+    test("only the hands' wave strength and the ring's size are the Lock Ring's own", () => {
+        assert.deepEqual(SETTINGS.filter(s => s.lockOnly).map(s => s.key), ["handWaves", "ringSize"]);
+    });
+
+    // Spec #10's "ring size": the widget's default size, as a share of the screen height.
+    test("ring size reads back as a share of the screen height, 20 % to 80 %", () => {
+        const ringSize = SETTINGS.find(s => s.key === "ringSize");
+        assert.deepEqual(sliderOf(ringSize), {
+            settingKey: "ringSize", label: "Ring size", description: ringSize.description,
+            defaultValue: 40, minimum: 20, maximum: 80, unit: "%",
+        });
+        assert.equal(resolve({ ringSize: 65 }).ringSize, 0.65);
+    });
+
+    test("the widget's default size follows the ring size setting live, and stays resizable", () => {
+        const ring = fs.readFileSync(path.join(ROOT, "lock-ring/LockRing.qml"), "utf8");
+        assert.match(ring, /defaultWidth: Math\.round\(\(screen\?\.height \?\? 1080\) \* LockAudio\.ringSize\)/);
+        assert.match(ring, /defaultHeight: defaultWidth/);
+        assert.doesNotMatch(ring, /^    (width|height):/m, "DMS sets the widget's size, so a resize sticks");
+        const audio = fs.readFileSync(path.join(ROOT, "lock-ring/LockAudio.qml"), "utf8");
+        assert.match(audio, /readonly property real ringSize: settings\.ringSize/);
     });
 
     test("wave strength reads back from its slider, 0 = straight hands", () => {
