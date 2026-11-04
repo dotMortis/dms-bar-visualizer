@@ -18,9 +18,9 @@ import { handAngles } from "./clock.mjs";
 // in dial radii), and how hard a kick whips it (the short, thick hour hand gets busy at full whip).
 // Its color is ring.frag's (lavender, mauve, pink: Catppuccin Mocha, as in shaders/viz.frag).
 export const HANDS = {
-    hour: { band: "bass", length: 0.52, thickness: 0.03, whip: 0.55 },
-    minute: { band: "mid", length: 0.78, thickness: 0.02, whip: 1 },
-    second: { band: "treble", length: 0.88, thickness: 0.011, whip: 1 },
+    hour: { band: "bass", length: 0.52, thickness: 0.02, whip: 0.55 },
+    minute: { band: "mid", length: 0.78, thickness: 0.013, whip: 1 },
+    second: { band: "treble", length: 0.88, thickness: 0.007, whip: 1 },
 };
 
 // Where every hand starts, in dial radii from the center: the gap that keeps them apart.

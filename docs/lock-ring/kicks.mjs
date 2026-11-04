@@ -1,9 +1,9 @@
 // Kicks on the Lock Ring, apart from drawing: how each one's Shockwave grows out of the center,
 // how brightly it crosses a radius as it passes, how it lifts the ribbons, how the center punches
 // as it is born, and how the hands flash. Plain JS for tests/lock-kicks.test.mjs;
-// shaders/ring.frag mirrors kickAt(), shockwaveCrossing(), ribbonSurge() and centerPunch() and has
-// the same constants (tests/lock-constants.test.mjs). The sparks a Kick flings off the ring are
-// the shader's alone.
+// shaders/ring.frag mirrors kickAt(), shockwaveFront(), shockwaveCrossing(), ribbonSurge() and
+// centerPunch() and has the same constants (tests/lock-constants.test.mjs). The sparks a Kick
+// flings off the ring are the shader's alone.
 // Distances are in dial radii (1 = the dial), ages in seconds, power is the shared detector's
 // hit strength (0.5..1, docs/kick.mjs).
 import { DIAL_RATIO } from "./ring.mjs";
@@ -50,16 +50,65 @@ export function kickSlots(ages, powers, seeds) {
     return slots;
 }
 
-// The live Shockwaves among the pipeline's last kicks (`ages`, `powers`, any order): each one's
-// age and power, with its front and strength (kickAt()).
-function shockwaves(ages, powers) {
-    const slots = kickSlots(ages, powers, []);
+// How far a Shockwave's front strays from round in its soft lobes, as a share of how far it has
+// travelled, and how much brighter one side of it is than the other (shockwaveFront()).
+export const SHAPE_REACH = 0.12;
+export const SHAPE_LIGHT = 0.3;
+// Its ragged edge on top of the lobes: how far it strays (as SHAPE_REACH), and how much darker the
+// edge flickers at its dimmest.
+export const ROUGH_REACH = 0.09;
+export const ROUGH_LIGHT = 0.45;
+// How wild a Kick's shape is from its power: a soft one's (at SHAPE_SOFT or below) is SHAPE_CALM of
+// a hard one's (at SHAPE_HARD or above), so busy tracks stay calm and drops tear the front.
+export const SHAPE_CALM = 0.25;
+export const SHAPE_SOFT = 0.55;
+export const SHAPE_HARD = 0.95;
+
+const TAU = 2 * Math.PI;
+const fract = x => x - Math.floor(x);
+
+// How wild a Kick of `power` (0.5..1) shapes its Shockwave, SHAPE_CALM..1.
+export function shapeChaos(power) {
+    return SHAPE_CALM + (1 - SHAPE_CALM) * smoothstep(SHAPE_SOFT, SHAPE_HARD, power);
+}
+
+// A Kick's Shockwave `age` seconds after it fired, in the direction `angle` (radians clockwise from
+// 12 o'clock): kickAt()'s front and strength, given the Kick's own shape. Each Kick (its `seed`)
+// wobbles in its own few soft lobes and is brighter on one side, and its edge is ragged like a
+// flame front, the rags running along it and flickering as it travels; it is born round and
+// wobbles more as it travels, and a harder Kick's shape is wilder (shapeChaos()). Without an angle
+// it is the round kickAt(). shaders/ring.frag's kickFront() mirrors it.
+export function shockwaveFront(age, power, seed, angle) {
+    const { front, strength } = kickAt(age, power);
+    if (angle === undefined)
+        return { front, strength };
+    const s = seed ?? 0;
+    const chaos = shapeChaos(power);
+    const wobble = 0.5 * Math.sin(2 * angle + TAU * fract(s * 0.618034))
+                 + 0.35 * Math.sin(3 * angle + TAU * fract(s * 0.754878))
+                 + 0.15 * Math.sin(5 * angle + TAU * fract(s * 0.569840));
+    const spin = TAU * fract(s * 0.302776);
+    const rough = 0.5 * Math.sin(5 * angle + spin)
+                + 0.3 * Math.sin(9 * angle - 1.7 * spin + 3 * age)
+                + 0.2 * Math.sin(17 * angle + 2.3 * spin - 6 * age);
+    const flicker = 1 - ROUGH_LIGHT * chaos * (0.5 - 0.5 * Math.sin(11 * angle - spin + 4 * age));
+    const reach = chaos * (SHAPE_REACH * (0.5 + 0.5 * fract(s * 0.414214)) * wobble + ROUGH_REACH * rough);
+    return {
+        front: KICK_ORIGIN + (front - KICK_ORIGIN) * (1 + reach),
+        strength: strength * (1 + SHAPE_LIGHT * Math.sin(angle + TAU * fract(s * 0.819173))) * flicker,
+    };
+}
+
+// The live Shockwaves among the pipeline's last kicks (`ages`, `powers`, `seeds`, any order): each
+// one's age and power, with its front and strength in the direction `angle` (shockwaveFront()).
+function shockwaves(ages, powers, seeds, angle) {
+    const slots = kickSlots(ages, powers, seeds ?? []);
     const live = [];
     for (let i = 0; i < KICKS; i++) {
         if (slots.powers[i] <= 0)
             continue;
         const age = Math.max(0, slots.ages[i]), power = slots.powers[i];
-        live.push({ age, power, ...kickAt(age, power) });
+        live.push({ age, power, ...shockwaveFront(age, power, slots.seeds[i], angle) });
     }
     return live;
 }
@@ -80,9 +129,11 @@ const smoothstep = (e0, e1, x) => {
 // is within CROSSING_LEAD, full strength as it passes, gone once it is CROSSING_TRAIL beyond.
 // Overlapping Shockwaves take the brightest. What the hour points flash by as the wave reaches
 // them; shaders/ring.frag's shockwaveCrossing() mirrors it.
-export function shockwaveCrossing(radius, ages, powers) {
+// With the kicks' `seeds` and a direction (`angle`, as shockwaveFront()) it follows each Kick's
+// shaped front there; without, the round one.
+export function shockwaveCrossing(radius, ages, powers, seeds, angle) {
     let crossing = 0;
-    for (const { front, strength } of shockwaves(ages, powers)) {
+    for (const { front, strength } of shockwaves(ages, powers, seeds, angle)) {
         const ds = radius - front;  // > 0 ahead of the front, < 0 behind it
         const near = ds >= 0 ? 1 - smoothstep(0, CROSSING_LEAD, ds) : 1 - smoothstep(0, CROSSING_TRAIL, -ds);
         crossing = Math.max(crossing, strength * near);
@@ -101,9 +152,10 @@ export const SURGE_LIFT = 0.6;
 // each Shockwave lifts by its strength (kickAt()) where its front is, falling off within about
 // 0.1 either side (SURGE_WIDTH). Unlike shockwaveCrossing(), overlapping surges add up, as on
 // the bar (shaders/viz.frag). shaders/ring.frag's ribbonSurge() mirrors it.
-export function ribbonSurge(radius, ages, powers) {
+// `seeds` and `angle` as shockwaveCrossing().
+export function ribbonSurge(radius, ages, powers, seeds, angle) {
     let surge = 0;
-    for (const { front, strength } of shockwaves(ages, powers)) {
+    for (const { front, strength } of shockwaves(ages, powers, seeds, angle)) {
         const ds = radius - front;
         surge += strength * Math.exp(-ds * ds / SURGE_WIDTH);
     }

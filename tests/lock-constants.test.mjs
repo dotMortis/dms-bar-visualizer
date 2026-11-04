@@ -9,8 +9,8 @@ import { describe, test } from "node:test";
 import { DIAL } from "../docs/demo.mjs";
 import { WAVE } from "../lock-ring/hands.mjs";
 import {
-    CROSSING_LEAD, CROSSING_TRAIL, KICK_FADE, KICK_GROW, KICK_ORIGIN, MAX_REACH, PLAYED_OUT, PUNCH_FADE, SURGE_LIFT,
-    SURGE_WIDTH,
+    CROSSING_LEAD, CROSSING_TRAIL, KICK_FADE, KICK_GROW, KICK_ORIGIN, MAX_REACH, PLAYED_OUT, PUNCH_FADE,
+    ROUGH_LIGHT, ROUGH_REACH, SHAPE_CALM, SHAPE_HARD, SHAPE_LIGHT, SHAPE_REACH, SHAPE_SOFT, SURGE_LIFT, SURGE_WIDTH,
 } from "../lock-ring/kicks.mjs";
 import { DIAL_RATIO, IDLE, RIBBON } from "../lock-ring/ring.mjs";
 
@@ -63,6 +63,19 @@ describe("ring.frag's constants match their modules", () => {
         close(frag.SURGE_LIFT, SURGE_LIFT, "SURGE_LIFT");
     });
 
+    test("how a Shockwave strays from round (kicks.mjs shockwaveFront())", () => {
+        close(frag.SHAPE_REACH, SHAPE_REACH, "SHAPE_REACH");
+        close(frag.SHAPE_LIGHT, SHAPE_LIGHT, "SHAPE_LIGHT");
+        close(frag.ROUGH_REACH, ROUGH_REACH, "ROUGH_REACH");
+        close(frag.ROUGH_LIGHT, ROUGH_LIGHT, "ROUGH_LIGHT");
+    });
+
+    test("how wild a Kick's power makes its Shockwave (kicks.mjs shapeChaos())", () => {
+        close(frag.SHAPE_CALM, SHAPE_CALM, "SHAPE_CALM");
+        close(frag.SHAPE_SOFT, SHAPE_SOFT, "SHAPE_SOFT");
+        close(frag.SHAPE_HARD, SHAPE_HARD, "SHAPE_HARD");
+    });
+
     test("how fast the center punch fades (kicks.mjs centerPunch())", () => {
         close(frag.PUNCH_FADE, PUNCH_FADE, "PUNCH_FADE");
     });
@@ -103,8 +116,8 @@ describe("ring.frag's constants match their modules", () => {
         const main = frag.slice(frag.indexOf("void main()"));
         const strands = main.slice(main.indexOf("for (int k = 0; k < 3; k++)"), main.indexOf("col += ribbon"));
         const points = main.slice(main.indexOf("for (int i = 0; i < 12; i++)"), main.indexOf("col = col / (1.0"));
-        assert.match(strands, /ribbonSurge\(ribbonRadius\(theta, calm, k\)\)/);
-        assert.match(points, /ribbonSurge\(ribbonRadius\(th, min\(1\.0, pm\), 0\)\)/);
+        assert.match(strands, /ribbonSurge\(ribbonRadius\(theta, calm, k\), theta\)/);
+        assert.match(points, /ribbonSurge\(ribbonRadius\(th, min\(1\.0, pm\), 0\), th\)/);
     });
 
     // A Shockwave hits without shaking the ring: nothing offsets where the shader draws.

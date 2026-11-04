@@ -866,7 +866,7 @@ function frame() {
   ring.handLevels = h.levels; ring.handPhases = h.phases;
   const kickAges = st.kickTimes.map(t => st.time - t);
   ring.flash = handFlash(kickAges, st.kickPowers, cfg.kickDecay);
-  ring.timeCrossing = shockwaveCrossing(TIME_RADIUS, kickAges, st.kickPowers);
+  ring.timeCrossing = shockwaveCrossing(TIME_RADIUS, kickAges, st.kickPowers, st.kickSeeds, Math.PI);  // the time sits at 6 o'clock
 
   if (view === "ring") {
     drawRing();

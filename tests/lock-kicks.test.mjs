@@ -9,7 +9,7 @@ import { describe, test } from "node:test";
 
 import { TIME_RADIUS } from "../lock-ring/clock.mjs";
 import { DEFAULTS } from "../docs/config.mjs";
-import { KICK_ORIGIN, EDGE, KICKS, centerPunch, handFlash, kickAt, kickSlots, ribbonSurge, shockwaveCrossing } from "../lock-ring/kicks.mjs";
+import { KICK_ORIGIN, EDGE, KICKS, centerPunch, handFlash, kickAt, kickSlots, ribbonSurge, shockwaveCrossing, shockwaveFront } from "../lock-ring/kicks.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -292,5 +292,83 @@ describe("center punch", () => {
         const powers = [1, 0.6, ...empty.slice(2)];
         assert.ok(Math.abs(centerPunch(ages, powers) - 0.6) < 0.01);
         assert.ok(centerPunch(new Array(KICKS).fill(0), new Array(KICKS).fill(1)) <= 1);
+    });
+});
+
+// Each Shockwave has its own shape: not a perfect circle but a soft, wobbly front, brighter on one
+// side, different for every Kick (its seed) and the same on every monitor (ADR 0002).
+describe("Shockwave shape", () => {
+    const TAU = 2 * Math.PI;
+    const angles = Array.from({ length: 72 }, (_, i) => i * TAU / 72);
+    const frontAt = (seed, angle, age = 0.4) => shockwaveFront(age, 1, seed, angle).front;
+
+    test("is not a perfect circle", () => {
+        const fronts = angles.map(a => frontAt(7, a));
+        assert.ok(Math.max(...fronts) - Math.min(...fronts) > 0.03, `spread ${Math.max(...fronts) - Math.min(...fronts)}`);
+    });
+
+    test("differs from Kick to Kick", () => {
+        const diff = Math.max(...angles.map(a => Math.abs(frontAt(7, a) - frontAt(8, a))));
+        assert.ok(diff > 0.02, `largest difference ${diff}`);
+    });
+
+    test("is the same for the same Kick, so every ring draws the same wave", () => {
+        for (const a of angles)
+            assert.equal(frontAt(42, a), frontAt(42, a));
+    });
+
+    test("is born round and only wobbles as it travels, staying near the round front", () => {
+        for (const a of angles) {
+            assert.ok(Math.abs(frontAt(3, a, 0) - KICK_ORIGIN) < 1e-9);
+            const round = kickAt(0.4, 1).front;
+            assert.ok(Math.abs(frontAt(3, a) - round) <= 0.22 * round, `angle ${a}`);
+        }
+    });
+
+    // Its edge is ragged, not only a few soft lobes: it turns back and forth many times around.
+    test("has a ragged edge", () => {
+        const fine = Array.from({ length: 720 }, (_, i) => frontAt(7, i * TAU / 720));
+        let turns = 0;
+        for (let i = 0; i < fine.length; i++) {
+            const prev = fine[(i + fine.length - 1) % fine.length], next = fine[(i + 1) % fine.length];
+            if ((fine[i] - prev) * (next - fine[i]) < 0)
+                turns++;
+        }
+        assert.ok(turns > 14, `${turns} turns`);
+    });
+
+    // The ragged edge flickers: at one angle it brightens and dims as the front travels.
+    test("flickers along its edge as it travels", () => {
+        const ages = Array.from({ length: 40 }, (_, i) => 0.05 + i * 0.02);
+        const rel = ages.map(t => shockwaveFront(t, 1, 5, 1.1).strength / kickAt(t, 1).strength);
+        assert.ok(Math.max(...rel) - Math.min(...rel) > 0.15, `flicker ${Math.max(...rel) - Math.min(...rel)}`);
+    });
+
+    // A soft Kick's front stays nearly round and steady; a hard one's is ragged (Q8 of the
+    // Shockwave grilling: soft hits calm, drops wild).
+    test("is calmer on a soft Kick than on a hard one", () => {
+        const stray = power => {
+            const round = kickAt(0.4, power).front - KICK_ORIGIN;
+            return Math.max(...angles.map(a => Math.abs(shockwaveFront(0.4, power, 7, a).front - KICK_ORIGIN - round) / round));
+        };
+        assert.ok(stray(0.5) < 0.4 * stray(1), `soft ${stray(0.5)}, hard ${stray(1)}`);
+    });
+
+    test("is brighter on one side, but never past the round wave's strength by much", () => {
+        const s = angles.map(a => shockwaveFront(0.2, 1, 5, a).strength);
+        assert.ok(Math.max(...s) - Math.min(...s) > 0.2);
+        assert.ok(Math.max(...s) <= 1.35 * kickAt(0.2, 1).strength);
+    });
+
+    test("the crossing and surge follow the shaped front in a direction", () => {
+        const angle = 1.3, seed = 11, age = 0.4;
+        const front = shockwaveFront(age, 1, seed, angle).front;
+        assert.ok(shockwaveCrossing(front, [age], [1], [seed], angle) > shockwaveCrossing(front + 0.12, [age], [1], [seed], angle));
+        assert.ok(ribbonSurge(front, [age], [1], [seed], angle) > 2 * ribbonSurge(front + 0.15, [age], [1], [seed], angle));
+        assert.ok(shockwaveCrossing(front, [age], [1], [seed], angle) <= 1);
+    });
+
+    test("without a direction the Shockwave is the round one", () => {
+        assert.equal(shockwaveCrossing(0.6, [0.3], [1], [9]), shockwaveCrossing(0.6, [0.3], [1]));
     });
 });

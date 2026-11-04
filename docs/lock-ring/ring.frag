@@ -73,6 +73,16 @@ const float SURGE_WIDTH = 0.006;
 const float SURGE_LIFT = 0.6;
 // centerPunch(): how fast the center punch fades, per second.
 const float PUNCH_FADE = 15.0;
+// shockwaveFront(): how far a Shockwave strays from round in its lobes and its ragged edge, how much
+// brighter one side is and how dark the edge flickers, and how wild a Kick's shape is from its
+// power (shapeChaos()).
+const float SHAPE_REACH = 0.12;
+const float SHAPE_LIGHT = 0.3;
+const float ROUGH_REACH = 0.09;
+const float ROUGH_LIGHT = 0.45;
+const float SHAPE_CALM = 0.25;
+const float SHAPE_SOFT = 0.55;
+const float SHAPE_HARD = 0.95;
 
 float band(int i) {
     int v = i / 4;
@@ -86,24 +96,46 @@ float kickAge(int i) { return i < 4 ? ubuf.kickAge0[i] : ubuf.kickAge1[i - 4]; }
 float kickPower(int i) { return i < 4 ? ubuf.kickPower0[i] : ubuf.kickPower1[i - 4]; }
 float kickSeed(int i) { return i < 4 ? ubuf.kickSeed0[i] : ubuf.kickSeed1[i - 4]; }
 
-// Kick j's Shockwave right now (lock-ring/kicks.mjs kickAt()): x = its front's radius (dial
-// radii), y = its strength, 0..1. A strength of 0 is an empty or played-out slot.
-vec2 kickFront(int j) {
+// How wild a Kick of `power` shapes its Shockwave, SHAPE_CALM..1 (lock-ring/kicks.mjs shapeChaos()).
+float shapeChaos(float power) {
+    return SHAPE_CALM + (1.0 - SHAPE_CALM) * smoothstep(SHAPE_SOFT, SHAPE_HARD, power);
+}
+
+// Kick j's Shockwave right now in the direction theta (radians clockwise from 12 o'clock):
+// x = its front's radius (dial radii), y = its strength. A strength of 0 is an empty or played-out
+// slot. Each Kick (its seed) wobbles in its own soft lobes and is brighter on one side, and its
+// edge is ragged like a flame front, flickering as it travels; born round, it wobbles more as it
+// travels, wilder on a harder Kick (lock-ring/kicks.mjs kickAt() and shockwaveFront()).
+vec2 kickFront(int j, float theta) {
     float age = max(kickAge(j), 0.0);
     float power = kickPower(j);
     if (power <= 0.0 || age >= PLAYED_OUT)
         return vec2(0.0);
     float reach = KICK_ORIGIN + (MAX_REACH - KICK_ORIGIN) * power;
-    return vec2(KICK_ORIGIN + (reach - KICK_ORIGIN) * (1.0 - exp(-age * KICK_GROW)), power * exp(-age * KICK_FADE));
+    float front = KICK_ORIGIN + (reach - KICK_ORIGIN) * (1.0 - exp(-age * KICK_GROW));
+    float strength = power * exp(-age * KICK_FADE);
+    float sd = kickSeed(j);
+    float wobble = 0.5 * sin(2.0 * theta + TAU * fract(sd * 0.618034))
+                 + 0.35 * sin(3.0 * theta + TAU * fract(sd * 0.754878))
+                 + 0.15 * sin(5.0 * theta + TAU * fract(sd * 0.569840));
+    float chaos = shapeChaos(power);
+    float spin = TAU * fract(sd * 0.302776);
+    float rough = 0.5 * sin(5.0 * theta + spin)
+                + 0.3 * sin(9.0 * theta - 1.7 * spin + 3.0 * age)
+                + 0.2 * sin(17.0 * theta + 2.3 * spin - 6.0 * age);
+    float flicker = 1.0 - ROUGH_LIGHT * chaos * (0.5 - 0.5 * sin(11.0 * theta - spin + 4.0 * age));
+    float stray = chaos * (SHAPE_REACH * (0.5 + 0.5 * fract(sd * 0.414214)) * wobble + ROUGH_REACH * rough);
+    return vec2(KICK_ORIGIN + (front - KICK_ORIGIN) * (1.0 + stray),
+                strength * (1.0 + SHAPE_LIGHT * sin(theta + TAU * fract(sd * 0.819173))) * flicker);
 }
 
 // How brightly a Shockwave's front is crossing radius r (dial radii) right now, 0..1: each Kick's
 // strength, shaped by how near its front is; the brightest wins. lock-ring/kicks.mjs
-// shockwaveCrossing().
-float shockwaveCrossing(float r) {
+// shockwaveCrossing(), in the direction theta.
+float shockwaveCrossing(float r, float theta) {
     float crossing = 0.0;
     for (int j = 0; j < KICKS; j++) {
-        vec2 kf = kickFront(j);
+        vec2 kf = kickFront(j, theta);
         float ds = r - kf.x;                  // > 0 ahead of the front, < 0 behind it
         float near = ds >= 0.0 ? 1.0 - smoothstep(0.0, CROSSING_LEAD, ds) : 1.0 - smoothstep(0.0, CROSSING_TRAIL, -ds);
         crossing = max(crossing, kf.y * near);
@@ -113,11 +145,11 @@ float shockwaveCrossing(float r) {
 
 // How much the Shockwaves lift the ribbons at radius r (dial radii) right now, in spectrum level:
 // each Kick's strength where its front is, falling off within about 0.1 either side; overlapping
-// surges add up, as viz.frag's. lock-ring/kicks.mjs ribbonSurge().
-float ribbonSurge(float r) {
+// surges add up, as viz.frag's. lock-ring/kicks.mjs ribbonSurge(), in the direction theta.
+float ribbonSurge(float r, float theta) {
     float surge = 0.0;
     for (int j = 0; j < KICKS; j++) {
-        vec2 kf = kickFront(j);
+        vec2 kf = kickFront(j, theta);
         float ds = r - kf.x;
         surge += kf.y * exp(-ds * ds / SURGE_WIDTH);
     }
@@ -180,6 +212,11 @@ const float RIBBON_REACH = 0.25;
 const float RIBBON_RIPPLE = 0.3;
 const float RIBBON_ROUND = 0.25;
 const float POINT_SIZE = 0.013;  // an hour point's core radius, in dial radii
+// The Shockwave's beads (the shader's alone): how many ride its front row on a soft and on a hard
+// Kick, and how many places either side of its own angle a pixel looks at.
+const float BEADS_SOFT = 45.0;
+const float BEADS_HARD = 64.0;
+const int BEAD_NEAR = 2;
 
 // How far the wave has come from 6 o'clock at a radians from it, rounded within RIBBON_ROUND of
 // either end so the mirrored halves meet level (ring.mjs unfold()).
@@ -346,7 +383,7 @@ void main() {
     float amp = calm;                    // strand 0's level, surged: the Aura's
     for (int k = 0; k < 3; k++) {
         float fk = float(k);
-        float surge = ribbonSurge(ribbonRadius(theta, calm, k));
+        float surge = ribbonSurge(ribbonRadius(theta, calm, k), theta);
         float level = min(1.0, music + surge);
         if (k == 0)
             amp = level;
@@ -374,7 +411,7 @@ void main() {
     // a bright wake filling in behind it.
     vec3 wakeCol = pal(hueBase + 0.3, 0.9, 1.0);
     for (int j = 0; j < KICKS; j++) {
-        vec2 kf = kickFront(j);
+        vec2 kf = kickFront(j, theta);
         float blast = kf.y;
         if (blast <= 0.0)
             continue;
@@ -386,6 +423,45 @@ void main() {
                * blast * 1.1;
         float wake = ds < 0.0 && r > KICK_ORIGIN ? exp(ds * 4.0) : 0.0;
         col += wakeCol * wake * blast * 0.35;
+    }
+
+    // --- Shockwave beads: beads of light riding each front ---------------------------------------
+    // The shader's own: rows of beads in the front's colors, lavender on the front and mauve and
+    // blue trailing it as its three bands do, riding its ragged shape (kickFront()) and lit by its
+    // strength there. Evenly spaced round with a little jitter, a fixed number per row, so they
+    // spread apart as the ring grows and it ends as loose points; each with its own size, flicker
+    // and life. More, bigger and looser on a harder Kick (shapeChaos()). Each pixel looks only at
+    // the beads within BEAD_NEAR places of its own angle.
+    for (int j = 0; j < KICKS; j++) {
+        vec2 kf = kickFront(j, theta);
+        if (kf.y <= 0.0 || abs(r - kf.x + 0.05) > 0.2)
+            continue;                         // away from this ring: past its rows and the beads' glow
+        float age = max(kickAge(j), 0.0);
+        float sd = kickSeed(j);
+        float chaos = shapeChaos(kickPower(j));
+        float spin = TAU * fract(sd * 0.302776);
+        for (int row = 0; row < 3; row++) {
+            float fr = float(row);
+            vec3 tint = row == 0 ? pow(LAVENDER, vec3(1.6)) : row == 1 ? pow(MAUVE, vec3(2.0)) : pow(BLUE, vec3(2.0));
+            float count = floor((BEADS_SOFT + (BEADS_HARD - BEADS_SOFT) * chaos) * (1.0 - 0.25 * fr));
+            float turn = spin + fr * 0.37;
+            float here = floor(fract((theta - turn) / TAU) * count);
+            for (int n = -BEAD_NEAR; n <= BEAD_NEAR; n++) {
+                float i = mod(here + float(n), count);
+                float seed = sd * 13.1 + fr * 101.0 + i * 2.93;
+                float h1 = hash1(seed), h2 = hash1(seed + 1.3), h3 = hash1(seed + 2.9), h4 = hash1(seed + 4.7);
+                float th = (i + 0.5 + 0.8 * (h1 - 0.5)) / count * TAU + turn;
+                vec2 bf = kickFront(j, th);
+                float rb = bf.x * (1.0 + (h2 - 0.5) * 0.05 * (0.5 + chaos)) - 0.05 * fr;
+                vec2 d = q - rb * vec2(sin(th), -cos(th));
+                float size = mix(0.007, 0.018, h3 * h3) * (0.75 + 0.5 * chaos);
+                float d2 = dot(d, d) / (size * size);
+                float life = bf.y * exp(-age * 1.5 * h4) * (1.0 - 0.15 * fr);
+                float twinkle = 0.75 + 0.25 * sin(age * 30.0 + h4 * 20.0);
+                vec3 c = mix(tint, pal(hueBase + h1 * 0.4, 0.85, 1.0), 0.3);
+                col += c * (exp(-d2) * 1.2 + 0.12 * exp(-d2 * 0.12)) * life * twinkle;
+            }
+        }
     }
 
     // --- Kick sparks: a spray flung off the ring, streaking outward, one per kick ---------------
@@ -442,11 +518,16 @@ void main() {
         float th = float(i) * TAU / 12.0;
         float ai = abs(th - PI);
         float pm = 1.3 * spectrum(pow(ai / PI, ubuf.bassStretch));
-        float level = min(1.0, pm + ribbonSurge(ribbonRadius(th, min(1.0, pm), 0)));
+        // Skip a point too far from this pixel to light it, before asking the Shockwaves about it:
+        // its halo ends 0.2 from it, and its surge moves it at most a full swing of the ribbon.
+        vec2 calmAt = ribbonRadius(th, min(1.0, pm), 0) * vec2(sin(th), -cos(th));
+        if (length(q - calmAt) > 0.2 + RIBBON_REACH * (1.0 + RIBBON_RIPPLE))
+            continue;
+        float level = min(1.0, pm + ribbonSurge(ribbonRadius(th, min(1.0, pm), 0), th));
         float ri = ribbonRadius(th, level, 0);
         vec2 at = ri * vec2(sin(th), -cos(th));
         float quarter = i - (i / 3) * 3 == 0 ? 1.0 : 0.0;
-        float hit = shockwaveCrossing(ri);
+        float hit = shockwaveCrossing(ri, th);
         float glow = mix(0.6, 1.0, quarter) * (0.6 + 0.4 * ubuf.presence) + 0.8 * hit;
         vec2 dq = q - at;
         float d2 = dot(dq, dq);

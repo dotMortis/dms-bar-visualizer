@@ -34,6 +34,14 @@ All notable changes to this project are documented here. The format follows
   split into lavender, mauve and blue copies pushed outward and flare toward white with a glow,
   faint for a soft Kick and full for a hard one. The digits stay in place, so the time stays
   readable. The demo's ring view shows the same.
+- The Lock Ring's Shockwaves are no longer perfect circles: each Kick's front wobbles in its own
+  soft lobes and is brighter on one side, and its edge is ragged like a flame front, flickering
+  as it travels; it is born round and wobbles more as it goes. A soft Kick's front stays nearly
+  round and calm, a hard one's tears wide. Beads of light ride each front in its lavender, mauve
+  and blue, spreading apart as the ring grows until it ends as loose points, more and bigger on a
+  harder Kick. The ribbons' surge, the hour points and the time follow each front's own shape, on
+  every ring alike.
+- The Lock Ring's hands are slimmer.
 
 ## [0.7.1] - 2026-11-04
 

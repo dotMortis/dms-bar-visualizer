@@ -21,3 +21,13 @@ _Avoid_: current player, source
 **Kick**:
 One detected bass-drum hit, fired once per hit when a band in the kick range rises sharply above its recent level.
 _Avoid_: beat, onset
+
+## Look
+
+**Shockwave**:
+The chromatic front a Kick sends out from the center of either visualizer, brighter and farther-reaching on a harder hit. On the Lock Ring the front is ragged and flickering, rougher on a harder hit, and carries beads of light along it.
+_Avoid_: kick wave, kick blast, blast
+
+**Aura**:
+The soft spectrum-colored glow around the ribbons that grows with the music.
+_Avoid_: halo, halo flow, glow

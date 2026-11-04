@@ -83,9 +83,10 @@ export function ribbonRadius(angle, { level = 0, flow = 0, time = 0, treble = 0,
 
 // The 12 hour points riding on the ribbon, from the shader's inputs: `values` (32 bands),
 // flow, time, treble, swell, presence (ring motion), bassStretch, `crossing`: how brightly a
-// Shockwave's front is crossing a radius right now (kicks.mjs shockwaveCrossing() on the kicks),
-// and `surge`: how much the Shockwaves lift the ribbons at a radius (kicks.mjs ribbonSurge(); both
-// passed in, since kicks.mjs imports this module). Each: angle (clockwise degrees from 12
+// Shockwave's front is crossing a radius in a direction (radians clockwise from 12 o'clock) right
+// now (kicks.mjs shockwaveCrossing() on the kicks), and `surge`: how much the Shockwaves lift the
+// ribbons at a radius in a direction (kicks.mjs ribbonSurge(); both passed in, since kicks.mjs
+// imports this module). Each: angle (clockwise degrees from 12
 // o'clock), radius (strand 0's there, surged where the strand sits before the surge, as the
 // ribbon is) and glow (12, 3, 6 and 9 brighter; dimmer in silence; each flashes as a Shockwave's
 // front reaches its radius). shaders/ring.frag mirrors this.
@@ -95,12 +96,12 @@ export function hourPoints({ values, flow, time, treble, swell, presence, bassSt
         const angle = i * 30;
         const music = 1.3 * spectrumLevel(values, spectrumAt(angle, bassStretch));
         const calm = ribbonRadius(angle, { level: Math.min(1, music), flow, time, treble, swell, strand: 0 });
-        const level = Math.min(1, music + surge(calm));
+        const level = Math.min(1, music + surge(calm, angle * TAU / 360));
         const radius = ribbonRadius(angle, { level, flow, time, treble, swell, strand: 0 });
         points.push({
             angle,
             radius,
-            glow: (i % 3 === 0 ? 1 : 0.6) * (0.6 + 0.4 * presence) + 0.8 * crossing(radius),
+            glow: (i % 3 === 0 ? 1 : 0.6) * (0.6 + 0.4 * presence) + 0.8 * crossing(radius, angle * TAU / 360),
         });
     }
     return points;
