@@ -5,8 +5,8 @@
 // bass, minute = mids, second = highs, each a neon wave ribbon that swings, thickens and glows
 // with its band (measured against that band's own recent peak) around a straight axis that never
 // moves off the time. The ribbon (ring.mjs) idles
-// in silence as a thin, faint, breathing wave; music grows it into spectrum ribbons that bulge
-// outward, and the ring swells with its energy. shaders/ring.frag draws all of that. On every
+// in silence as a thin, faint, breathing wave; music grows it into spectrum ribbons that wave
+// around the swelling dial, and the ring swells with its energy. shaders/ring.frag draws all of that. On every
 // Kick a chromatic shockwave expands from the center, sparks fly off the ring and all hands whip
 // and flash; as its front crosses the digital time, the time splits into the shockwave's colors
 // and glows.
@@ -53,7 +53,7 @@ DesktopPluginComponent {
     readonly property real bassStretch: LockAudio.bassStretch
 
     readonly property real size: Math.min(width, height)
-    // Leaves room around the dial for the ribbons to bulge into (ring.mjs).
+    // Leaves room around the dial for the ribbons to wave into (ring.mjs).
     readonly property real dialRadius: size * Ring.DIAL_RATIO
 
     // Holds the shared capture while this ring exists: from lock to unlock.

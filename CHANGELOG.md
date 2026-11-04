@@ -18,6 +18,16 @@ All notable changes to this project are documented here. The format follows
   instant of the Kick, so the wave visibly travels out and lights them as it passes, brighter on
   a harder hit. A soft Kick's shockwave stops short of the ring and leaves them dark. The hands
   still flash on the Kick itself.
+- The Lock Ring's ribbons wave like the Bar Visualizer's: with music each strand swings inward and
+  outward around the swelling dial, farther when the music is louder, instead of bulging outward
+  as a row of lumps. The spectrum is smoothed with a cubic between the bands, so the ribbon has no
+  corners, and it passes through 6 and 12 o'clock without a V where the mirrored halves meet. In
+  silence the ribbon idles as before.
+- The Lock Ring's Shockwaves hit like the Bar Visualizer's Kicks: a wider, softer front in
+  lavender, mauve and blue with a brighter wake behind it; the ribbons flare and bulge as the front
+  crosses them, more on a harder Kick and adding up when Shockwaves overlap, with the hour points
+  riding them; a plasma haze flashes across the dial on a hard Kick (none at rest or on a soft
+  one); and the center punches white-lavender as a Shockwave is born. Nothing shakes.
 - The Lock Ring's digital time takes the shockwave's hit: as the front crosses it, the digits
   split into lavender, mauve and blue copies pushed outward and flare toward white with a glow,
   faint for a soft Kick and full for a hard one. The digits stay in place, so the time stays

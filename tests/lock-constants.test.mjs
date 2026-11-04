@@ -8,8 +8,10 @@ import { describe, test } from "node:test";
 
 import { DIAL } from "../docs/demo.mjs";
 import { WAVE } from "../lock-ring/hands.mjs";
-import { CROSSING_LEAD, CROSSING_TRAIL, KICK_FADE, KICK_GROW, KICK_ORIGIN, MAX_REACH, PLAYED_OUT } from "../lock-ring/kicks.mjs";
-import { DIAL_RATIO, IDLE } from "../lock-ring/ring.mjs";
+import {
+    CROSSING_LEAD, CROSSING_TRAIL, KICK_FADE, KICK_GROW, KICK_ORIGIN, MAX_REACH, PLAYED_OUT, SURGE_LIFT, SURGE_WIDTH,
+} from "../lock-ring/kicks.mjs";
+import { DIAL_RATIO, IDLE, RIBBON } from "../lock-ring/ring.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const read = file => fs.readFileSync(path.join(ROOT, file), "utf8");
@@ -55,9 +57,19 @@ describe("ring.frag's constants match their modules", () => {
         close(frag.CROSSING_TRAIL, CROSSING_TRAIL, "CROSSING_TRAIL");
     });
 
+    test("how the ribbons surge where a shockwave crosses them (kicks.mjs ribbonSurge())", () => {
+        close(frag.SURGE_WIDTH, SURGE_WIDTH, "SURGE_WIDTH");
+        close(frag.SURGE_LIFT, SURGE_LIFT, "SURGE_LIFT");
+    });
+
     test("the ribbon's idle wave (ring.mjs IDLE)", () => {
         for (const [key, value] of Object.entries(IDLE))
             close(frag[`IDLE_${key.toUpperCase()}`], value, `IDLE_${key.toUpperCase()}`);
+    });
+
+    test("the ribbon's music wave (ring.mjs RIBBON)", () => {
+        for (const [key, value] of Object.entries(RIBBON))
+            close(frag[`RIBBON_${key.toUpperCase()}`], value, `RIBBON_${key.toUpperCase()}`);
     });
 
     test("the hands' wave (hands.mjs WAVE)", () => {
@@ -76,6 +88,22 @@ describe("ring.frag's constants match their modules", () => {
         const points = frag.slice(frag.indexOf("for (int i = 0; i < 12; i++)"), frag.indexOf("col = col / (1.0"));
         assert.match(points, /shockwaveCrossing\(/);
         assert.doesNotMatch(points, /handFlash/);
+    });
+
+    // ring.mjs hourPoints(): they ride the ribbon, surged at its rest radius as the ribbons are.
+    test("the ribbons and the hour points surge alike, at the ribbon's rest radius", () => {
+        const frag = read("lock-ring/shaders/ring.frag").replace(/\/\/.*$/gm, "");
+        const main = frag.slice(frag.indexOf("void main()"));
+        const points = main.slice(main.indexOf("for (int i = 0; i < 12; i++)"), main.indexOf("col = col / (1.0"));
+        assert.match(main.slice(0, main.indexOf("for (int k = 0; k < 3; k++)")), /ribbonSurge\(base\)/);
+        assert.match(points, /\+ surge\)/);
+    });
+
+    // A Shockwave hits without shaking the ring: nothing offsets where the shader draws.
+    test("nothing shakes", () => {
+        const frag = read("lock-ring/shaders/ring.frag").replace(/\/\/.*$/gm, "");
+        assert.doesNotMatch(frag, /shake/i);
+        assert.match(frag, /vec2 p = qt_TexCoord0 \* 2\.0 - 1\.0;/);
     });
 
     test("ring.frag spells out no other copy of the dial ratio", () => {

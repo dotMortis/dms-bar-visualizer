@@ -1,6 +1,7 @@
 // Kicks on the Lock Ring, apart from drawing: how each one's shockwave grows out of the center,
 // how brightly it crosses a radius as it passes, and how the hands flash. Plain JS for
-// tests/lock-kicks.test.mjs; shaders/ring.frag mirrors kickAt() and shockwaveCrossing() and has
+// tests/lock-kicks.test.mjs; shaders/ring.frag mirrors kickAt(), shockwaveCrossing() and
+// ribbonSurge() and has
 // the same constants (tests/lock-constants.test.mjs). The sparks a kick flings
 // off the ring are the shader's alone.
 // Distances are in dial radii (1 = the dial), ages in seconds, power is the shared detector's
@@ -77,6 +78,30 @@ export function shockwaveCrossing(radius, ages, powers) {
         crossing = Math.max(crossing, strength * near);
     }
     return Math.min(1, crossing);
+}
+
+// How the ribbons surge where a shockwave's front crosses them (ribbonSurge()): the front's reach
+// either side, a Gaussian's 2σ² in dial radii squared (about 0.05 each way), and the lift at full
+// strength, in spectrum level.
+export const SURGE_WIDTH = 0.006;
+export const SURGE_LIFT = 0.6;
+
+// How much the shockwaves lift the ribbons at `radius` (dial radii) right now, in spectrum level
+// to add to the music's (0 = none), from the pipeline's last kicks (`ages`, `powers`, any order):
+// each shockwave lifts by its strength (kickAt()) where its front is, falling off within about
+// 0.1 either side. Unlike shockwaveCrossing(), overlapping surges add up, as on the bar
+// (shaders/viz.frag). shaders/ring.frag's ribbonSurge() mirrors it.
+export function ribbonSurge(radius, ages, powers) {
+    const slots = kickSlots(ages, powers, []);
+    let surge = 0;
+    for (let i = 0; i < KICKS; i++) {
+        if (slots.powers[i] <= 0)
+            continue;
+        const { front, strength } = kickAt(Math.max(0, slots.ages[i]), slots.powers[i]);
+        const ds = radius - front;
+        surge += strength * Math.exp(-ds * ds / SURGE_WIDTH);
+    }
+    return SURGE_LIFT * surge;
 }
 
 // How brightly the hands flash, 0..1, from the same kicks as the shockwaves: every kick lights them

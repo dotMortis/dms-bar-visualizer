@@ -9,7 +9,7 @@ import { describe, test } from "node:test";
 
 import { TIME_RADIUS } from "../lock-ring/clock.mjs";
 import { DEFAULTS } from "../docs/config.mjs";
-import { KICK_ORIGIN, EDGE, KICKS, handFlash, kickAt, kickSlots, shockwaveCrossing } from "../lock-ring/kicks.mjs";
+import { KICK_ORIGIN, EDGE, KICKS, handFlash, kickAt, kickSlots, ribbonSurge, shockwaveCrossing } from "../lock-ring/kicks.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -213,5 +213,55 @@ describe("shockwave crossing", () => {
         }
         assert.ok(last < 0.01, `${last} by 2.5 s`);
         assert.equal(shockwaveCrossing(r, ...one(3, 0.5)), 0, "and nothing once it has played out");
+    });
+});
+
+// How much a shockwave's front lifts the ribbons where it crosses them (spectrum level, added to
+// the music's): the bar's surge, bent into a ring.
+describe("ribbon surge", () => {
+    const empty = new Array(KICKS).fill(0);
+    const one = (age, power) => [[age, ...new Array(KICKS - 1).fill(100)], [power, ...empty.slice(1)]];
+    const peakAt = (radius, ages, powers) => {
+        let peak = 0;
+        for (let t = 0; t <= 3; t += 0.002)
+            peak = Math.max(peak, ribbonSurge(radius, ages.map(a => a + t), powers));
+        return peak;
+    };
+
+    test("is 0 with no kicks", () => {
+        for (const r of [0.3, 1, 1.2]) {
+            assert.equal(ribbonSurge(r, [], []), 0);
+            assert.equal(ribbonSurge(r, new Array(KICKS).fill(100), empty), 0);
+        }
+    });
+
+    test("is 0 before the front arrives and after it has passed, and peaks as it passes", () => {
+        let peak = 0, peakAge = 0;
+        for (let age = 0; age <= 2; age += 0.002) {
+            const value = ribbonSurge(1, ...one(age, 1));
+            if (Math.abs(kickAt(age, 1).front - 1) > 0.3)
+                assert.ok(value < 1e-3, `at ${age} s, front ${kickAt(age, 1).front}: ${value}`);
+            if (value > peak)
+                [peak, peakAge] = [value, age];
+        }
+        assert.ok(peak > 0.2, `peak ${peak}`);
+        assert.ok(Math.abs(kickAt(peakAge, 1).front - 1) < 0.02, `peaks with the front at ${kickAt(peakAge, 1).front}`);
+    });
+
+    test("a harder kick surges more", () => {
+        for (const r of [0.6, 1]) {
+            const soft = peakAt(r, ...one(0, 0.7)), hard = peakAt(r, ...one(0, 1));
+            assert.ok(hard > soft * 1.3, `at ${r}: hard ${hard}, soft ${soft}`);
+        }
+    });
+
+    test("overlapping surges add up", () => {
+        const [ages] = one(0.25, 1);
+        ages[1] = 0.26;
+        const powers = [1, 1, ...empty.slice(2)];
+        const both = ribbonSurge(1, ages, powers);
+        const first = ribbonSurge(1, ...one(0.25, 1)), second = ribbonSurge(1, ...one(0.26, 1));
+        assert.ok(first > 0.05 && second > 0.05, `${first}, ${second}`);
+        assert.ok(Math.abs(both - (first + second)) < 1e-12, `${both} vs ${first} + ${second}`);
     });
 });
