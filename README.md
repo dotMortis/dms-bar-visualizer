@@ -1,10 +1,10 @@
 <div align="center">
 
-<a href="https://dotmortis.github.io/dms-bar-visualizer/"><img src="assets/hero.svg" alt="Animated preview of dms-bar-visualizer: neon ribbons, shockwaves and sparks behind a top bar" width="100%"></a>
+<a href="https://dotmortis.github.io/dms-bar-visualizer/"><img src="assets/hero.svg" alt="Animated preview: the Bar Visualizer's neon Ribbons and Shockwaves crossing the Lock Ring's Dial, both hitting on the same beat" width="100%"></a>
 
 <br>
 
-**A shader-based audio visualizer that lives behind the top bar of [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) on Hyprland.**
+**Music visualizers for [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) on Hyprland: one behind the top bar, one on the lock screen.**
 
 [![Hyprland](https://img.shields.io/badge/Hyprland-89b4fa?style=for-the-badge&logo=hyprland&logoColor=11111b)](https://hyprland.org)
 [![Quickshell](https://img.shields.io/badge/Quickshell-cba6f7?style=for-the-badge)](https://quickshell.org)
@@ -15,129 +15,131 @@
 
 </div>
 
-Neon ribbons shaped by the spectrum, waves pushed outward by the music's energy, and on every kick a chromatic shockwave plus a spray of streaking particles, all in Catppuccin Mocha lavender.
+Two visualizers that react to whatever is playing, in Catppuccin Mocha:
 
-It runs as its own small [Quickshell](https://quickshell.org) config. DMS itself isn't modified, so DMS updates can't break it.
+- the **Bar Visualizer**, behind the DankBar, sized and inset like the bar
+- the **Lock Ring**, on the lock screen: a circular spectrum around an analog and digital clock
 
-For the lock screen, there's the separately installed [Lock Ring](#lock-ring): the same look as a ring around a clock.
+Install either one, or both. Neither touches the other, and DMS itself isn't modified, so DMS updates can't break them.
 
-> [!NOTE]
-> The preview above is an SVG re-creation of `shaders/viz.frag` driven by a synthetic 120 bpm loop. For the real shader, try the **[live WebGL demo](https://dotmortis.github.io/dms-bar-visualizer/)**: it runs on a demo beat, a synth loop, your microphone or an audio file, with every tweakable on a slider.
+Try them in your browser first: the **[live demo](https://dotmortis.github.io/dms-bar-visualizer/)** runs the real shaders on a demo beat, a synth loop, your microphone or an audio file, with a slider for every setting. Its **[Lock Ring view](https://dotmortis.github.io/dms-bar-visualizer/#ring)** shows the Lock Ring.
+
+## What it looks like
+
+### Bar Visualizer
+
+<p align="center"><img src="assets/bar-anatomy.svg" alt="The Bar Visualizer with its parts labeled: Ribbons, Aura, Shockwave, Spray, Center Punch, Haze and Treble Sparks" width="100%"></p>
+
+Neon **Ribbons** shaped by the spectrum swing around the bar's center line, inside a soft **Aura** that grows with the music. On every **Kick**, a **Shockwave** runs out from the center with a **Center Punch** where it starts and a **Spray** of sparks that streak and bounce. Hard Kicks flash the **Haze** across the bar. **Treble Sparks** twinkle with the treble.
+
+### Lock Ring
+
+<p align="center"><img src="assets/ring-anatomy.svg" alt="The Lock Ring with its parts labeled: Ribbons, Aura, Dial, Hour Points, Hands, Digital Time, Shockwave with Beads, Spray and Center Punch" width="80%"></p>
+
+Soft neon **Ribbons** wave inward and outward around the **Dial**, which swells with the music. A symmetric **Aura** glows both ways from them. In silence the ribbon keeps breathing as a thin, faint wave.
+
+On every Kick, a ragged, flickering **Shockwave** tears out from the center, carrying **Beads** of light. It's calm on a soft Kick and torn wide on a hard one. As its front passes, the Ribbons surge, the 12 **Hour Points** flash and the **Digital Time** splits into lavender, mauve and blue copies. The **Hands** swing with the bass, mids and treble and flash on the Kick itself, but always show the true time. The Lock Ring has no Haze.
 
 ## How it works
 
-<p align="center"><img src="assets/layers.svg" alt="Layer diagram: the transparent DankBar on the top layer, the visualizer on the bottom layer, the wallpaper below" width="720"></p>
+- **Follows the Active Player.** Both visualizers listen to the MPRIS player DankBar shows (same selection rules) and capture whichever output *that* player plays to. Spotify on Bluetooth while the default output is HDMI just works. With no player, they fall back to the newest playing stream, then the default output.
+- **One Kick per hit, at any volume.** A Kick fires when a band in the kick range jumps well above its recent level. Harder hits make bigger Shockwaves, and up to 8 play at once.
+- **One capture for all screens.** Every monitor's Bar Visualizer, and every monitor's Lock Ring, runs from one capture, so all screens pulse together. The Lock Ring captures only while the screen is locked.
+- **Layering.** The Bar Visualizer is a click-through surface behind the DankBar. With a transparent bar, it shows through.
 
-- **Layering:** a click-through Wayland layer surface on the `bottom` layer, sized and inset exactly like the DankBar. The DMS bar draws on the `top` layer, so with a transparent bar background the visualizer shows through.
-- **Audio:** [cava](https://github.com/karlstav/cava) provides 32 frequency bands at 60 fps with light smoothing, so transients punch.
-- **Follows the active player:** it tracks the MPRIS player DankBar shows (same selection rules) and captures the monitor of whichever output *that* player's stream plays to. Spotify on Bluetooth while the default output is HDMI just works. With no player, it falls back to the newest playing stream, then the default output.
-- **Beat detection:** any band in the kick range (`kickLowHz` to `kickHighHz`) jumping above its recent level by `kickThreshold` of the range's recent peak fires a kick, at any volume. Down to 0.06, each hit fires once. Lower values catch softer kicks, and from about 0.15 down bass notes too. Harder hits get bigger shockwaves, and up to 8 play at once.
-- **Matches DMS's maximize detection:** with a maximized window on a monitor's active workspace, the visualizer drops its gap and rounding together with the bar.
+  <p align="center"><img src="assets/layers.svg" alt="Layer diagram: the transparent DankBar on the top layer, the Bar Visualizer on the bottom layer, the wallpaper below" width="640"></p>
 
 ## Requirements
 
 - Hyprland
-- DankMaterialShell (top bar; 2.x for the Lock Ring)
+- DankMaterialShell: any version with a top bar for the Bar Visualizer, 2.x for the Lock Ring
 - PipeWire or PulseAudio
+- Quickshell, cava, libpulse and qt6-shadertools. On Arch:
 
-On Arch:
+  ```sh
+  sudo pacman -S --needed quickshell cava libpulse qt6-shadertools
+  ```
 
-```sh
-sudo pacman -S --needed quickshell cava libpulse qt6-shadertools
-```
+  The Arch packages below pull these in for you.
 
 ## Install
 
-There are two parts, and you can install either one alone or both:
-
-- the **Bar Visualizer**, behind the top bar: its own Quickshell config, started by a systemd user service
-- the **[Lock Ring](#lock-ring)**, on the lock screen: a DMS plugin
-
-Installing or removing one never touches the other. After installing, [set it up](#set-up).
-
 > [!TIP]
-> Piping a script from the internet into `bash` runs it without showing it to you. The scripts are short; read them first ([install-arch.sh](install-arch.sh), [install-lock-arch.sh](install-lock-arch.sh), [install.sh](install.sh), [install-lock.sh](install-lock.sh)) if you like.
+> Piping a script into `bash` runs it without showing it to you. They're short, so read them first if you like: [install-arch.sh](install-arch.sh), [install-lock-arch.sh](install-lock-arch.sh), [install.sh](install.sh), [install-lock.sh](install-lock.sh).
 
 ### Arch Linux (recommended)
 
-Each part is a real pacman package, built from [`packaging/aur`](packaging/aur) with `makepkg`, so pacman tracks every file:
+Each visualizer is a real pacman package, built locally with `makepkg` from [`packaging/aur`](packaging/aur), so pacman tracks every file. The scripts install `base-devel` and `git` if they're missing.
+
+**Bar Visualizer** (`dms-bar-visualizer-git`):
 
 ```sh
-# Bar Visualizer
+# install, and update to the latest commit
 curl -fsSL https://raw.githubusercontent.com/dotMortis/dms-bar-visualizer/main/install-arch.sh | bash
-# Lock Ring
-curl -fsSL https://raw.githubusercontent.com/dotMortis/dms-bar-visualizer/main/install-lock-arch.sh | bash
+# uninstall
+curl -fsSL https://raw.githubusercontent.com/dotMortis/dms-bar-visualizer/main/install-arch.sh | bash -s -- --uninstall
 ```
 
-Or from a clone: `git clone https://github.com/dotMortis/dms-bar-visualizer && cd dms-bar-visualizer`, then `./install-arch.sh` and/or `./install-lock-arch.sh`.
+It installs to `/usr/share/dms-bar-visualizer`, registers the Quickshell config `bar-visualizer` and enables the systemd user service `bar-visualizer`. Add `--no-service` (after `bash -s --`) to skip the service and run it yourself with `qs -c bar-visualizer`. It also removes an earlier `install.sh` setup, which would otherwise shadow the package.
 
-Run a script again to update its part to the latest commit.
+**Lock Ring** (`dms-lock-visualizer-git`):
 
-`install-arch.sh` builds `dms-bar-visualizer-git`. It:
+```sh
+# install, and update to the latest commit
+curl -fsSL https://raw.githubusercontent.com/dotMortis/dms-bar-visualizer/main/install-lock-arch.sh | bash
+# uninstall
+curl -fsSL https://raw.githubusercontent.com/dotMortis/dms-bar-visualizer/main/install-lock-arch.sh | bash -s -- --uninstall
+```
 
-1. installs `base-devel` and `git` if they're missing, and pulls in dependencies through pacman
-2. installs to `/usr/share/dms-bar-visualizer` and registers the Quickshell config as `bar-visualizer`
-3. cleans up a previous `install.sh` setup, which would otherwise shadow the package
-4. enables the systemd user service (skip with `--no-service`, then run `qs -c bar-visualizer`)
+It installs the plugin into DMS's system plugin dir, `/etc/xdg/quickshell/dms-plugins/lockRing`, and removes a link left by `install-lock.sh`, which would otherwise shadow the package. Run `dms restart` after installing, updating or uninstalling.
 
-`install-lock-arch.sh` builds `dms-lock-visualizer-git`, which installs the plugin into DMS's system plugin dir, `/etc/xdg/quickshell/dms-plugins/lockRing`. It also removes a link left by `install-lock.sh`, which would otherwise shadow the package. After an update, run `dms restart`.
+From a clone, run `./install-arch.sh` or `./install-lock-arch.sh` with the same options.
 
 ### Other distros, or hacking on it
 
 **Bar Visualizer:**
 
 ```sh
+# install, and update
 curl -fsSL https://raw.githubusercontent.com/dotMortis/dms-bar-visualizer/main/install.sh | bash
+# uninstall
+curl -fsSL https://raw.githubusercontent.com/dotMortis/dms-bar-visualizer/main/install.sh | bash -s -- --uninstall
 ```
 
-Piped like this, it checks the repo out to `~/.local/share/dms-bar-visualizer` (or updates it there) and runs from that checkout. To hack on it, clone wherever you like and run `./install.sh` from there instead. The script:
+Piped like this, it checks the repo out to `~/.local/share/dms-bar-visualizer` (or updates it there) and runs from that checkout. To hack on it, clone wherever you like and run `./install.sh` there instead. It compiles the shader, links the checkout to `~/.config/quickshell/bar-visualizer` and enables the `bar-visualizer` systemd user service. Use `--no-service` to skip the service and run `qs -c bar-visualizer` yourself.
 
-1. compiles the shader
-2. symlinks the repo to `~/.config/quickshell/bar-visualizer`
-3. enables a systemd user service that starts with your graphical session
-
-Use `--no-service` to skip autostart and run it yourself with `qs -c bar-visualizer`.
-
-**Lock Ring:** it needs a clone. `install-lock.sh` can't be piped.
+**Lock Ring:** this one needs a clone, because `install-lock.sh` links the plugin from it. It can't be piped.
 
 ```sh
 git clone https://github.com/dotMortis/dms-bar-visualizer && cd dms-bar-visualizer
-./install-lock.sh
+./install-lock.sh               # install
+./install-lock.sh --uninstall   # uninstall
 ```
 
-It compiles the ring shader, so it needs `qsb` (on Arch: `qt6-shadertools`), and links `lock-ring/` into your DMS plugin dir (`~/.config/dms/plugins/lockRing`). Edits in the checkout then go live after `dms restart`.
-
-### Uninstall
-
-Every script takes `--uninstall`. Piped, it goes after `bash -s --`:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/dotMortis/dms-bar-visualizer/main/install-arch.sh | bash -s -- --uninstall        # Bar Visualizer, Arch package
-curl -fsSL https://raw.githubusercontent.com/dotMortis/dms-bar-visualizer/main/install.sh | bash -s -- --uninstall             # Bar Visualizer, source install
-curl -fsSL https://raw.githubusercontent.com/dotMortis/dms-bar-visualizer/main/install-lock-arch.sh | bash -s -- --uninstall   # Lock Ring, Arch package
-./install-lock.sh --uninstall                                                                                                 # Lock Ring, from its clone
-```
-
-After removing the Lock Ring, run `dms restart` so DMS drops it.
+It compiles the Lock Ring's shader (it needs `qsb`, from qt6-shadertools) and links `lock-ring/` into your DMS plugin dir as `~/.config/dms/plugins/lockRing`. To update, see [Updating](#updating). Run `dms restart` after installing or uninstalling.
 
 ## Set up
 
 ### Set up the Bar Visualizer
 
-1. **Make the bar transparent:** **DMS Settings → Dank Bar → Transparency = 0**. The visualizer draws behind the bar, so an opaque bar hides it.
+1. **Make the bar transparent:** **DMS Settings → Dank Bar → Transparency = 0**. The Bar Visualizer draws behind the bar, so an opaque bar hides it.
 2. **Match the bar's geometry:** set `barThickness`, `spacing` and `radius` in `~/.config/bar-visualizer/config.json` to your DankBar's (see [Configuration](#configuration)). The file appears on first start. `hyprctl layers` shows the `dms:bar` surface, whose height is `barThickness + spacing`.
-3. **Check it runs:** play some music. It should move behind the bar. If it doesn't, run `systemctl --user status bar-visualizer`, or see [Troubleshooting](#troubleshooting).
+3. **Check it runs:** play some music. It should move behind the bar. If it doesn't, see [Troubleshooting](#troubleshooting).
 
 ### Set up the Lock Ring
 
-1. **Enable it:** the Lock Ring is a desktop plugin, so DMS loads it on its own, with no toggle. If it doesn't show up under **DMS Settings → Plugins**, restart DMS: `dms restart`.
+1. **Check DMS has it:** the Lock Ring is a desktop plugin, so DMS loads it on its own, with no toggle. If it doesn't show up under **DMS Settings → Plugins**, run `dms restart`.
 2. **Add the widget:** **DMS Settings → Lock Screen → Add widget → Lock Ring**.
-3. **Move the password field:** the ring and DMS's password field both start in the centre of the screen. Under **DMS Settings → Lock Screen → Edit widgets**, drag the password field below the ring. You can move and resize the ring there too.
-4. **Check it runs:** play some music and lock the screen. Its settings are in the Bar Visualizer's `config.json`, under `lockRing` (see [Lock Ring settings](#lock-ring-settings)).
+3. **Move the password field:** the Lock Ring and DMS's password field both start in the center of the screen. Under **DMS Settings → Lock Screen → Edit widgets**, drag the password field below the Lock Ring. You can move and resize the Lock Ring there too.
+4. **Check it runs:** play some music and lock the screen.
 
 ## Configuration
 
-Both visualizers read their settings from one file, `~/.config/bar-visualizer/config.json`. The Bar Visualizer creates it with the defaults on first start (and again if you delete it, which resets everything). Keys you remove from it fall back to their default. The Bar Visualizer picks up changes as soon as you save, no restart needed, and the Lock Ring by the next lock. The Lock Ring uses every setting below except the bar's geometry, and has its own in the `lockRing` section (see [Lock Ring settings](#lock-ring-settings)).
+Both visualizers read one file, `~/.config/bar-visualizer/config.json` ([why one file](docs/adr/0004-both-visualizers-read-one-config-json.md)). The Bar Visualizer creates it with the defaults on first start, and again if you delete it, which resets everything. Without the Bar Visualizer, the Lock Ring runs on the defaults; create the file by hand to change them.
+
+- Keys you leave out, and values of the wrong type, fall back to their default. Unknown keys are ignored.
+- A half-written or broken file is skipped: both visualizers keep their last good settings.
+- The Bar Visualizer picks up changes as soon as you save. The Lock Ring picks them up at the next lock. It never writes the file.
 
 ```json
 {
@@ -150,99 +152,59 @@ Both visualizers read their settings from one file, `~/.config/bar-visualizer/co
 }
 ```
 
-| Property | Default | What it does |
-| --- | --- | --- |
-| `barThickness` | `40` | DankBar body height. It depends on DMS inner padding and font/icon scale. |
-| `spacing` | `4` | DMS bar *spacing* (the gap around the bar) |
-| `radius` | `12` | DMS corner radius |
-| `followMaximize` | `true` | Mirror DMS's *maximize detection* |
-| `intensity` | `1.0` | Overall brightness |
-| `speed` | `1.0` | Animation speed |
-| `kickThreshold` | `0.4` | How far a band must jump above its recent level to fire a kick, as a fraction (0 to 1) of the kick range's recent peak. Lower = more kicks |
-| `kickDecay` | `6.0` | Higher = shorter impact |
-| `kickLowHz` | `20` | Bottom of the frequency range that fires the kick (shockwave and particles) |
-| `kickHighHz` | `90` | Top of that range. Raise both to hit on snares or claps instead of the kick drum |
-| `kickCooldown` | `0.1` | Minimum seconds between kicks, scaled by `speed`. `0` = no limit |
-| `bassStretch` | `1.4` | Above 1 spreads the bass (centre) wider, so it isn't hidden under centre widgets |
+| Key | Default | Used by | What it does |
+| --- | --- | --- | --- |
+| `barThickness` | `40` | Bar | DankBar body height. It depends on DMS inner padding and font/icon scale |
+| `spacing` | `4` | Bar | DMS bar *spacing* (the gap around the bar) |
+| `radius` | `12` | Bar | DMS corner radius |
+| `followMaximize` | `true` | Bar | Mirror DMS's *maximize detection*: with a maximized window on a monitor's active workspace, drop the gap and rounding with the bar |
+| `intensity` | `1.0` | both | Overall brightness |
+| `speed` | `1.0` | both | Animation speed |
+| `kickThreshold` | `0.4` | both | How far a band must jump above its recent level to fire a Kick, as a share (0 to 1) of the kick range's recent peak. Lower = more Kicks. From about 0.15 down, bass notes fire too |
+| `kickDecay` | `6.0` | both | Higher = shorter impact |
+| `kickLowHz` | `20` | both | Bottom of the frequency range that fires a Kick |
+| `kickHighHz` | `90` | both | Top of that range. Raise both to hit on snares or claps instead of the kick drum |
+| `kickCooldown` | `0.1` | both | Minimum seconds between Kicks, scaled by `speed`. `0` = no limit |
+| `bassStretch` | `1.4` | both | Above 1 spreads the bass wider: around the bar's center, so center widgets don't hide it, and around the Lock Ring's bottom |
+| `lockRing.handWaves` | `1.0` | Lock Ring | How far the Hands swing with the music and on Kicks. `0` = straight Hands |
+| `lockRing.ringSize` | `0.4` | Lock Ring | The widget's default size, as a share of the screen height. Resizing it under Edit widgets still works |
 
-To find the right geometry, run `hyprctl layers`. The `dms:bar` surface height equals `barThickness + spacing`.
+The `lockRing` settings apply to every Lock Ring at once, since all of them share one capture ([why](docs/adr/0002-lock-ring-settings-are-plugin-wide.md)). A `config.json` from before the `lockRing` section existed works as it is; add the section to change those two.
 
-The defaults of every key live in `docs/config.mjs`. A value of the wrong type falls back to its default, and keys it doesn't know are ignored. If the file is half-written or not valid JSON, both visualizers keep their last good settings.
+Want to tune by eye first? The [live demo](https://dotmortis.github.io/dms-bar-visualizer/) has a slider for every key, with the names `config.json` uses, and **Export config.json** downloads the whole file.
 
-Want to tune by eye first? The [live demo](https://dotmortis.github.io/dms-bar-visualizer/) has a slider for every key.
+## Updating
 
-### Shader
+Run the same install command again. The Arch scripts always build the latest commit from GitHub, and the piped `install.sh` updates its own checkout. From a clone of your own, `git pull` first.
 
-The look lives in `shaders/viz.frag`: palette, ribbons, shockwave and particles. After editing it, recompile with `./install.sh --no-service` or:
+- **Bar Visualizer:** the scripts restart its service.
+- **Lock Ring:** DMS keeps a loaded plugin in memory, so run `dms restart` to load the new version.
+- **Lock Ring from a clone:** `install-lock.sh` links the checkout, but compiles the Lock Ring's shader (`ring.frag.qsb`) only when it runs. After pulling, run `./install-lock.sh` again, then `dms restart`. The same goes if you ran it from the Bar Visualizer's `~/.local/share/dms-bar-visualizer` checkout and that checkout got updated.
 
-```sh
-/usr/lib/qt6/bin/qsb --glsl "100 es,120,150" --hlsl 50 --msl 12 -o shaders/viz.frag.qsb shaders/viz.frag
-```
+## Troubleshooting
 
-Then restart the visualizer (`systemctl --user restart bar-visualizer`). Qt caches the compiled shader for the life of the process, so hot reload doesn't pick it up.
+**Bar Visualizer**
 
-To change colours, edit the `palette()` cycle and the `LAVENDER` / `MAUVE` / `PINK` / `BLUE` constants.
+- **Nothing shows:** make sure the DankBar is transparent ([Set up](#set-up-the-bar-visualizer)) and the service runs: `systemctl --user status bar-visualizer`.
+- **Nothing moves:** check `pgrep -a cava` and `cat $XDG_RUNTIME_DIR/bar-visualizer-cava.conf`. The `source=` line should be the `.monitor` of the output you hear audio from.
+- **Logs:** with the service, `journalctl --user -u bar-visualizer -f`. Started by hand, run `qs -c bar-visualizer` in a terminal and watch its output.
 
-### README animations and demo
+**Lock Ring**
 
-The SVGs in `assets/` are generated. After tweaking `assets/generate.py`, run `python3 assets/generate.py`.
+- **Not in the widget list:** run `dms restart`, then look for it under **DMS Settings → Plugins**.
+- **An old version shows after an update:** run `dms restart`. From a clone, run `./install-lock.sh` again first ([Updating](#updating)).
+- **The Lock Ring shows but doesn't move:** while the screen is locked, check `cat $XDG_RUNTIME_DIR/lock-ring-cava.conf`. The `source=` line should be the `.monitor` of the output you hear audio from.
 
-`docs/index.html` is the live demo (served by GitHub Pages). It carries a GLSL ES port of `shaders/viz.frag`, so mirror shader changes there. Its Lock Ring view needs no mirroring: it fetches the ring's own shader and converts it to GLSL ES as the page loads (`docs/webgl.mjs`), and imports the plugin's modules. Those files (`ring.frag` and the ring's `.mjs` modules) live in `docs/lock-ring/`, because Pages publishes only `docs/` and doesn't follow symlinks, and `lock-ring/` links to them, as it does to `docs/kick.mjs` and `docs/config.mjs`. Edit them there.
+## Limitations
 
-Kick detection isn't mirrored: `docs/kick.mjs` is the one detector, and both the visualizer's audio pipeline (`audio/AudioPipeline.qml`) and the demo import it. It lives in `docs/` because Pages publishes only that directory. Browsers don't load module scripts over `file://`, so to run the demo locally, serve the directory and open http://localhost:8000:
-
-```sh
-python3 -m http.server -d docs
-```
-
-### Kick detection tests
-
-A replay suite holds the kick detector to account. It plays real cava output, recorded from synthesized tracks with known kick onsets, through `docs/kick.mjs` and fails when a track gets more missed, doubled or stray kicks, or a later median kick, than its budget allows. It needs nothing but node, no install:
-
-```sh
-node --test
-```
-
-It prints those numbers per track for the default and a sensitive kick setting. Other tests check that the kicks and their power don't depend on the volume, and that kicks come back soon after a 12 dB drop and after a cava restart. A sine sweep recorded the same way checks that `kickLowHz` and `kickHighHz` select the bands cava puts those frequencies in. `tests/fixtures/record.py` synthesizes and records the tracks; its header says how to re-record them or add one (needs cava, numpy and real time).
-
-## Lock Ring
-
-The Bar Visualizer can't show on the lock screen: while it's up, only DMS's own surfaces are visible. The **Lock Ring** is a separate DMS plugin for the lock screen: the same ribbons and colours bent into a circle that is the dial of an analog and digital clock, with 12 hour points riding on it and floating hands that react to the music but always show the true time. In silence the ribbon keeps breathing as a thin, faint wave. It follows the active player and detects kicks with the same `docs/kick.mjs` as the bar, and every monitor's ring runs from one capture. ([Why it's a plugin](docs/adr/0001-lock-ring-runs-inside-dms.md).)
-
-To install it and set it up, see [Install](#install) and [Set up the Lock Ring](#set-up-the-lock-ring).
-
-### Lock Ring settings
-
-The Lock Ring reads all its settings from the Bar Visualizer's `~/.config/bar-visualizer/config.json` (see [Configuration](#configuration)), so you tune both visualizers in one file ([why](docs/adr/0004-both-visualizers-read-one-config-json.md)). It uses the bar's look and audio settings (`intensity`, `speed`, `kickThreshold`, `kickDecay`, `kickLowHz`, `kickHighHz`, `kickCooldown` and `bassStretch`) as they are. Its own are in the `lockRing` section:
-
-| Key | Default | What it does |
-| --- | --- | --- |
-| `lockRing.handWaves` | `1.0` | How far the hands swing with the music and on kicks. `0` = straight hands |
-| `lockRing.ringSize` | `0.4` | The widget's default size, as a share of the screen height. Resizing the widget under Edit widgets still works |
-
-They apply to every Lock Ring at once, since all rings share one capture ([why](docs/adr/0002-lock-ring-settings-are-plugin-wide.md)). The Lock Ring never writes the file. A `config.json` from before the `lockRing` section existed works as it is: add the section to change those two. Without the Bar Visualizer the Lock Ring runs on the defaults; create the file by hand to change them (then `dms restart` if `~/.config/bar-visualizer/` didn't exist yet).
-
-To tune it without locking the screen, open the [live demo's Lock Ring view](https://dotmortis.github.io/dms-bar-visualizer/#ring). Its sliders have the names `config.json` has, and **Export config.json** downloads the whole file.
-
-> [!NOTE]
-> DMS keeps a loaded plugin in memory, so after updating the Lock Ring (with either script, or by pulling the checkout), restart DMS to see the new version: `dms restart`.
-
-> [!IMPORTANT]
-> `install-lock.sh` links the checkout, but the compiled shader (`ring.frag.qsb`) is built once, at install. If you ran it from a checkout that later gets updated, such as the Bar Visualizer installer's `~/.local/share/dms-bar-visualizer`, run `install-lock.sh` from it again after the update so the shader is recompiled, then `dms restart`.
+- **Top bar only:** the Bar Visualizer doesn't support bottom or side bars yet.
+- **One geometry for all screens:** a single bar geometry applies to every screen, and the Bar Visualizer shows on every monitor even if DankBar is disabled on some.
+- **Player switching:** DMS doesn't expose which player it shows, so both visualizers re-implement its rules. If you switch players by hand in the DMS media popout, they won't follow.
 
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md). Releases are tagged on [GitHub](https://github.com/dotMortis/dms-bar-visualizer/releases).
 
-## Limitations
+## Contributing
 
-- **Top bar only:** bottom and side bars aren't supported yet.
-- **One geometry for all screens:** a single bar geometry applies to every screen, and the visualizer shows on every monitor even if DankBar is disabled on some.
-- **Player switching:** DMS doesn't expose which player it displays, so the visualizer re-implements the same rules. If you switch players by hand in the DMS media popout, the visualizer won't follow.
-
-## Troubleshooting
-
-- **Nothing moves:** check `pgrep -a cava` and `cat $XDG_RUNTIME_DIR/bar-visualizer-cava.conf`. The `source=` line should be the `.monitor` of the output you hear audio from.
-- **Logs:**
-  - with the service: `journalctl --user -u bar-visualizer -f`
-  - started by hand: run `qs -c bar-visualizer` in a terminal and watch its output
+Shaders, the demo, the tests and the README's animations: see [CONTRIBUTING.md](CONTRIBUTING.md).
