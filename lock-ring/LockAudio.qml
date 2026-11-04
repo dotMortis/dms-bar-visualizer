@@ -47,15 +47,15 @@ Singleton {
     readonly property real flow: pipeline?.flow ?? 0
     // 0..1, the last kick's impact, fading at kickDecay: the ribbons' kick punch.
     readonly property real kick: pipeline?.kick ?? 0
-    // Kicks, for the shockwave and flashing hands: the last kickSlots kicks.
+    // Kicks, for the Shockwave and flashing hands: the last kickSlots kicks.
     readonly property var kickAges: pipeline?.kickAges ?? []
     readonly property var kickPowers: pipeline?.kickPowers ?? []
     readonly property var kickSeeds: pipeline?.kickSeeds ?? []
     // The same kicks as the ring shader's slots (lock-ring/kicks.mjs): { ages, powers, seeds }, 8 each.
     readonly property var kickSlots: Kicks.kickSlots(kickAges, kickPowers, kickSeeds)
-    // 0..1, how brightly all hands flash: lit by every kick together with its shockwave and sparks.
+    // 0..1, how brightly all hands flash: lit by every kick together with its Shockwave and sparks.
     readonly property real flash: Kicks.handFlash(kickAges, kickPowers, settings.kickDecay)
-    // 0..1, how brightly a shockwave's front is crossing the digital time right now: its chromatic
+    // 0..1, how brightly a Shockwave's front is crossing the digital time right now: its chromatic
     // split and glow (clock.mjs timeHit()). Here, so every ring's time takes the hit in sync.
     readonly property real timeCrossing: Kicks.shockwaveCrossing(Clock.TIME_RADIUS, kickAges, kickPowers)
     // The ring's motion (lock-ring/ring.mjs): radius growth as a fraction of the dial radius, and

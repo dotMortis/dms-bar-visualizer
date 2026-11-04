@@ -184,7 +184,7 @@ import { toWebGL } from "./webgl.mjs";
 import { DIAL_RATIO, createRingMotion } from "./lock-ring/ring.mjs";
 import { handFlash, shockwaveCrossing } from "./lock-ring/kicks.mjs";
 import { createHandMotion } from "./lock-ring/hands.mjs";
-import { TIME_HIT, TIME_RADIUS, TIME_TOP, formatTime, timeHit } from "./lock-ring/clock.mjs";
+import { TIME_FONT, TIME_HIT, TIME_RADIUS, TIME_TOP, formatTime, timeHit } from "./lock-ring/clock.mjs";
 const RING_FRAG = fetch("./lock-ring/ring.frag").then(r => {
   if (!r.ok) throw new Error(`ring.frag: HTTP ${r.status}`);
   return r.text();
@@ -760,7 +760,7 @@ function drawRing() {
 }
 
 // The digital time LockRing.qml draws over the shader, with its size, and how it takes a
-// shockwave's hit (clock.mjs timeHit()): copies in the shockwave's colors pushed outward behind
+// Shockwave's hit (clock.mjs timeHit()): copies in the Shockwave's colors pushed outward behind
 // the digits, which flare toward white with a glow and never move. The dial (the living ribbon),
 // its hour points and the floating hands are ring.frag's.
 const face = document.getElementById("face");
@@ -774,12 +774,12 @@ function drawFace() {
   fctx.translate(c.x, c.y);
 
   const text = formatTime(new Date(), { use24Hour });
-  const em = Math.max(10 * dpr, size * 0.075), top = dial * TIME_TOP;
+  const em = Math.max(10 * dpr, size * TIME_FONT), top = dial * TIME_TOP;
   const hit = timeHit(ring.timeCrossing);
   fctx.font = `500 ${em}px Inter, "Segoe UI", Roboto, Ubuntu, system-ui, sans-serif`;
   fctx.textAlign = "center"; fctx.textBaseline = "top";
-  // The chromatic split, softened a little as MultiEffect's blur does.
-  fctx.filter = "blur(1px)";
+  // The chromatic split, softened as MultiEffect's blur does.
+  fctx.filter = `blur(${TIME_HIT.soften * em}px)`;
   for (const { color, offset, opacity } of hit.copies) {
     if (opacity <= 0) continue;
     fctx.globalAlpha = opacity;
@@ -787,14 +787,26 @@ function drawFace() {
     fctx.fillText(text, 0, top + offset * em);
   }
   fctx.filter = "none";
+  // The digits' glow alone, spread around their middle as MultiEffect's shadowScale does: the
+  // digits are drawn far off to the left and only their shadow is shifted back.
+  if (hit.glow.opacity > 0) {
+    const away = 10 * face.width, mid = top + em / 2;
+    fctx.save();
+    fctx.translate(0, mid);
+    fctx.scale(hit.glow.scale, hit.glow.scale);
+    fctx.globalAlpha = hit.glow.opacity;
+    fctx.fillStyle = "black";
+    fctx.shadowColor = TIME_HIT.glow.color;
+    fctx.shadowBlur = TIME_HIT.glow.radius * em;
+    fctx.shadowOffsetX = away * hit.glow.scale;
+    fctx.fillText(text, -away, -em / 2);
+    fctx.restore();
+  }
   fctx.globalAlpha = 1;
-  // The digits, mixed toward white, with their glow.
+  // The digits, mixed toward white.
   const w = hit.white, mix = (c) => Math.round(c + (255 - c) * w);
   fctx.fillStyle = `rgb(${mix(180)} ${mix(190)} ${mix(254)} / .85)`;
-  fctx.shadowColor = `rgb(230 235 255 / ${(hit.glow / TIME_HIT.glow) || 0})`;
-  fctx.shadowBlur = hit.glow * em;
   fctx.fillText(text, 0, top);
-  fctx.shadowBlur = 0;
 
   fctx.restore();
 }

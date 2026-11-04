@@ -1,4 +1,4 @@
-// Kicks on the Lock Ring: each one sends a chromatic shockwave out of the center and the hands
+// Kicks on the Lock Ring: each one sends a chromatic Shockwave out of the center and the hands
 // flash. (The sparks it flings off the ring are the shader's alone.) Distances are in dial radii (1 = the dial), ages in seconds.
 // Power is the shared detector's hit strength, 0.5 (a soft hit) to 1 (the hardest next to the
 // recent kicks).
@@ -9,11 +9,11 @@ import { describe, test } from "node:test";
 
 import { TIME_RADIUS } from "../lock-ring/clock.mjs";
 import { DEFAULTS } from "../docs/config.mjs";
-import { KICK_ORIGIN, EDGE, KICKS, handFlash, kickAt, kickSlots, ribbonSurge, shockwaveCrossing } from "../lock-ring/kicks.mjs";
+import { KICK_ORIGIN, EDGE, KICKS, centerPunch, handFlash, kickAt, kickSlots, ribbonSurge, shockwaveCrossing } from "../lock-ring/kicks.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
-describe("shockwave", () => {
+describe("Shockwave", () => {
     test("starts at the center", () => {
         assert.equal(kickAt(0, 1).front, KICK_ORIGIN);
         assert.equal(kickAt(0, 0.5).front, KICK_ORIGIN);
@@ -28,7 +28,7 @@ describe("shockwave", () => {
         }
     });
 
-    test("a harder hit makes a bigger shockwave", () => {
+    test("a harder hit makes a bigger Shockwave", () => {
         for (const age of [0.05, 0.2, 0.5, 1, 2])
             assert.ok(kickAt(age, 1).front > kickAt(age, 0.5).front * 1.3, `at ${age} s`);
         assert.ok(kickAt(0.1, 1).strength > kickAt(0.1, 0.5).strength, "and a brighter one");
@@ -105,7 +105,7 @@ describe("hand flash", () => {
         assert.equal(handFlash(...one(0, 0.5)), 0.5);
     });
 
-    test("fires together with the shockwave, from the same kick", () => {
+    test("fires together with the Shockwave, from the same kick", () => {
         for (const power of [0.5, 0.75, 1]) {
             const kick = kickAt(0, power);
             assert.ok(kick.strength > 0 && handFlash(...one(0, power)) > 0, `power ${power}`);
@@ -128,9 +128,9 @@ describe("hand flash", () => {
     });
 });
 
-// How brightly a shockwave's front is crossing a radius right now, 0..1: what the hour points
+// How brightly a Shockwave's front is crossing a radius right now, 0..1: what the hour points
 // light up by as the wave passes them.
-describe("shockwave crossing", () => {
+describe("Shockwave crossing", () => {
     const empty = new Array(KICKS).fill(0);
     const one = (age, power) => [[age, ...new Array(KICKS - 1).fill(100)], [power, ...empty.slice(1)]];
 
@@ -169,7 +169,7 @@ describe("shockwave crossing", () => {
         }
     });
 
-    test("overlapping shockwaves: the brightest wins, and it never goes above 1", () => {
+    test("overlapping Shockwaves: the brightest wins, and it never goes above 1", () => {
         const ages = [0.3, 0.1, 0.05, 0, 0.02, 0.2, 0.15, 0.01];
         const powers = new Array(KICKS).fill(1);
         for (let r = 0; r <= 1.4; r += 0.01) {
@@ -202,7 +202,7 @@ describe("shockwave crossing", () => {
         }
     });
 
-    test("fades as the shockwave fades", () => {
+    test("fades as the Shockwave fades", () => {
         // A soft kick's front settles at its reach; a radius there keeps being crossed, fading out.
         const r = kickAt(10, 0.5).front;
         let last = Infinity;
@@ -216,7 +216,7 @@ describe("shockwave crossing", () => {
     });
 });
 
-// How much a shockwave's front lifts the ribbons where it crosses them (spectrum level, added to
+// How much a Shockwave's front lifts the ribbons where it crosses them (spectrum level, added to
 // the music's): the bar's surge, bent into a ring.
 describe("ribbon surge", () => {
     const empty = new Array(KICKS).fill(0);
@@ -263,5 +263,34 @@ describe("ribbon surge", () => {
         const first = ribbonSurge(1, ...one(0.25, 1)), second = ribbonSurge(1, ...one(0.26, 1));
         assert.ok(first > 0.05 && second > 0.05, `${first}, ${second}`);
         assert.ok(Math.abs(both - (first + second)) < 1e-12, `${both} vs ${first} + ${second}`);
+    });
+});
+
+// The center punch: a white-lavender flash at the center as each Shockwave is born, 0..1, from
+// that Kick's own power: every Kick punches, a soft one faintly, a hard one strongly.
+describe("center punch", () => {
+    const empty = new Array(KICKS).fill(0);
+    const one = (age, power) => [[age, ...new Array(KICKS - 1).fill(100)], [power, ...empty.slice(1)]];
+
+    test("is dark without kicks", () => {
+        assert.equal(centerPunch([], []), 0);
+        assert.equal(centerPunch(new Array(KICKS).fill(100), empty), 0);
+    });
+
+    test("every Kick punches as its Shockwave is born, at that Kick's power", () => {
+        assert.ok(Math.abs(centerPunch(...one(0, 1)) - 1) < 1e-9);
+        assert.ok(Math.abs(centerPunch(...one(0, 0.5)) - 0.5) < 1e-9, "a soft Kick still punches, faintly");
+    });
+
+    test("is a punch, not a glow: gone within a quarter second, while the Shockwave flies on", () => {
+        assert.ok(centerPunch(...one(0.25, 1)) < 0.05, `${centerPunch(...one(0.25, 1))}`);
+        assert.ok(kickAt(0.25, 1).strength > 0.5);
+    });
+
+    test("a new Kick punches again, and overlapping punches never go past full", () => {
+        const ages = [0.4, 0, ...new Array(KICKS - 2).fill(100)];
+        const powers = [1, 0.6, ...empty.slice(2)];
+        assert.ok(Math.abs(centerPunch(ages, powers) - 0.6) < 0.01);
+        assert.ok(centerPunch(new Array(KICKS).fill(0), new Array(KICKS).fill(1)) <= 1);
     });
 });

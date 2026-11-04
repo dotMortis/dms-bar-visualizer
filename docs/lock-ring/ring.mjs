@@ -86,15 +86,16 @@ export function ribbonRadius(angle, { level = 0, flow = 0, time = 0, treble = 0,
 // Shockwave's front is crossing a radius right now (kicks.mjs shockwaveCrossing() on the kicks),
 // and `surge`: how much the Shockwaves lift the ribbons at a radius (kicks.mjs ribbonSurge(); both
 // passed in, since kicks.mjs imports this module). Each: angle (clockwise degrees from 12
-// o'clock), radius (strand 0's there, surged as the ribbon is at its rest radius, 1 + swell) and
-// glow (12, 3, 6 and 9 brighter; dimmer in silence; each flashes as a Shockwave's front reaches
-// its radius). shaders/ring.frag mirrors this.
+// o'clock), radius (strand 0's there, surged where the strand sits before the surge, as the
+// ribbon is) and glow (12, 3, 6 and 9 brighter; dimmer in silence; each flashes as a Shockwave's
+// front reaches its radius). shaders/ring.frag mirrors this.
 export function hourPoints({ values, flow, time, treble, swell, presence, bassStretch, crossing = () => 0, surge = () => 0 }) {
     const points = [];
-    const lift = surge(1 + swell);
     for (let i = 0; i < 12; i++) {
         const angle = i * 30;
-        const level = Math.min(1, 1.3 * spectrumLevel(values, spectrumAt(angle, bassStretch)) + lift);
+        const music = 1.3 * spectrumLevel(values, spectrumAt(angle, bassStretch));
+        const calm = ribbonRadius(angle, { level: Math.min(1, music), flow, time, treble, swell, strand: 0 });
+        const level = Math.min(1, music + surge(calm));
         const radius = ribbonRadius(angle, { level, flow, time, treble, swell, strand: 0 });
         points.push({
             angle,

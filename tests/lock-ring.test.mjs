@@ -171,16 +171,16 @@ describe("the hour points", () => {
             near(points[i].glow, points[0].glow);
     });
 
-    // A hard kick, `age` seconds ago: its shockwave crossing the ring (kicks.mjs).
+    // A hard kick, `age` seconds ago: its Shockwave crossing the ring (kicks.mjs).
     const kicked = age => Object.assign({}, state, { crossing: r => shockwaveCrossing(r, [age], [1]) });
 
-    test("a kick doesn't flash them at its instant, while its shockwave is still near the center", () => {
+    test("a kick doesn't flash them at its instant, while its Shockwave is still near the center", () => {
         const points = hourPoints(state);
         for (const age of [0, 0.05])
             hourPoints(kicked(age)).forEach((p, i) => near(p.glow, points[i].glow, `${p.angle} at ${age} s`));
     });
 
-    test("each flashes as the shockwave's front reaches its radius", () => {
+    test("each flashes as the Shockwave's front reaches its radius", () => {
         const points = hourPoints(state);
         points.forEach((p, i) => {
             let age = 0;
@@ -190,7 +190,8 @@ describe("the hour points", () => {
         });
     });
 
-    // A hard kick whose shockwave's front is at the ribbon's rest radius (1 + swell): the ribbons surge there.
+    // A hard kick whose Shockwave's front is at the ribbon's rest radius (1 + swell): the ribbons
+    // surge there.
     const surging = (() => {
         let age = 0;
         while (kickAt(age, 1).front < 1 + state.swell)
@@ -198,16 +199,22 @@ describe("the hour points", () => {
         return Object.assign({}, state, { surge: r => ribbonSurge(r, [age], [1]) });
     })();
 
-    test("they ride the ribbon as a shockwave surges it, swinging farther with it", () => {
-        const lift = surging.surge(1 + state.swell);
-        assert.ok(lift > 0.2, `the surge at the ring: ${lift}`);
+    // Each surges where its own strand is before the surge, as the ribbons do in ring.frag.
+    test("they ride the ribbon as a Shockwave surges it, swinging farther with it", () => {
+        assert.ok(surging.surge(1 + state.swell) > 0.2, `the surge at the ring: ${surging.surge(1 + state.swell)}`);
         const calm = hourPoints(state), surged = hourPoints(surging);
-        surged.forEach(point => {
+        surged.forEach((point, i) => {
+            const lift = surging.surge(calm[i].radius);
             const level = Math.min(1, 1.3 * spectrumLevel(values, spectrumAt(point.angle, 1.4)) + lift);
             near(point.radius, ribbonRadius(point.angle, Object.assign({}, state, { level, strand: 0 })), `${point.angle}`);
         });
-        const reach = points => Math.max(...points.map(p => Math.abs(p.radius - 1 - state.swell)));
-        assert.ok(reach(surged) > reach(calm) + 0.02, `${reach(surged)} vs ${reach(calm)}`);
+        // The points the front is crossing swing farther; the ones it is far from stay put.
+        const swing = p => Math.abs(p.radius - 1 - state.swell);
+        assert.ok(surged.some((p, i) => swing(p) > swing(calm[i]) + 0.01), "a point the front crosses swings farther");
+        surged.forEach((p, i) => {
+            if (surging.surge(calm[i].radius) < 1e-3)
+                near(p.radius, calm[i].radius, `${p.angle}, which the front is far from`);
+        });
     });
 
     test("they stay visible in silence, a little dimmer", () => {

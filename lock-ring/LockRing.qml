@@ -4,12 +4,14 @@
 // in DMS's lock-screen font and 12h/24h setting. The hands show the music too (hands.mjs): hour =
 // bass, minute = mids, second = highs, each a neon wave ribbon that swings, thickens and glows
 // with its band (measured against that band's own recent peak) around a straight axis that never
-// moves off the time. The ribbon (ring.mjs) idles
-// in silence as a thin, faint, breathing wave; music grows it into spectrum ribbons that wave
-// around the swelling dial, and the ring swells with its energy. shaders/ring.frag draws all of that. On every
-// Kick a chromatic shockwave expands from the center, sparks fly off the ring and all hands whip
-// and flash; as its front crosses the digital time, the time splits into the shockwave's colors
-// and glows.
+// moves off the time. The ribbon (ring.mjs) idles in silence as a thin, faint, breathing wave;
+// music grows it into spectrum ribbons that wave around the swelling dial, and the ring swells
+// with its energy. shaders/ring.frag draws all of that. On every Kick a chromatic Shockwave
+// expands from the center (kicks.mjs) as the center punches white-lavender, a plasma haze flashes
+// across the dial on a hard one, sparks fly off the ring and all hands whip and flash; the
+// ribbons surge and the hour points flash as its front crosses them. As the front crosses the
+// digital time, drawn here, the time splits into the Shockwave's colors and glows (clock.mjs
+// timeHit()).
 // Every ring on every monitor draws from the one shared capture in LockAudio.
 import QtQuick
 import QtQuick.Effects
@@ -124,7 +126,7 @@ DesktopPluginComponent {
             property vector4d b7: root.quad(LockAudio.values, 28)
         }
 
-        // The digital time, inside the dial below the center. When a shockwave's front crosses it
+        // The digital time, inside the dial below the center. When a Shockwave's front crosses it
         // (LockAudio.timeCrossing, the same on every ring), it splits into lavender, mauve and blue
         // copies pushed outward and flares toward white with a glow (clock.mjs timeHit()). The
         // digits themselves never move.
@@ -148,14 +150,14 @@ DesktopPluginComponent {
                 })
                 color: Qt.alpha(root.lavender, 0.85)
                 font.family: SettingsData.lockScreenFontFamily !== "" ? SettingsData.lockScreenFontFamily : Theme.fontFamily
-                font.pixelSize: Math.max(10, root.size * 0.075)
+                font.pixelSize: Math.max(10, root.size * Clock.TIME_FONT)
                 font.weight: Font.Medium
             }
 
-            // The chromatic split: the digits in each of the shockwave's colors, offset outward
-            // (down, away from the center), behind the digits.
+            // The chromatic split: the digits in each of the Shockwave's colors, offset outward
+            // (down, away from the center), behind the digits, softened by TIME_HIT.soften.
             Repeater {
-                model: 3
+                model: Clock.TIME_HIT.split.length
 
                 MultiEffect {
                     required property int index
@@ -169,26 +171,26 @@ DesktopPluginComponent {
                     colorization: 1
                     colorizationColor: copy.color
                     blurEnabled: true
-                    blur: 0.2
-                    blurMax: 4
+                    blur: 1
+                    blurMax: Math.max(1, Math.round(Clock.TIME_HIT.soften * time.em))
                 }
             }
 
-            // The digits, flaring toward white with a glow as the front crosses them.
+            // The digits, flaring toward white with a glow as the front crosses them: the glow at
+            // TIME_HIT.glow's color and radius, its opacity and spread growing with the hit.
             MultiEffect {
                 source: digits
                 anchors.fill: parent
                 colorization: time.hit.white
                 colorizationColor: "white"
                 shadowEnabled: true
-                shadowColor: Qt.rgba(0.9, 0.92, 1, 1)
+                shadowColor: Clock.TIME_HIT.glow.color
                 shadowHorizontalOffset: 0
                 shadowVerticalOffset: 0
                 shadowBlur: 1
-                // The glow's radius grows with the hit up to its peak (TIME_HIT.glow font sizes).
-                blurMax: Math.max(1, Math.round(Clock.TIME_HIT.glow * time.em))
-                shadowScale: 1 + time.hit.glow * 0.2
-                shadowOpacity: time.hit.glow / Clock.TIME_HIT.glow
+                blurMax: Math.max(1, Math.round(Clock.TIME_HIT.glow.radius * time.em))
+                shadowScale: time.hit.glow.scale
+                shadowOpacity: time.hit.glow.opacity
             }
         }
     }
