@@ -30,6 +30,7 @@ Singleton {
     // The look settings, the same for every ring.
     readonly property real intensity: settings.intensity
     readonly property real bassStretch: settings.bassStretch
+    readonly property real handWaves: settings.handWaves
     readonly property bool running: pipeline !== null
     readonly property int bandCount: Kick.BANDS
     readonly property var values: pipeline?.values ?? new Array(bandCount).fill(0)

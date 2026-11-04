@@ -26,13 +26,27 @@ describe("lock ring settings", () => {
             kickHighHz: 90,
             kickCooldown: 0.1,
             bassStretch: 1.4,
+            handWaves: 1.0,
         });
     });
 
+    // The Lock Ring's own settings (the hands) have no Bar Visualizer counterpart.
+    const shared = SETTINGS.filter(s => !s.lockOnly);
+
     test("the defaults are the ones in shell.qml and the audio pipeline", () => {
         const bar = { ...qmlDefaults("shell.qml"), ...qmlDefaults("audio/AudioPipeline.qml") };
-        for (const [key, value] of Object.entries(resolve({})))
-            assert.equal(value, bar[key], key);
+        const defaults = resolve({});
+        for (const { key } of shared)
+            assert.equal(defaults[key], bar[key], key);
+    });
+
+    test("only the hands' wave strength is the Lock Ring's own", () => {
+        assert.deepEqual(SETTINGS.filter(s => s.lockOnly).map(s => s.key), ["handWaves"]);
+    });
+
+    test("wave strength reads back from its slider, 0 = straight hands", () => {
+        assert.equal(resolve({ handWaves: 0 }).handWaves, 0);
+        assert.equal(resolve({ handWaves: 150 }).handWaves, 1.5);
     });
 
     // What SliderSetting saves: kickThreshold 25 %, kickCooldown 250 ms, bassStretch 200 %.
@@ -70,10 +84,14 @@ describe("lock ring settings", () => {
     });
 
     // The slider ranges are the demo's (docs/index.html SLIDERS), so a value tuned there fits here.
+    // The Lock Ring's own settings too, once the demo has them.
     test("the slider ranges are the demo's", () => {
         const html = fs.readFileSync(path.join(ROOT, "docs/index.html"), "utf8");
         for (const setting of SETTINGS) {
-            const [, min, max] = html.match(new RegExp(`\\["${setting.key}",\\s*([\\d.]+),\\s*([\\d.]+)`));
+            const found = html.match(new RegExp(`\\["${setting.key}",\\s*([\\d.]+),\\s*([\\d.]+)`));
+            if (!found && setting.lockOnly)
+                continue;
+            const [, min, max] = found;
             assert.deepEqual([setting.min, setting.max], [Number(min), Number(max)], setting.key);
         }
     });

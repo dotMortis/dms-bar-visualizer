@@ -20,14 +20,17 @@ All notable changes to this project are documented here. The format follows
   capture, so they pulse in sync, and it runs only while a Lock Ring is on screen.
   `install-lock.sh` now compiles the ring's shader, so it needs `qsb` (qt6-shadertools).
 - The Lock Ring's hands react to the music: hour to the bass, minute to the mids, second to the
-  highs. Each thickens, glows and shimmers along its length with its band. The music never moves
-  them: they always point at the true time. In silence they're plain.
+  highs. Each is a slim neon wave ribbon in the Bar Visualizer's style, with a white-hot core and
+  extra strands. The louder its band, the wider it swings and the brighter it glows, and every
+  kick whips it. The wave only bends a hand around a straight line at the true time, so the hands
+  always point at the time and their tips stay on it. In silence they're calm, thin lines. A
+  "Hand waves" setting sets how far they swing, down to straight hands at 0%.
 - Kicks on the Lock Ring, detected exactly like the Bar Visualizer's: each one sends a chromatic
   shockwave out of the center hub, sparks fly off the ring, and all hands flash. Harder hits make
   bigger, brighter shockwaves, and up to 8 kicks play on top of each other.
 - Lock Ring settings in DMS: open a Lock Ring widget's options under Settings → Lock Screen to
-  set intensity, speed, kick threshold, kick decay, kick range, kick cooldown and bass stretch.
-  The defaults are the Bar Visualizer's. They apply right away, and to every Lock Ring at once,
+  set intensity, speed, kick threshold, kick decay, kick range, kick cooldown, bass stretch and
+  hand waves. The defaults are the Bar Visualizer's. They apply right away, and to every Lock Ring at once,
   because all rings share one capture. The Lock Ring never reads the Bar Visualizer's
   `config.json`.
 - On Arch, `install-lock-arch.sh` builds and installs the Lock Ring as the pacman package

@@ -3,8 +3,10 @@
 // the dial. They bulge outward with each band's level, mirrored left and right with bass at the
 // bottom, and the ring's radius swells with the music's energy. On every Kick a chromatic shockwave
 // expands from the center hub, bigger on a harder hit, and a spray of sparks flies off the ring; up
-// to KICKS of them play at once. Draws nothing in silence (presence 0, no kicks), which leaves the
-// faint dial LockRing.qml draws underneath.
+// to KICKS of them play at once. On top, the clock's three hands as neon wave ribbons (hand()):
+// they swing, thicken and glow with their bands and whip on every Kick, around a straight axis at
+// the true time. In silence only the hands are drawn, as plain lines, over the faint dial
+// LockRing.qml draws underneath.
 // Compile: /usr/lib/qt6/bin/qsb --glsl "100 es,120,150" --hlsl 50 --msl 12 -o ring.frag.qsb ring.frag
 // (install-lock.sh does this).
 
@@ -22,6 +24,15 @@ layout(std140, binding = 0) uniform buf {
     float dial;         // the dial's radius, as a fraction of half the item's size
     float intensity;
     float bassStretch;
+    // The hands (lock-ring/hands.mjs handPoses()), x = hour, y = minute, z = second, w unused.
+    // Angles in radians, clockwise from 12 o'clock; everything else in dial radii.
+    float pixel;        // one pixel, in dial radii (for antialiasing)
+    float handFlash;    // 0..1, how white-hot all hands flash on a kick (kicks.mjs handFlash())
+    vec4 handAngle;     // where each hand points: from the time alone (clock.mjs)
+    vec4 handLength;    // hub to tip
+    vec4 handAmp;       // the wave's sideways reach (handLook().amplitude), 0 = straight
+    vec4 handWidth;     // the ribbon's thickness
+    vec4 handGlow;      // 0..1, the band's level as neon halo and extra strands
     vec4 kickAge0; vec4 kickAge1;      // the last KICKS kicks (any order), lock-ring/kicks.mjs kickSlots()
     vec4 kickPower0; vec4 kickPower1;  // 0 = empty slot
     vec4 kickSeed0; vec4 kickSeed1;
@@ -34,7 +45,7 @@ const float TAU = 6.28318530718;
 const int KICKS = 8;  // matches kickSlots in audio/AudioPipeline.qml and KICKS in lock-ring/kicks.mjs
 
 // In dial radii, as in lock-ring/kicks.mjs: the hub, and how far the hardest hit reaches.
-const float HUB = 0.02 / 0.34;
+const float HUB = 0.014 / 0.34;
 const float MAX_REACH = 0.9 * 0.5 / 0.34;
 
 float band(int i) {
@@ -76,6 +87,84 @@ vec3 palette(float h) {
 
 vec3 pal(float h, float s, float v) {
     return v * pow(palette(h), vec3(1.0 + 1.5 * s));
+}
+
+// --- Hands: neon wave ribbons ----------------------------------------------------------------
+// Each hand is a ribbon of HAND_STRANDS strands, like viz.frag's, whose centrelines undulate
+// sideways around the hand's straight hub-to-tip axis in a wave travelling from the hub to the tip.
+// The axis is the true time (handAngle); the wave starts at nothing at the hub and leaves the tip
+// by the axis (waveEnvelope()). In silence (handAmp 0, handGlow 0) the strands collapse into one
+// plain line. Uses the uniforms handAngle, handLength, handAmp, handWidth, handGlow, handFlash,
+// pixel, plus time, flow and treble.
+//
+// WAVE in lock-ring/hands.mjs; waveEnvelope() and waveOffset() mirror it.
+const float WAVE_PERIODS = 1.5;
+const float WAVE_RISE = 0.3;
+const float WAVE_FALL = 0.35;
+const float WAVE_TIP = 0.12;
+const float WAVE_RIPPLE = 0.15;
+const int HAND_STRANDS = 3;
+const float HALO_END = 0.35;  // where a hand's halo has faded out, in dial radii from a strand
+
+float waveEnvelope(float u) {
+    float fall = smoothstep(1.0 - WAVE_FALL, 1.0, u);
+    return smoothstep(0.0, WAVE_RISE, u) * (1.0 + (WAVE_TIP - 1.0) * fall);
+}
+
+float waveOffset(float u, float phase, float amplitude, float treble) {
+    float tr = clamp(treble, 0.0, 1.0) * WAVE_RIPPLE;
+    float x = TAU * WAVE_PERIODS * u;
+    float wave = (1.0 - tr) * sin(x - phase) + tr * sin(x * 2.3 - phase * 1.7);
+    return amplitude * waveEnvelope(u) * wave;
+}
+
+// One hand at q (dial radii, y down) in `color`: emissive light to add.
+vec3 hand(vec2 q, float index, float angle, float len, float amp, float width, float glow, vec3 color) {
+    vec2 dir = vec2(sin(angle), -cos(angle));  // hub to tip
+    vec2 side = vec2(cos(angle), sin(angle));  // to the hand's right
+    float along = dot(q, dir);
+    float across = dot(q, side);
+    // Cheap reject: past the hand's reach (its length, swing and halo, which ends at HALO_END).
+    if (along < -HALO_END || along > len + HALO_END || abs(across) > amp + width + HALO_END)
+        return vec3(0.0);
+    float u = along / len;
+    float uc = clamp(u, 0.0, 1.0);
+    float flash = ubuf.handFlash;
+    float tr = ubuf.treble;
+    vec3 col = vec3(0.0);
+    for (int k = 0; k < HAND_STRANDS; k++) {
+        float fk = float(k);
+        // Strands drift apart with the band: each its own speed, phase and reach. Multiples of
+        // 1/20 on flow, and of TAU/1200 on time, keep the waves seamless where those wrap.
+        float phase = ubuf.flow * (1.5 + 0.75 * fk) + ubuf.time * TAU * (0.5 + 0.15 * fk) + fk * 2.1 + index * 1.3;
+        float a = amp * (1.0 - 0.22 * fk);
+        float y = waveOffset(uc, phase, a, tr);
+        float d;
+        if (u > 0.0 && u < 1.0) {
+            // Distance across the strand, corrected for its slope so steep stretches stay as thick.
+            float e = 0.01;
+            float slope = (waveOffset(uc + e, phase, a, tr) - waveOffset(uc - e, phase, a, tr)) / (2.0 * e * len);
+            d = abs(across - y) / sqrt(1.0 + slope * slope);
+        } else {
+            d = length(vec2(along - uc * len, across - y));  // round caps at the hub and tip
+        }
+        // Slim neon, like viz.frag's ribbons: the main strand is the hand, a thin line with a
+        // hairline white-hot core; the others are hairlines that come in with the band and the
+        // kick. The impact is the swing and the glow around them, not their thickness.
+        float main = k == 0 ? 1.0 : 0.0;
+        float weight = mix(clamp(glow + flash, 0.0, 1.0) * (0.85 - 0.2 * fk), 1.0, main);
+        float w = max(0.6 * ubuf.pixel, width * mix(0.2, 0.5, main));  // half thickness
+        float body = smoothstep(w + ubuf.pixel, w - ubuf.pixel, d);
+        float cw = max(0.5 * ubuf.pixel, w * 0.35);
+        float hot = exp(-d * d / (cw * cw));                           // white-hot core
+        float hw = 0.004 + 0.014 * glow + 0.02 * flash;                // halo half-width
+        float halo = 1.0 / (1.0 + d * d / (hw * hw)) * smoothstep(HALO_END, HALO_END * 0.4, d);
+        vec3 c = mix(color, pal(ubuf.time * 0.05 + index * 0.33 + fk * 0.2, 0.9, 1.0), 0.3 * fk);
+        col += weight * (c * body * mix(0.8, 1.0, main)
+                       + vec3(1.0) * hot * (0.3 + 0.7 * glow + 1.2 * flash)
+                       + pow(c, vec3(2.2)) * halo * (0.12 + 0.7 * glow + 0.9 * flash));
+    }
+    return col;
 }
 
 void main() {
@@ -169,6 +258,13 @@ void main() {
     }
 
     col *= ubuf.intensity;
+
+    // --- Hands, at full brightness whatever the intensity, so the clock always reads -----------
+    // Second on top of minute on top of hour; light adds, as in the ribbons.
+    col += hand(q, 0.0, ubuf.handAngle.x, ubuf.handLength.x, ubuf.handAmp.x, ubuf.handWidth.x, ubuf.handGlow.x, LAVENDER);
+    col += hand(q, 1.0, ubuf.handAngle.y, ubuf.handLength.y, ubuf.handAmp.y, ubuf.handWidth.y, ubuf.handGlow.y, MAUVE);
+    col += hand(q, 2.0, ubuf.handAngle.z, ubuf.handLength.z, ubuf.handAmp.z, ubuf.handWidth.z, ubuf.handGlow.z, PINK);
+
     col = col / (1.0 + col * 0.35);                   // soft tone-map, as in viz.frag
 
     // Emissive, premultiplied: alpha follows brightness. Fades out before the item's edge.

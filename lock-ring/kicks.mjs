@@ -3,8 +3,8 @@
 // Distances are in dial radii (1 = the dial), ages in seconds, power is the shared detector's
 // hit strength (0.5..1, docs/kick.mjs).
 
-// The hub's radius and the widget's edge, in dial radii (LockRing.qml: hub size*0.02, dial size*0.34).
-export const HUB = 0.02 / 0.34;
+// The hub's radius and the widget's edge, in dial radii (LockRing.qml: hub size*0.014, dial size*0.34).
+export const HUB = 0.014 / 0.34;
 export const EDGE = 0.5 / 0.34;
 // The hardest hit's shockwave stops here, where the ring's edge fade starts.
 const MAX_REACH = 0.9 * EDGE;

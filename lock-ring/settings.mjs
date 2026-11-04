@@ -1,8 +1,8 @@
 // The Lock Ring's settings: the one list of its tweakables, shown in DMS's plugin settings
 // (LockRingSettings.qml) and read by the shared capture (LockAudio.qml). One plugin-wide set, not
 // one per widget, because every ring draws from the same capture and kick detector (ADR 0002).
-// Defaults are the Bar Visualizer's (shell.qml, audio/AudioPipeline.qml); the Lock Ring never reads
-// the bar's config.json. Plain JS for tests/lock-settings.test.mjs.
+// Defaults are the Bar Visualizer's (shell.qml, audio/AudioPipeline.qml), except for the Lock
+// Ring's own (lockOnly); the Lock Ring never reads the bar's config.json. Plain JS for tests/lock-settings.test.mjs.
 //
 // DMS's SliderSetting stores integers only, so each setting is stored as round(value * scale) and
 // read back as stored / scale. To add one, add an entry here: the settings page and the ring pick
@@ -30,6 +30,10 @@ export const SETTINGS = [
     { key: "bassStretch", label: "Bass stretch",
         description: "Spreads the bass over more of the ring. 100% = linear.",
         default: 1.4, min: 1, max: 3, scale: 100, unit: "%" },
+    // The Lock Ring's own (lockOnly: no Bar Visualizer counterpart): hands.mjs handLook()'s strength.
+    { key: "handWaves", label: "Hand waves",
+        description: "How far the hands swing with the music and on kicks. 0% = straight hands.",
+        default: 1.0, min: 0, max: 2, scale: 100, unit: "%", lockOnly: true },
 ];
 
 const BY_KEY = new Map(SETTINGS.map(s => [s.key, s]));

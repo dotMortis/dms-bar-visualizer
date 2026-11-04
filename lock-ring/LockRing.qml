@@ -2,13 +2,13 @@
 // A clock: a faint ring with 12 hour notches as the dial, three hands that always point at the
 // true time (the second hand sweeps), and a small HH:MM below the hub in DMS's lock-screen font
 // and 12h/24h setting. The hands show the music too (hands.mjs): hour = bass, minute = mids,
-// second = highs, each thickening, glowing and shimmering with its band, never moving off the
-// time. Around the dial, spectrum ribbons (shaders/ring.frag) bulge outward with
-// the music and the ring swells with its energy; in silence only the faint dial is left. On every
-// Kick a chromatic shockwave expands from the hub, sparks fly off the ring and all hands flash.
+// second = highs, each a neon wave ribbon that swings, thickens and glows with its band around a
+// straight axis that never moves off the time. Around the dial, spectrum ribbons
+// (shaders/ring.frag, which draws the hands too) bulge outward with the music and the ring swells
+// with its energy; in silence only the faint dial and plain hands are left. On every Kick a
+// chromatic shockwave expands from the hub, sparks fly off the ring and all hands whip and flash.
 // Every ring on every monitor draws from the one shared capture in LockAudio.
 import QtQuick
-import QtQuick.Effects
 import qs.Common
 import qs.Modules.Plugins
 import "clock.mjs" as Clock
@@ -32,12 +32,16 @@ DesktopPluginComponent {
 
     // Read fresh every frame, so the second hand sweeps and the clock is right again after suspend.
     property var now: new Date()
-    // Each hand's angle (from the time alone) and look (from its band). The look's parameters, and
-    // each hand's band, color and shape, are in hands.mjs.
+    // Each hand's angle (from the time alone) and look (from its band, the kick flash and the
+    // handWaves setting). The look's parameters, and each hand's band, color and shape, are in
+    // hands.mjs; ring.frag draws them.
     readonly property var poses: Hands.handPoses(now, {
         bass: LockAudio.bass,
         mid: LockAudio.mid,
         treble: LockAudio.treble
+    }, {
+        flash: LockAudio.flash,
+        strength: LockAudio.handWaves
     })
 
     // Look settings, shared by every ring (LockAudio, settings.mjs).
@@ -56,6 +60,12 @@ DesktopPluginComponent {
         return Qt.vector4d(arr[i] ?? 0, arr[i + 1] ?? 0, arr[i + 2] ?? 0, arr[i + 3] ?? 0);
     }
 
+    // One pose value of every hand, as the shader's hour/minute/second vec4.
+    function perHand(key, scale) {
+        const p = root.poses;
+        return Qt.vector4d(p.hour[key] * scale, p.minute[key] * scale, p.second[key] * scale, 0);
+    }
+
     FrameAnimation {
         running: root.visible
         onTriggered: root.now = new Date()
@@ -67,11 +77,20 @@ DesktopPluginComponent {
         height: root.size
         anchors.centerIn: parent
 
-        // The spectrum ribbons, around and under the dial.
+        // The spectrum ribbons, around and under the dial, and the hands. Always on: it draws the
+        // hands even in silence.
         ShaderEffect {
             anchors.fill: parent
             fragmentShader: Qt.resolvedUrl("shaders/ring.frag.qsb")
-            visible: LockAudio.presence > 0.001 || LockAudio.kickSlots.powers.some(p => p > 0)
+
+            // The hands (hands.mjs handPoses()): angles in radians, sizes in dial radii.
+            property real pixel: 1 / root.dialRadius
+            property real handFlash: LockAudio.flash
+            property vector4d handAngle: root.perHand("angle", Math.PI / 180)
+            property vector4d handLength: root.perHand("length", 1)
+            property vector4d handAmp: root.perHand("amplitude", 1)
+            property vector4d handWidth: root.perHand("width", 1)
+            property vector4d handGlow: root.perHand("glow", 1)
 
             // Wrapped for 32-bit precision; 1200 s keeps the hue cycle (t*0.05) seamless.
             property real time: LockAudio.time % 1200
@@ -146,117 +165,13 @@ DesktopPluginComponent {
             font.weight: Font.Medium
         }
 
-        // Hour, minute, second, in hands.mjs's order, so the second hand draws on top.
-        Repeater {
-            model: Object.keys(Hands.HANDS)
-
-            Hand {
-                required property string modelData
-                required property int index
-                readonly property var spec: Hands.HANDS[modelData]
-                readonly property var pose: root.poses[modelData]
-
-                angle: pose.angle
-                length: root.dialRadius * spec.length
-                thickness: Math.max(1, root.size * spec.thickness * pose.thicken)
-                color: spec.color
-                glow: pose.glow
-                shimmer: pose.shimmer
-                // Each hand's wave at its own offset.
-                phase: (LockAudio.time * Hands.LOOK.shimmerSpeed + index / 3) % 1
-            }
-        }
-
         // The hub.
         Rectangle {
             anchors.centerIn: parent
-            width: root.size * 0.04
+            width: root.size * 0.028
             height: width
             radius: width / 2
             color: root.lavender
-        }
-    }
-
-    // A hand: a rounded ribbon from the center outward, turned clockwise from 12 o'clock by `angle`
-    // degrees. Plain in silence; `glow` (0..1) haloes it and `shimmer` (0..1) runs a bright wave
-    // along it from the hub to the tip, `phase` (0..1) being where that wave is.
-    component Hand: Item {
-        id: hand
-
-        property real angle: 0
-        property real length: 0
-        property real thickness: 0
-        property color color: "white"
-        property real glow: 0
-        property real shimmer: 0
-        property real phase: 0
-
-        readonly property color bright: Qt.tint(color, Qt.rgba(1, 1, 1, Hands.LOOK.shimmerWhite * shimmer))
-        // Where the bright wave is: 1 = at the hub, 0 = at the tip (the item's top).
-        readonly property real waveAt: 1 - phase
-        // 0..1: brightens the hand toward white. Every Kick flashes all hands together.
-        property real flash: LockAudio.flash
-
-        width: thickness
-        height: length
-        // In the dial; an inline component can't see the file's ids.
-        x: parent.width / 2 - width / 2
-        y: parent.height / 2 - height
-        transform: Rotation {
-            origin.x: hand.width / 2
-            origin.y: hand.height
-            angle: hand.angle
-        }
-
-        // The glow: a wider ribbon in the hand's color, blurred into a soft halo behind the hand.
-        // Off (the plain ribbon alone) in silence.
-        Rectangle {
-            id: halo
-            readonly property real pad: hand.thickness * Hands.LOOK.glowSpread / 2
-            x: -pad
-            y: -pad
-            width: hand.width + 2 * pad
-            height: hand.height + pad
-            radius: width / 2
-            color: hand.color
-            visible: false
-        }
-        MultiEffect {
-            anchors.fill: halo
-            source: halo
-            visible: hand.glow > 0.001
-            opacity: Hands.LOOK.glowOpacity * hand.glow
-            autoPaddingEnabled: true
-            blurEnabled: true
-            blur: 1
-            blurMax: Hands.LOOK.glowBlur
-        }
-
-        Rectangle {
-            anchors.fill: parent
-            radius: width / 2
-            antialiasing: true
-            color: hand.color
-            gradient: hand.shimmer > 0.001 ? shine : null
-
-            Gradient {
-                id: shine
-                GradientStop { position: 0; color: hand.color }
-                GradientStop { position: Math.max(0.001, hand.waveAt - Hands.LOOK.shimmerWidth); color: hand.color }
-                GradientStop { position: Math.min(0.998, Math.max(0.002, hand.waveAt)); color: hand.bright }
-                GradientStop { position: Math.min(0.999, hand.waveAt + Hands.LOOK.shimmerWidth); color: hand.color }
-                GradientStop { position: 1; color: hand.color }
-            }
-        }
-
-        // The kick flash: a white overlay on top of the hand, glow and shimmer included.
-        Rectangle {
-            anchors.fill: parent
-            radius: width / 2
-            antialiasing: true
-            color: "white"
-            opacity: 0.7 * hand.flash
-            visible: opacity > 0.005
         }
     }
 }
