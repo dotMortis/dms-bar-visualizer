@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Lock Ring, first part: a DMS desktop plugin (`lockRing`, in `lock-ring/`) that you add to the
+  lock screen under Settings → Lock Screen. It shows a clock so far: a faint ring with 12 hour
+  notches, hands that always point at the true time with a sweeping second hand, and a small
+  `HH:MM` in DMS's lock-screen font and 12h/24h setting. It doesn't react to music yet.
+  `install-lock.sh` links it into your DMS plugin dir, and `--uninstall` removes it. Neither
+  touches the Bar Visualizer install.
+
 ## [0.5.0] - 2026-10-30
 
 ### Changed
