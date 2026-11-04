@@ -29,10 +29,13 @@ Singleton {
     // (ADR 0004). Its defaults while there is none; the Lock Ring never writes it. Watched, so an
     // edit applies by the next lock.
     property var settings: Config.DEFAULTS
+    // The settings the Lock Ring runs on: the bar's, with the lockRing section's percentages of
+    // intensity and the kick settings applied (ADR 0005).
+    readonly property var ringSettings: Config.lockRingSettings(settings)
 
     // --- Outputs ----------------------------------------------------------
     // The look settings, the same for every ring.
-    readonly property real intensity: settings.intensity
+    readonly property real intensity: ringSettings.intensity
     readonly property real bassStretch: settings.bassStretch
     readonly property real handWaves: settings.lockRing.handWaves
     // The widget's default size, as a share of the screen height.
@@ -118,7 +121,7 @@ Singleton {
 
         // Its own cava conf, not the bar's: each installer stops only its own cava.
         AudioPipeline {
-            settings: root.settings
+            settings: root.ringSettings
             confPath: `${Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"}/lock-ring-cava.conf`
         }
     }

@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- The Lock Ring can differ from the bar in brightness and Kicks: `config.json`'s `lockRing`
+  section takes `intensityPercent`, `kickLowHzPercent`, `kickHighHzPercent`,
+  `kickThresholdPercent` and `kickCooldownPercent`, each a percentage of the bar's setting
+  (`100` = the same), so retuning the bar still retunes the ring. The demo's ring view has a
+  slider for each.
+
 ## [0.8.2] - 2026-11-04
 
 ### Changed

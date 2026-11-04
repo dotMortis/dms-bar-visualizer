@@ -168,8 +168,15 @@ Both visualizers read one file, `~/.config/bar-visualizer/config.json` ([why one
 | `bassStretch` | `1.4` | both | Above 1 spreads the bass wider: around the bar's center, so center widgets don't hide it, and around the Lock Ring's bottom |
 | `lockRing.handWaves` | `1.0` | Lock Ring | How far the Hands swing with the music and on Kicks. `0` = straight Hands |
 | `lockRing.ringSize` | `0.4` | Lock Ring | The widget's default size, as a share of the screen height. Resizing it under Edit widgets still works |
+| `lockRing.intensityPercent` | `100` | Lock Ring | The Lock Ring's brightness, in percent of `intensity` |
+| `lockRing.kickLowHzPercent` | `100` | Lock Ring | The bottom of the Lock Ring's kick range, in percent of `kickLowHz` |
+| `lockRing.kickHighHzPercent` | `100` | Lock Ring | The top of the Lock Ring's kick range, in percent of `kickHighHz` |
+| `lockRing.kickThresholdPercent` | `100` | Lock Ring | The Lock Ring's `kickThreshold`, in percent of it. Lower = more Kicks |
+| `lockRing.kickCooldownPercent` | `100` | Lock Ring | The Lock Ring's `kickCooldown`, in percent of it. With `kickCooldown` at `0` it stays `0` |
 
-The `lockRing` settings apply to every Lock Ring at once, since all of them share one capture ([why](docs/adr/0002-lock-ring-settings-are-plugin-wide.md)). A `config.json` from before the `lockRing` section existed works as it is; add the section to change those two.
+The `lockRing` settings apply to every Lock Ring at once, since all of them share one capture ([why](docs/adr/0002-lock-ring-settings-are-plugin-wide.md)). A `config.json` from before the `lockRing` section existed works as it is; add the section to change them.
+
+The `…Percent` keys tune the Lock Ring apart from the bar without cutting it loose: each is a percentage of the base setting, the top-level key both visualizers read. `100` is the same as the bar, `150` half again as much, and a negative value counts as `0`. Retuning the base setting retunes both ([why](docs/adr/0005-lock-ring-tunes-shared-settings-as-percentages.md)). The Lock Ring has its own Kick detector, so with other kick percentages it fires on other hits than the bar.
 
 Want to tune by eye first? The [live demo](https://dotmortis.github.io/dms-bar-visualizer/) has a slider for every key, with the names `config.json` uses, and **Export config.json** downloads the whole file.
 

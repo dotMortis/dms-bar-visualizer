@@ -179,6 +179,7 @@
 import { BANDS, HIGH_HZ, LOW_HZ, createKickDetector } from "./kick.mjs";
 // The views and their sliders (demo.mjs). The Lock Ring view runs the
 // plugin's own modules and shader (lock-ring/), which live here because Pages publishes only docs/.
+import { lockRingSettings } from "./config.mjs";
 import { defaults, ringSide, ringUniforms, setValueAt, slidersFor, valueAt, viewFromHash } from "./demo.mjs";
 import { toWebGL } from "./webgl.mjs";
 import { DIAL_RATIO, createRingMotion } from "./lock-ring/ring.mjs";
@@ -356,6 +357,11 @@ void main() {
 const cfg = defaults();
 let use24Hour = true;
 let view = viewFromHash(location.hash);
+// The settings the view runs on: the Lock Ring's are the bar's with its percentages applied, as in
+// lock-ring/LockAudio.qml.
+const live = () => view === "ring" ? lockRingSettings(cfg) : cfg;
+// Call after any change to cfg or the view.
+const configureKicks = () => kickDetector.configure(live());
 
 const kickDetector = createKickDetector(cfg);
 const st = {
@@ -593,7 +599,7 @@ function buildSliders() {
     input.value = valueAt(cfg, key); out.textContent = shown(key);
     input.addEventListener("input", () => {
       setValueAt(cfg, key, parseFloat(input.value)); out.textContent = shown(key);
-      kickDetector.configure(cfg); layout();
+      configureKicks(); layout();
     });
     outputs[key] = [input, out];
     sliderBox.appendChild(l);
@@ -603,7 +609,7 @@ document.getElementById("reset").addEventListener("click", () => {
   Object.assign(cfg, defaults());
   for (const [k, [i, o]] of Object.entries(outputs)) { i.value = valueAt(cfg, k); o.textContent = shown(k); }
   use24Hour = use24.checked = true;
-  kickDetector.configure(cfg); layout();
+  configureKicks(); layout();
 });
 const use24 = document.getElementById("use24");
 use24.addEventListener("change", () => { use24Hour = use24.checked; });
@@ -623,7 +629,7 @@ function setView(v) {
   document.getElementById("exportHint").textContent = "";
   if (location.hash !== (v === "ring" ? "#ring" : "") ) history.replaceState(null, "", v === "ring" ? "#ring" : location.pathname + location.search);
   buildSliders();
-  kickDetector.configure(cfg);
+  configureKicks();
   layout();
 }
 for (const b of document.querySelectorAll("#views button")) b.addEventListener("click", () => setView(b.dataset.view));
@@ -742,7 +748,7 @@ function drawRing() {
   rgl.clearColor(0, 0, 0, 0); rgl.clear(rgl.COLOR_BUFFER_BIT);
   const values = ringUniforms({
     values: st.values, time: st.time, flow: st.flow, treble: st.treble, kick: st.kick,
-    swell: ring.swell, presence: ring.presence, intensity: cfg.intensity, bassStretch: cfg.bassStretch,
+    swell: ring.swell, presence: ring.presence, intensity: live().intensity, bassStretch: cfg.bassStretch,
     kickAges: st.kickTimes.map(t => st.time - t), kickPowers: st.kickPowers, kickSeeds: st.kickSeeds,
     now: new Date(), handLevels: ring.handLevels, handPhases: ring.handPhases, flash: ring.flash, handWaves: cfg.lockRing.handWaves,
     dialRadius: Math.min(ringCanvas.width, ringCanvas.height) * DIAL_RATIO,

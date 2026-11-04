@@ -56,6 +56,11 @@ const RING = [
     ...SHARED,
     slider("lockRing.handWaves", 0, 2, 0.05, "How far the hands swing with the music and on kicks. 0 = straight hands"),
     slider("lockRing.ringSize", 0.2, 0.8, 0.05, "The widget's default size, as a share of the screen height"),
+    slider("lockRing.intensityPercent", 0, 300, 5, "The Lock Ring's brightness, in % of intensity"),
+    slider("lockRing.kickLowHzPercent", 0, 300, 5, "The Lock Ring's kick range from, in % of kickLowHz"),
+    slider("lockRing.kickHighHzPercent", 0, 300, 5, "The Lock Ring's kick range up to, in % of kickHighHz"),
+    slider("lockRing.kickThresholdPercent", 0, 300, 5, "The Lock Ring's kick threshold, in % of kickThreshold. Lower = more kicks"),
+    slider("lockRing.kickCooldownPercent", 0, 300, 5, "The Lock Ring's kick cooldown, in % of kickCooldown"),
 ];
 
 // The view a URL hash opens: #ring for the Lock Ring, anything else the Bar Visualizer.

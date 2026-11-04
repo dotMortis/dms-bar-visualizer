@@ -24,7 +24,14 @@ describe("demo views", () => {
 
     test("the ring view has the shared settings and the Lock Ring's section, but no bar geometry", () => {
         assert.deepEqual(keys("ring"), ["intensity", "speed", "kickThreshold", "kickDecay", "kickLowHz", "kickHighHz",
-            "kickCooldown", "bassStretch", "lockRing.handWaves", "lockRing.ringSize"]);
+            "kickCooldown", "bassStretch", "lockRing.handWaves", "lockRing.ringSize", "lockRing.intensityPercent",
+            "lockRing.kickLowHzPercent", "lockRing.kickHighHzPercent", "lockRing.kickThresholdPercent",
+            "lockRing.kickCooldownPercent"]);
+    });
+
+    test("the ring view's percentages go from 0 to 300 %", () => {
+        for (const s of slidersFor("ring").filter(s => s.key.endsWith("Percent")))
+            assert.deepEqual([s.min, s.max], [0, 300], s.key);
     });
 
     // Both views tune one set of values, so a tweak carries over when switching.

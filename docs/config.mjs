@@ -25,6 +25,12 @@ export const DEFAULTS = {
     lockRing: {
         handWaves: 1.0,   // how far the hands swing with the music and on kicks; 0 = straight
         ringSize: 0.4,    // the widget's default size, as a share of the screen height
+        // Percentages of the settings above, for the Lock Ring only; 100 = the same (ADR 0005).
+        intensityPercent: 100,
+        kickLowHzPercent: 100,
+        kickHighHzPercent: 100,
+        kickThresholdPercent: 100,
+        kickCooldownPercent: 100,
     },
 };
 
@@ -60,4 +66,17 @@ function merge(stored, defaults) {
 // half-written file can keep the last good settings.
 export function parseConfig(text) {
     return merge(JSON.parse(text), DEFAULTS);
+}
+
+// The base settings each lockRing.<key>Percent scales for the Lock Ring.
+const RING_PERCENTS = ["intensity", "kickLowHz", "kickHighHz", "kickThreshold", "kickCooldown"];
+
+// The settings the Lock Ring runs on, from parseConfig()'s: the bar's, with each of RING_PERCENTS
+// scaled by its percentage in the lockRing section (ADR 0005). A negative percentage counts as 0.
+// A fresh copy. Object.assign, not `{ ...x }`: Qt's JS engine can't parse object spread.
+export function lockRingSettings(settings) {
+    const out = Object.assign({}, settings);
+    for (const key of RING_PERCENTS)
+        out[key] = settings[key] * Math.max(0, settings.lockRing[`${key}Percent`]) / 100;
+    return out;
 }

@@ -13,3 +13,5 @@ This reverses two requirements from the Lock Ring's spec: #10's "It does **not**
 ## Consequences
 
 The Lock Ring depends on a file the Bar Visualizer owns. It only reads it and never creates or writes it, so without the Bar Visualizer it runs on the defaults until the user writes the file by hand. If `~/.config/bar-visualizer/` doesn't exist when DMS starts, the file isn't watched until `dms restart`. The Bar Visualizer writes the `lockRing` section only into a file it creates, so an older `config.json` has none until the user adds it. Values an older Lock Ring stored in DMS's `plugin_settings.json` are ignored. ADR 0002's one set for every ring still holds, now in `config.json`.
+
+The Lock Ring's own adjustments to the shared settings are percentages of them, so they keep following the bar ([ADR 0005](0005-lock-ring-tunes-shared-settings-as-percentages.md)).
