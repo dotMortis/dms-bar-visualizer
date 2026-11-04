@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The Lock Ring's ribbons wave like the Bar Visualizer's: with music each strand swings inward and
+  outward around the swelling dial, farther when the music is louder, instead of bulging outward
+  as a row of lumps. The spectrum is smoothed with a cubic between the bands, so the ribbon has no
+  corners, and it passes through 6 and 12 o'clock without a V where the mirrored halves meet. In
+  silence the ribbon idles as before.
+
 ## [0.7.1] - 2026-11-04
 
 ### Fixed

@@ -9,7 +9,7 @@ import { describe, test } from "node:test";
 import { DIAL } from "../docs/demo.mjs";
 import { WAVE } from "../lock-ring/hands.mjs";
 import { KICK_FADE, KICK_GROW, KICK_ORIGIN, MAX_REACH, PLAYED_OUT } from "../lock-ring/kicks.mjs";
-import { DIAL_RATIO, IDLE } from "../lock-ring/ring.mjs";
+import { DIAL_RATIO, IDLE, RIBBON } from "../lock-ring/ring.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const read = file => fs.readFileSync(path.join(ROOT, file), "utf8");
@@ -53,6 +53,11 @@ describe("ring.frag's constants match their modules", () => {
     test("the ribbon's idle wave (ring.mjs IDLE)", () => {
         for (const [key, value] of Object.entries(IDLE))
             close(frag[`IDLE_${key.toUpperCase()}`], value, `IDLE_${key.toUpperCase()}`);
+    });
+
+    test("the ribbon's music wave (ring.mjs RIBBON)", () => {
+        for (const [key, value] of Object.entries(RIBBON))
+            close(frag[`RIBBON_${key.toUpperCase()}`], value, `RIBBON_${key.toUpperCase()}`);
     });
 
     test("the hands' wave (hands.mjs WAVE)", () => {

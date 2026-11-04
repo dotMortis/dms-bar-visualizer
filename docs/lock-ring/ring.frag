@@ -1,8 +1,9 @@
 #version 450
 // Lock Ring: the Bar Visualizer's neon spectrum ribbons (shaders/viz.frag) bent into a circle, and
 // the ribbon is the dial: in silence a thin, faint wave that breathes and drifts around the dial
-// radius, never a fixed circle; music grows it outward with each band's level, mirrored left and
-// right with bass at the bottom, and the ring's radius swells with the music's energy. 12 hour
+// radius, never a fixed circle; with music its strands wave around the swelling dial, inward and
+// outward with each band's level like the bar's around its center line, mirrored left and right
+// with bass at the bottom, and the ring's radius swells with the music's energy. 12 hour
 // points ride on it. On every Kick a chromatic shockwave expands from the center, bigger on a
 // harder hit, and a spray of sparks flies off the ring; up to KICKS of them play at once. On top,
 // the clock's three floating hands as neon wave ribbons (hand()): they swing, thicken and glow with
@@ -76,11 +77,26 @@ float hash1(float n) {
     return fract(sin(n * 12.9898) * 43758.5453);
 }
 
-// Spectrum at s in [0,1] (0 = bass), linearly interpolated across 32 bands.
+// Band i's slope in the smoothed spectrum: the harmonic mean of its neighbours' steps, 0 at a
+// peak, a dip or either end (ring.mjs spectrumLevel()).
+float bandSlope(int i) {
+    if (i <= 0 || i >= 31)
+        return 0.0;
+    float d0 = band(i) - band(i - 1);
+    float d1 = band(i + 1) - band(i);
+    return d0 * d1 > 0.0 ? 2.0 * d0 * d1 / (d0 + d1) : 0.0;
+}
+
+// Spectrum at s in [0,1] (0 = bass) across 32 bands, smoothed with a monotone cubic between them:
+// through every band's value, no corners, within 0..1. lock-ring/ring.mjs spectrumLevel().
 float spectrum(float s) {
     float f = clamp(s, 0.0, 1.0) * 31.0;
-    int i = int(floor(f));
-    return mix(band(i), band(min(i + 1, 31)), fract(f));
+    int i = min(int(floor(f)), 30);
+    float t = f - float(i);
+    float t2 = t * t;
+    float t3 = t2 * t;
+    return band(i) * (2.0 * t3 - 3.0 * t2 + 1.0) + bandSlope(i) * (t3 - 2.0 * t2 + t)
+         + band(i + 1) * (3.0 * t2 - 2.0 * t3) + bandSlope(i + 1) * (t3 - t2);
 }
 
 // Catppuccin Mocha, lavender-led, as in viz.frag.
@@ -95,17 +111,32 @@ const float IDLE_REACH = 0.035;
 const float IDLE_DRIFT = 0.05;
 const float IDLE_BREATH = 0.1;
 const float IDLE_GLOW = 0.4;
+// RIBBON in lock-ring/ring.mjs: the music's wave, its treble ripple, and the rounding at 6 and 12.
+const float RIBBON_REACH = 0.25;
+const float RIBBON_RIPPLE = 0.3;
+const float RIBBON_ROUND = 0.25;
 const float POINT_SIZE = 0.013;  // an hour point's core radius, in dial radii
 
+// How far the wave has come from 6 o'clock at a radians from it, rounded within RIBBON_ROUND of
+// either end so the mirrored halves meet level (ring.mjs unfold()).
+float foldBend(float v) {
+    return v < RIBBON_ROUND ? (RIBBON_ROUND - v) * (RIBBON_ROUND - v) / (2.0 * RIBBON_ROUND) : 0.0;
+}
+
+float unfold(float a) {
+    return a + foldBend(a) - foldBend(PI - a);
+}
+
 // Strand k's radius at theta (clockwise from 12 o'clock, radians), in dial radii: the swelling
-// base, the music's bulge (level, 0..1), and the idle wave that breathes and drifts with time.
+// base, the music's wave around it (level, 0..1), and the idle wave that breathes and drifts with
+// time.
 float ribbonRadius(float theta, float level, int k) {
     float fk = float(k);
-    float a = abs(theta - PI);
+    float a = unfold(abs(theta - PI));
     float freq = 3.0 + 2.0 * fk;
     float phase = ubuf.flow * (1.0 + 0.5 * fk) + 2.1 * fk;
-    float wave = 0.5 + 0.5 * sin(a * freq - phase) + 0.15 * sin(a * freq * 2.3 - phase * 1.7) * ubuf.treble;
-    float music = 0.32 * level * clamp(wave, 0.0, 1.2);
+    float wave = sin(a * freq - phase) + RIBBON_RIPPLE * ubuf.treble * sin(a * freq * 2.3 - phase * 1.7);
+    float music = RIBBON_REACH * level * wave;
     float breath = 0.7 + 0.3 * sin(TAU * IDLE_BREATH * ubuf.time + 1.7 * fk);
     float idle = IDLE_REACH * breath * sin(theta * (3.0 + fk) + TAU * IDLE_DRIFT * (1.0 + 0.5 * fk) * ubuf.time + 2.1 * fk);
     return 1.0 + ubuf.swell + music + idle;
@@ -229,8 +260,8 @@ void main() {
 
     // --- The ribbon: the dial itself --------------------------------------------------------
     // Neon strands like the bar's. In silence they idle as a thin, faint, breathing wave around the
-    // dial radius; music grows them into the spectrum ribbons, their waves travelling around the
-    // ring from the bottom up, advanced by audio energy (ubuf.flow): loud = racing, quiet = crawling.
+    // dial radius; music grows them into the spectrum ribbons, which wave around the swelling dial,
+    // inward and outward, their waves travelling around the ring from the bottom up, advanced by audio energy (ubuf.flow): loud = racing, quiet = crawling.
     // Lit with viz.frag's glow (ribbonLight()): the same crisp line with a soft falloff as the bar's
     // at any ring size, wider on a kick.
     vec3 ribbon = vec3(0.0);
