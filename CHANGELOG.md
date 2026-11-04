@@ -18,6 +18,10 @@ All notable changes to this project are documented here. The format follows
   instant of the Kick, so the wave visibly travels out and lights them as it passes, brighter on
   a harder hit. A soft Kick's shockwave stops short of the ring and leaves them dark. The hands
   still flash on the Kick itself.
+- The Lock Ring's digital time takes the shockwave's hit: as the front crosses it, the digits
+  split into lavender, mauve and blue copies pushed outward and flare toward white with a glow,
+  faint for a soft Kick and full for a hard one. The digits stay in place, so the time stays
+  readable. The demo's ring view shows the same.
 
 ## [0.7.1] - 2026-11-04
 

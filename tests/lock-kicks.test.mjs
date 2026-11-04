@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, test } from "node:test";
 
+import { TIME_RADIUS } from "../lock-ring/clock.mjs";
 import { DEFAULTS } from "../docs/config.mjs";
 import { KICK_ORIGIN, EDGE, KICKS, handFlash, kickAt, kickSlots, shockwaveCrossing } from "../lock-ring/kicks.mjs";
 
@@ -176,6 +177,28 @@ describe("shockwave crossing", () => {
             const brightest = Math.max(...ages.map((age, i) => shockwaveCrossing(r, ...one(age, powers[i]))));
             assert.ok(Math.abs(all - brightest) < 1e-12, `at ${r}: ${all} vs ${brightest}`);
             assert.ok(all <= 1);
+        }
+    });
+
+    test("reaches the digital time before the ring: the wave hits the time, then the ring", () => {
+        // When each radius is crossed hardest by one kick, at every power.
+        const peakAge = (radius, power) => {
+            let peak = 0, at = 0;
+            for (let age = 0; age <= 3; age += 0.002) {
+                const value = shockwaveCrossing(radius, ...one(age, power));
+                if (value > peak)
+                    [peak, at] = [value, age];
+            }
+            return { peak, at };
+        };
+        assert.ok(TIME_RADIUS > 0.3 && TIME_RADIUS < 0.8, `the time sits inside the dial, at ${TIME_RADIUS}`);
+        for (const power of [0.5, 0.75, 1]) {
+            const time = peakAge(TIME_RADIUS, power);
+            assert.ok(time.peak > 0, `a ${power} kick reaches the time`);
+            if (power === 1) {
+                const ring = peakAge(1, power);
+                assert.ok(time.at < ring.at, `time at ${time.at} s, ring at ${ring.at} s`);
+            }
         }
     });
 

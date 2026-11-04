@@ -8,9 +8,11 @@
 // in silence as a thin, faint, breathing wave; music grows it into spectrum ribbons that bulge
 // outward, and the ring swells with its energy. shaders/ring.frag draws all of that. On every
 // Kick a chromatic shockwave expands from the center, sparks fly off the ring and all hands whip
-// and flash.
+// and flash; as its front crosses the digital time, the time splits into the shockwave's colors
+// and glows.
 // Every ring on every monitor draws from the one shared capture in LockAudio.
 import QtQuick
+import QtQuick.Effects
 import qs.Common
 import qs.Modules.Plugins
 import "clock.mjs" as Clock
@@ -122,18 +124,72 @@ DesktopPluginComponent {
             property vector4d b7: root.quad(LockAudio.values, 28)
         }
 
-        // The digital time, inside the dial below the center.
-        Text {
+        // The digital time, inside the dial below the center. When a shockwave's front crosses it
+        // (LockAudio.timeCrossing, the same on every ring), it splits into lavender, mauve and blue
+        // copies pushed outward and flares toward white with a glow (clock.mjs timeHit()). The
+        // digits themselves never move.
+        Item {
+            id: time
             anchors.horizontalCenter: parent.horizontalCenter
-            y: dial.height / 2 + root.dialRadius * 0.38
-            text: Clock.formatTime(root.now, {
-                use24Hour: SettingsData.use24HourClock,
-                padHours12Hour: SettingsData.padHours12Hour
-            })
-            color: Qt.alpha(root.lavender, 0.85)
-            font.family: SettingsData.lockScreenFontFamily !== "" ? SettingsData.lockScreenFontFamily : Theme.fontFamily
-            font.pixelSize: Math.max(10, root.size * 0.075)
-            font.weight: Font.Medium
+            y: dial.height / 2 + root.dialRadius * Clock.TIME_TOP
+            width: digits.implicitWidth
+            height: digits.implicitHeight
+
+            readonly property var hit: Clock.timeHit(LockAudio.timeCrossing)
+            readonly property real em: digits.font.pixelSize
+
+            // The source the effects draw; drawn only through them.
+            Text {
+                id: digits
+                visible: false
+                text: Clock.formatTime(root.now, {
+                    use24Hour: SettingsData.use24HourClock,
+                    padHours12Hour: SettingsData.padHours12Hour
+                })
+                color: Qt.alpha(root.lavender, 0.85)
+                font.family: SettingsData.lockScreenFontFamily !== "" ? SettingsData.lockScreenFontFamily : Theme.fontFamily
+                font.pixelSize: Math.max(10, root.size * 0.075)
+                font.weight: Font.Medium
+            }
+
+            // The chromatic split: the digits in each of the shockwave's colors, offset outward
+            // (down, away from the center), behind the digits.
+            Repeater {
+                model: 3
+
+                MultiEffect {
+                    required property int index
+                    readonly property var copy: time.hit.copies[index]
+                    source: digits
+                    width: time.width
+                    height: time.height
+                    y: copy.offset * time.em
+                    visible: copy.opacity > 0
+                    opacity: copy.opacity
+                    colorization: 1
+                    colorizationColor: copy.color
+                    blurEnabled: true
+                    blur: 0.2
+                    blurMax: 4
+                }
+            }
+
+            // The digits, flaring toward white with a glow as the front crosses them.
+            MultiEffect {
+                source: digits
+                anchors.fill: parent
+                colorization: time.hit.white
+                colorizationColor: "white"
+                shadowEnabled: true
+                shadowColor: Qt.rgba(0.9, 0.92, 1, 1)
+                shadowHorizontalOffset: 0
+                shadowVerticalOffset: 0
+                shadowBlur: 1
+                // The glow's radius grows with the hit up to its peak (TIME_HIT.glow font sizes).
+                blurMax: Math.max(1, Math.round(Clock.TIME_HIT.glow * time.em))
+                shadowScale: 1 + time.hit.glow * 0.2
+                shadowOpacity: time.hit.glow / Clock.TIME_HIT.glow
+            }
         }
     }
 }
