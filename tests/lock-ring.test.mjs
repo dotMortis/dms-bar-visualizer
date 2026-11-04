@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { IDLE, createRingMotion, hourPoints, ribbonRadius, spectrumAt, spectrumLevel } from "../lock-ring/ring.mjs";
+import { IDLE, RIBBON, createRingMotion, hourPoints, ribbonLevel, ribbonRadius, spectrumAt, spectrumLevel } from "../lock-ring/ring.mjs";
 import { kickAt, ribbonSurge, shockwaveCrossing } from "../lock-ring/kicks.mjs";
 
 const near = (actual, expected, msg) => assert.ok(Math.abs(actual - expected) < 1e-9, `${msg ?? ""} ${actual} != ${expected}`);
@@ -151,7 +151,7 @@ describe("the hour points", () => {
 
     test("each rides on the ribbon, at the ribbon's radius at its hour", () => {
         for (const point of hourPoints(state)) {
-            const level = Math.min(1, 1.3 * spectrumLevel(values, spectrumAt(point.angle, 1.4)));
+            const level = Math.min(1, 1.3 * ribbonLevel(values, spectrumAt(point.angle, 1.4)));
             near(point.radius, ribbonRadius(point.angle, Object.assign({}, state, { level, strand: 0 })), `${point.angle}`);
         }
     });
@@ -205,7 +205,7 @@ describe("the hour points", () => {
         const calm = hourPoints(state), surged = hourPoints(surging);
         surged.forEach((point, i) => {
             const lift = surging.surge(calm[i].radius);
-            const level = Math.min(1, 1.3 * spectrumLevel(values, spectrumAt(point.angle, 1.4)) + lift);
+            const level = Math.min(1, 1.3 * ribbonLevel(values, spectrumAt(point.angle, 1.4)) + lift);
             near(point.radius, ribbonRadius(point.angle, Object.assign({}, state, { level, strand: 0 })), `${point.angle}`);
         });
         // The points the front is crossing swing farther; the ones it is far from stay put.
@@ -258,8 +258,8 @@ describe("the smoothed spectrum", () => {
     });
 });
 
-// With music the ribbons wave like the bar's: each strand swings inward and outward around the
-// swelling dial, as the bar's ribbons swing around its center line.
+// With music the ribbons wave like the bar's, but only outward: each strand rises from the
+// swelling dial and back down to it, never inside it, so the clock keeps its room.
 describe("the ribbon with music", () => {
     const playing = { flow: 1.3, time: 5, treble: 0.3, swell: 0.06 };
     const span = (level, strand) => {
@@ -272,13 +272,24 @@ describe("the ribbon with music", () => {
         return { low, high };
     };
 
-    test("swings both inside and outside the swollen dial, beyond its idle wave", () => {
+    test("swings only outward from the swollen dial, beyond its idle wave, never inside it", () => {
         const base = 1 + playing.swell;
-        for (let strand = 0; strand < 3; strand++) {
-            const { low, high } = span(0.8, strand);
-            assert.ok(low < base - 2 * IDLE.reach, `strand ${strand} inside: ${low}`);
-            assert.ok(high > base + 2 * IDLE.reach, `strand ${strand} outside: ${high}`);
-        }
+        for (const treble of [0, 0.5, 1])
+            for (let strand = 0; strand < 3; strand++) {
+                let low = Infinity, high = -Infinity;
+                for (let angle = 0; angle < 360; angle += 0.5)
+                    for (const time of [5, 9.3, 14.1]) {
+                        const r = ribbonRadius(angle, { ...playing, time, treble, level: 0.8, strand });
+                        low = Math.min(low, r);
+                        high = Math.max(high, r);
+                    }
+                assert.ok(low >= base - IDLE.reach - 1e-12, `strand ${strand} treble ${treble} inside: ${low}`);
+                assert.ok(high > base + 2 * IDLE.reach, `strand ${strand} treble ${treble} outside: ${high}`);
+            }
+    });
+
+    test("its crest stays within the widget's room: at most RIBBON.reach with the ripple", () => {
+        assert.ok(RIBBON.reach * (1 + RIBBON.ripple) <= 0.25, `${RIBBON.reach} * (1 + ${RIBBON.ripple})`);
     });
 
     test("its slope is continuous across 6 and 12 o'clock, where the mirrored halves meet", () => {
@@ -289,7 +300,7 @@ describe("the ribbon with music", () => {
                     // The whole ribbon: each angle's level from the smoothed spectrum, as drawn.
                     const at = angle => ribbonRadius(angle, {
                         ...playing, flow, strand,
-                        level: Math.min(1, 1.3 * spectrumLevel(values, spectrumAt(angle, bassStretch))) * 0.7,
+                        level: Math.min(1, 1.3 * ribbonLevel(values, spectrumAt(angle, bassStretch))) * 0.7,
                     });
                     for (const angle of [180, 360]) {
                         const [left, right] = slopes(at, angle, 1e-6);
@@ -318,10 +329,30 @@ describe("the ribbon with music", () => {
             }
     });
 
-    test("a louder level swings it farther, both ways", () => {
+    test("a louder level swings it farther out", () => {
         for (let strand = 0; strand < 3; strand++) {
             const soft = span(0.4, strand), loud = span(0.9, strand);
-            assert.ok(loud.low < soft.low && loud.high > soft.high, `strand ${strand}`);
+            assert.ok(loud.high > soft.high, `strand ${strand}`);
+        }
+    });
+
+    // The level the ribbons wave with is the spectrum smoothed along the ring, so a jump from one
+    // band to the next doesn't kink a strand.
+    test("its level is the spectrum smoothed: gentler than the bands, flat at both ends", () => {
+        const values = Array.from({ length: 32 }, (_, i) => [0.9, 0.1, 0.6, 1, 0, 0.35, 0.8][i % 7]);
+        let steepest = 0, steepestRaw = 0;
+        for (let s = 0.01; s < 0.99; s += 0.002) {
+            steepest = Math.max(steepest, Math.abs(slopes(x => ribbonLevel(values, x), s)[0]));
+            steepestRaw = Math.max(steepestRaw, Math.abs(slopes(x => spectrumLevel(values, x), s)[0]));
+        }
+        assert.ok(steepest < steepestRaw / 3, `${steepest} vs ${steepestRaw}`);
+        for (const s of [0, 1]) {
+            const [left, right] = slopes(x => ribbonLevel(values, x), s, 1e-6);
+            assert.ok(Math.abs(left) < 1e-3 && Math.abs(right) < 1e-3, `at ${s}: ${left}, ${right}`);
+        }
+        for (let s = 0; s <= 1; s += 0.01) {
+            const level = ribbonLevel(values, s);
+            assert.ok(level >= 0 && level <= 1, `${s}: ${level}`);
         }
     });
 });

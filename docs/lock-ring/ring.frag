@@ -1,8 +1,8 @@
 #version 450
 // Lock Ring: the Bar Visualizer's neon spectrum ribbons (shaders/viz.frag) bent into a circle, and
 // the ribbon is the dial: in silence a thin, faint wave that breathes and drifts around the dial
-// radius, never a fixed circle; with music its strands wave around the swelling dial, inward and
-// outward with each band's level like the bar's around its center line, mirrored left and right
+// radius, never a fixed circle; with music its strands wave outward from the swelling dial, as
+// high as each band's level, in round curves like the bar's, mirrored left and right
 // with bass at the bottom, and the ring's radius swells with the music's energy. 12 hour points
 // ride on it, each flashing as a Shockwave's front reaches it. On every Kick a chromatic Shockwave
 // expands from the center, bigger on a harder hit, the center punches as it is born, the ribbons
@@ -213,6 +213,11 @@ float spectrum(float s) {
          + band(i + 1) * (3.0 * t2 - 2.0 * t3) + bandSlope(i + 1) * (t3 - t2);
 }
 
+// Mirrored at both ends, so a sum of these keeps its slope 0 there (ribbonSpectrum()).
+float spectrumMirrored(float s) {
+    return spectrum(s < 0.0 ? -s : (s > 1.0 ? 2.0 - s : s));
+}
+
 // Catppuccin Mocha, lavender-led, as in viz.frag.
 const vec3 LAVENDER = vec3(0.706, 0.745, 0.996); // #b4befe
 const vec3 MAUVE    = vec3(0.796, 0.651, 0.969); // #cba6f7
@@ -225,10 +230,15 @@ const float IDLE_REACH = 0.035;
 const float IDLE_DRIFT = 0.05;
 const float IDLE_BREATH = 0.1;
 const float IDLE_GLOW = 0.4;
-// RIBBON in lock-ring/ring.mjs: the music's wave, its treble ripple, and the rounding at 6 and 12.
-const float RIBBON_REACH = 0.25;
-const float RIBBON_RIPPLE = 0.3;
+// RIBBON in lock-ring/ring.mjs: the music's wave, its treble ripple, the rounding at 6 and 12,
+// and how far apart along the spectrum ribbonSpectrum() averages.
+const float RIBBON_REACH = 0.2;
+const float RIBBON_RIPPLE = 0.2;
 const float RIBBON_ROUND = 0.25;
+const float RIBBON_SMOOTH = 0.06;
+// AURA in lock-ring/ring.mjs: the Aura's own reach and treble widening, apart from the ribbons'.
+const float AURA_REACH = 0.25;
+const float AURA_RIPPLE = 0.3;
 const float POINT_SIZE = 0.013;  // an hour point's core radius, in dial radii
 // The Shockwave's beads (the shader's alone): how many ride its front row on a soft and on a hard
 // Kick, and how many places either side of its own angle a pixel looks at.
@@ -246,15 +256,25 @@ float unfold(float a) {
     return a + foldBend(a) - foldBend(PI - a);
 }
 
+// The level the ribbons wave with at s: spectrum() averaged with its neighbours, so the strands
+// rise and fall in round curves instead of kinking from band to band (ring.mjs ribbonLevel()).
+float ribbonSpectrum(float s) {
+    float d = RIBBON_SMOOTH;
+    return (spectrumMirrored(s - 2.0 * d) + 2.0 * spectrumMirrored(s - d) + 3.0 * spectrum(s)
+          + 2.0 * spectrumMirrored(s + d) + spectrumMirrored(s + 2.0 * d)) / 9.0;
+}
+
 // Strand k's radius at theta (clockwise from 12 o'clock, radians), in dial radii: the swelling
-// base, the music's wave around it (level, 0..1), and the idle wave that breathes and drifts with
+// base, the music's wave rising outward from it (level, 0..1), and the idle wave that breathes and drifts with
 // time.
 float ribbonRadius(float theta, float level, int k) {
     float fk = float(k);
     float a = unfold(abs(theta - PI));
-    float freq = 3.0 + 2.0 * fk;
+    float freq = 3.0 + fk;
     float phase = ubuf.flow * (1.0 + 0.5 * fk) + 2.1 * fk;
-    float wave = sin(a * freq - phase) + RIBBON_RIPPLE * ubuf.treble * sin(a * freq * 2.3 - phase * 1.7);
+    // 0 on the dial .. 1 at the crest; the ripple rides on it, so it never dips inside.
+    float swing = 0.5 + 0.5 * sin(a * freq - phase);
+    float wave = swing * (1.0 + RIBBON_RIPPLE * ubuf.treble * sin(a * freq * 2.3 - phase * 1.7));
     float music = RIBBON_REACH * level * wave;
     float breath = 0.7 + 0.3 * sin(TAU * IDLE_BREATH * ubuf.time + 1.7 * fk);
     float idle = IDLE_REACH * breath * sin(theta * (3.0 + fk) + TAU * IDLE_DRIFT * (1.0 + 0.5 * fk) * ubuf.time + 2.1 * fk);
@@ -371,7 +391,7 @@ void main() {
     // The music's level here, before any Shockwave lifts it. Each strand surges where it sits
     // before the surge (ribbonSurge() there), so the flare travels out across the strands with the
     // front; overlapping Kicks add up.
-    float music = 1.3 * spectrum(s) * (1.0 + 0.7 * ubuf.kick);
+    float music = 1.3 * ribbonSpectrum(s) * (1.0 + 0.7 * ubuf.kick);
     float calm = min(1.0, music);
     float t = ubuf.time;
     float hueBase = t * 0.05 + s * 0.15;
@@ -386,8 +406,8 @@ void main() {
 
     // --- The ribbon: the dial itself --------------------------------------------------------
     // Neon strands like the bar's. In silence they idle as a thin, faint, breathing wave around the
-    // dial radius; music grows them into the spectrum ribbons, which wave around the swelling dial,
-    // inward and outward, their waves travelling around the ring from the bottom up, advanced by
+    // dial radius; music grows them into the spectrum ribbons, which wave outward from the swelling
+    // dial, never inside it, their waves travelling around the ring from the bottom up, advanced by
     // audio energy (ubuf.flow): loud = racing, quiet = crawling.
     // Lit with viz.frag's glow (ribbonLight()), a little softer: a neon line with a defined core,
     // the same at any ring size, wider on a kick.
@@ -411,13 +431,13 @@ void main() {
     // A Kick only pushes the whole glow outward a little and eases it back (auraPush()).
     // From the spine, not a fixed circle, so nothing about the dial stands still. Symmetric:
     // brightest at the spine, with the same music-driven reach inward as outward, so there is no
-    // inner edge. It reaches as far as the strands swing at this level (RIBBON_REACH, with the
-    // treble's ripple), filling the ribbon's swing; the hands and the time stay clear of it.
+    // inner edge. Its reach is its own (AURA_REACH, with the treble's ripple), not the ribbons';
+    // the hands and the time stay clear of it.
     float off = abs(r - ribbonRadius(theta, 0.0, 0) - AURA_PUSH * auraPush());
     float amp = min(1.0, 1.3 * spectrum(s));
-    float aura = smoothstep(RIBBON_REACH * (1.0 + RIBBON_RIPPLE * ubuf.treble) * amp + 0.02, 0.0, off);
+    float aura = smoothstep(AURA_REACH * (1.0 + AURA_RIPPLE * ubuf.treble) * amp + 0.02, 0.0, off);
     // Added after the kick's punch below, which would brighten it with every Kick.
-    vec3 auraCol = pal(hueBase + 0.5 + s * 0.8, 0.8, 1.0) * aura * amp * 0.45 * ubuf.presence;
+    vec3 auraCol = pal(hueBase + 0.5 + s * 0.8, 1.0, 1.0) * aura * amp * 0.6 * ubuf.presence;
 
     // --- Kick Shockwaves: a chromatic ring expanding from the center, one per Kick ---------------
     // kickFront(): front and strength (blast). A wide, soft front in lavender, mauve and blue, and
@@ -532,7 +552,7 @@ void main() {
     for (int i = 0; i < 12; i++) {
         float th = float(i) * TAU / 12.0;
         float ai = abs(th - PI);
-        float pm = 1.3 * spectrum(pow(ai / PI, ubuf.bassStretch));
+        float pm = 1.3 * ribbonSpectrum(pow(ai / PI, ubuf.bassStretch));
         // Skip a point too far from this pixel to light it, before asking the Shockwaves about it:
         // its halo ends 0.2 from it, and its surge moves it at most a full swing of the ribbon.
         vec2 calmAt = ribbonRadius(th, min(1.0, pm), 0) * vec2(sin(th), -cos(th));

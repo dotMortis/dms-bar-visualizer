@@ -10,7 +10,7 @@
 import { writeFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DIAL_RATIO, spectrumAt, spectrumLevel, ribbonRadius, hourPoints, createRingMotion, IDLE, RIBBON } from "../docs/lock-ring/ring.mjs";
+import { DIAL_RATIO, spectrumAt, spectrumLevel, ribbonLevel, ribbonRadius, hourPoints, createRingMotion, IDLE, AURA } from "../docs/lock-ring/ring.mjs";
 import { shockwaveFront, shockwaveCrossing, ribbonSurge, centerPunch, auraPush, handFlash, shapeChaos, kickSlots, MAX_REACH, AURA_PUSH, KICK_ORIGIN } from "../docs/lock-ring/kicks.mjs";
 import { TIME_FONT, TIME_TOP, TIME_RADIUS, TIME_HIT, timeHit } from "../docs/lock-ring/clock.mjs";
 import { handPoses, createHandMotion, waveOffset, HANDS } from "../docs/lock-ring/hands.mjs";
@@ -379,7 +379,7 @@ function ringPanel({ cx, cy, side, id = "ring" }) {
         const surge = surgeOf(st), pts = [];
         for (let i = 0; i < N; i++) {
             const angle = 360 * i / N, theta = angle * TAU / 360;
-            const music = 1.3 * spectrumLevel(st.values, spectrumAt(angle, BASS_STRETCH)) * (1 + 0.7 * st.kick);
+            const music = 1.3 * ribbonLevel(st.values, spectrumAt(angle, BASS_STRETCH)) * (1 + 0.7 * st.kick);
             const opts = { flow: st.flow, time: st.t, treble: st.treble, swell: st.swell, strand: k };
             const calm = ribbonRadius(angle, { ...opts, level: Math.min(1, music) });
             const level = Math.min(1, music + surge(calm, theta));
@@ -387,7 +387,7 @@ function ringPanel({ cx, cy, side, id = "ring" }) {
         }
         return pts;
     };
-    // The Aura: a band both ways from the calm spine, as wide as the strands swing there.
+    // The Aura: a band both ways from the calm spine, as wide as its own reach (AURA) there.
     const aura = st => {
         const outer = [], inner = [], n = 72;
         const push = AURA_PUSH * auraPush(st.slots.ages, st.slots.powers);
@@ -395,7 +395,7 @@ function ringPanel({ cx, cy, side, id = "ring" }) {
             const angle = 360 * i / n, theta = angle * TAU / 360;
             const amp = Math.min(1, 1.3 * spectrumLevel(st.values, spectrumAt(angle, BASS_STRETCH)));
             const spine = ribbonRadius(angle, { flow: st.flow, time: st.t, treble: st.treble, swell: st.swell }) + push;
-            const reach = RIBBON.reach * (1 + RIBBON.ripple * st.treble) * amp * 0.7 + 0.02;
+            const reach = AURA.reach * (1 + AURA.ripple * st.treble) * amp * 0.7 + 0.02;
             outer.push(polar(spine + reach, theta));
             inner.push(polar(Math.max(0.5, spine - reach), theta));
         }
@@ -406,7 +406,7 @@ function ringPanel({ cx, cy, side, id = "ring" }) {
     const presence = perFrame(i => n2(lerp(IDLE.glow, 1, shaped(i, st => st.presence))));
     const auraSvg = `<path fill="url(#${id}aura)" fill-rule="evenodd" transform="scale(0.5)">`
         + anim("d", perFrame(i => { const [o, n] = shaped(i, aura); return relPath(o, true) + relPath(n, true); }))
-        + anim("opacity", perFrame(i => n2(0.3 * shaped(i, st => st.presence)))) + `</path>`;
+        + anim("opacity", perFrame(i => n2(0.4 * shaped(i, st => st.presence)))) + `</path>`;
 
     // The Shockwaves: per Kick, its ragged front (shockwaveFront()) as a path, drawn as a wake fill,
     // a wide lavender front, and mauve and blue copies trailing it, plus Beads riding it.

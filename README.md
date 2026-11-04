@@ -36,7 +36,7 @@ Neon **Ribbons** shaped by the spectrum swing around the bar's center line, insi
 
 <p align="center"><img src="assets/ring-anatomy.svg" alt="The Lock Ring with its parts labeled: Ribbons, Aura, Dial, Hour Points, Hands, Digital Time, Shockwave with Beads, Spray and Center Punch" width="80%"></p>
 
-Soft neon **Ribbons** wave inward and outward around the **Dial**, which swells with the music. A symmetric **Aura** glows both ways from them. In silence the ribbon keeps breathing as a thin, faint wave.
+Soft neon **Ribbons** wave outward from the **Dial**, which swells with the music, in round curves. A symmetric **Aura** glows both ways around the Dial. In silence the ribbon keeps breathing as a thin, faint wave.
 
 On every Kick, a ragged, flickering **Shockwave** tears out from the center, carrying **Beads** of light. It's calm on a soft Kick and torn wide on a hard one. As its front passes, the Ribbons surge, the 12 **Hour Points** flash and the **Digital Time** splits into lavender, mauve and blue copies. The **Hands** swing with the bass, mids and treble and flash on the Kick itself, but always show the true time. The Lock Ring has no Haze.
 

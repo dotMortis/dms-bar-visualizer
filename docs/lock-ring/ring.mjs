@@ -1,8 +1,9 @@
 // The Lock Ring's look, apart from drawing: where the spectrum sits on the ring, the ribbon that is
 // the dial (a calm, living wave in silence that the music grows into spectrum ribbons that wave
-// around the swelling dial, smoothed between the bands), the 12 hour points riding on it, and how
+// outward from the swelling dial, smoothed between the bands), the 12 hour points riding on it, and how
 // the ring swells with the music. Plain JS for tests/lock-ring.test.mjs; LockAudio.qml runs the
-// motion, shaders/ring.frag mirrors spectrumAt(), spectrumLevel(), ribbonRadius() and hourPoints().
+// motion, shaders/ring.frag mirrors spectrumAt(), spectrumLevel(), ribbonLevel(), ribbonRadius() and
+// hourPoints().
 
 // The dial's radius as a share of the widget's side (LockRing.qml's dialRadius), leaving room
 // around it for the ribbons to wave into. ring.frag's DIAL_RATIO.
@@ -38,6 +39,16 @@ export function spectrumLevel(values, s) {
     return a * (2 * t3 - 3 * t2 + 1) + slope(i) * (t3 - 2 * t2 + t) + b * (3 * t2 - 2 * t3) + slope(i + 1) * (t3 - t2);
 }
 
+// The level the ribbons wave with at s (0 = lowest band .. 1 = highest): spectrumLevel() averaged
+// over its neighbours RIBBON.smooth and twice that apart (weights 1 2 3 2 1), so the ribbons swell
+// and settle smoothly along the ring. Mirrored at both ends of the spectrum, so its slope stays 0
+// there and the halves still meet level at 6 and 12 o'clock. shaders/ring.frag's ribbonSpectrum().
+export function ribbonLevel(values, s) {
+    const at = x => spectrumLevel(values, x < 0 ? -x : x > 1 ? 2 - x : x);
+    const d = RIBBON.smooth;
+    return (at(s - 2 * d) + 2 * at(s - d) + 3 * at(s) + 2 * at(s + d) + at(s + 2 * d)) / 9;
+}
+
 // The ribbon in silence: never a fixed circle, but a thin, slow wave around the dial radius.
 //   reach   how far it strays from the dial radius, in dial radii
 //   drift   how fast its wave drifts around the dial, in turns of phase per second (strand 0)
@@ -45,13 +56,21 @@ export function spectrumLevel(values, s) {
 //   glow    how bright the ribbon is in silence, as a share of its brightness with music
 export const IDLE = { reach: 0.035, drift: 0.05, breath: 0.1, glow: 0.4 };
 
-// The ribbon with music, like the bar's: each strand a wave swinging inward and outward around
-// the swelling dial.
-//   reach   how far a strand swings either way at full level, in dial radii
-//   ripple  how much of the treble rides on the wave as a faster ripple
+// The ribbon with music, like the bar's: each strand a wave rising outward from the swelling dial
+// and back down to it, never inside it, so the clock keeps its room. Round crests and troughs.
+//   reach   how far a strand's crest rises above the dial at full level, in dial radii
+//   ripple  how much of the treble rides on the wave as a faster ripple, as a share of its height
+//           there, so it fades out where the strand touches the dial
 //   round   how far from 6 and 12 o'clock the wave is rounded where the mirrored halves meet,
 //           in radians, so they meet level instead of in a V
-export const RIBBON = { reach: 0.25, ripple: 0.3, round: 0.25 };
+//   smooth  how far apart along the spectrum (0..1) ribbonLevel() averages the levels, so the
+//           strands rise and fall in round curves rather than kinking from band to band
+export const RIBBON = { reach: 0.2, ripple: 0.2, round: 0.25, smooth: 0.06 };
+
+// The Aura's own reach: how far it spreads from the calm spine either way at full level, in dial
+// radii, and how much the treble widens it. Its own, so the Aura stays as it is when the ribbons'
+// wave changes. ring.frag's AURA_REACH and AURA_RIPPLE.
+export const AURA = { reach: 0.25, ripple: 0.3 };
 
 const TAU = 2 * Math.PI;
 
@@ -72,9 +91,11 @@ export function ribbonRadius(angle, { level = 0, flow = 0, time = 0, treble = 0,
     const k = strand;
     const theta = (((angle % 360) + 360) % 360) * Math.PI / 180;
     const a = unfold(Math.abs(theta - Math.PI));         // from the bottom, the same on both sides
-    const freq = 3 + 2 * k;
+    const freq = 3 + k;
     const phase = flow * (1 + 0.5 * k) + 2.1 * k;
-    const wave = Math.sin(a * freq - phase) + RIBBON.ripple * treble * Math.sin(a * freq * 2.3 - phase * 1.7);
+    // 0 on the dial .. 1 at the crest; the ripple rides on it, so it never dips inside.
+    const swing = 0.5 + 0.5 * Math.sin(a * freq - phase);
+    const wave = swing * (1 + RIBBON.ripple * treble * Math.sin(a * freq * 2.3 - phase * 1.7));
     const music = RIBBON.reach * level * wave;
     const breath = 0.7 + 0.3 * Math.sin(TAU * IDLE.breath * time + 1.7 * k);
     const idle = IDLE.reach * breath * Math.sin(theta * (3 + k) + TAU * IDLE.drift * (1 + 0.5 * k) * time + 2.1 * k);
@@ -94,7 +115,7 @@ export function hourPoints({ values, flow, time, treble, swell, presence, bassSt
     const points = [];
     for (let i = 0; i < 12; i++) {
         const angle = i * 30;
-        const music = 1.3 * spectrumLevel(values, spectrumAt(angle, bassStretch));
+        const music = 1.3 * ribbonLevel(values, spectrumAt(angle, bassStretch));
         const calm = ribbonRadius(angle, { level: Math.min(1, music), flow, time, treble, swell, strand: 0 });
         const level = Math.min(1, music + surge(calm, angle * TAU / 360));
         const radius = ribbonRadius(angle, { level, flow, time, treble, swell, strand: 0 });

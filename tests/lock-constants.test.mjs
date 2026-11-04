@@ -12,7 +12,7 @@ import {
     AURA_FALL, AURA_PUSH, AURA_RISE, CROSSING_LEAD, CROSSING_TRAIL, KICK_FADE, KICK_GROW, KICK_ORIGIN, MAX_REACH, PLAYED_OUT, PUNCH_FADE,
     ROUGH_LIGHT, ROUGH_REACH, SHAPE_CALM, SHAPE_HARD, SHAPE_LIGHT, SHAPE_REACH, SHAPE_SOFT, SURGE_LIFT, SURGE_WIDTH,
 } from "../lock-ring/kicks.mjs";
-import { DIAL_RATIO, IDLE, RIBBON } from "../lock-ring/ring.mjs";
+import { AURA, DIAL_RATIO, IDLE, RIBBON } from "../lock-ring/ring.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const read = file => fs.readFileSync(path.join(ROOT, file), "utf8");
@@ -94,6 +94,11 @@ describe("ring.frag's constants match their modules", () => {
     test("the ribbon's music wave (ring.mjs RIBBON)", () => {
         for (const [key, value] of Object.entries(RIBBON))
             close(frag[`RIBBON_${key.toUpperCase()}`], value, `RIBBON_${key.toUpperCase()}`);
+    });
+
+    test("the Aura's own reach (ring.mjs AURA)", () => {
+        for (const [key, value] of Object.entries(AURA))
+            close(frag[`AURA_${key.toUpperCase()}`], value, `AURA_${key.toUpperCase()}`);
     });
 
     test("the hands' wave (hands.mjs WAVE)", () => {

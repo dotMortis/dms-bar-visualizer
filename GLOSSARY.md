@@ -33,7 +33,7 @@ The soft spectrum-colored glow around the ribbons that grows with the music. On 
 _Avoid_: halo, halo flow, glow
 
 **Ribbons**:
-The neon strands, shaped by the spectrum, that both visualizers draw: along the bar on the Bar Visualizer, around the Dial on the Lock Ring.
+The neon strands, shaped by the spectrum, that both visualizers draw in round curves: along the bar on the Bar Visualizer, waving outward from the Dial on the Lock Ring, never inside it.
 _Avoid_: lines, waves, strands
 
 **Spray**:
@@ -55,7 +55,7 @@ _Avoid_: sparks (alone), glitter, Spray (a different thing)
 ## Lock Ring parts
 
 **Dial**:
-The circle the Lock Ring's Ribbons wave around, swelling with the music's energy.
+The circle the Lock Ring's Ribbons wave outward from, swelling with the music's energy. The Aura glows both ways around it.
 _Avoid_: ring (alone), circle, face
 
 **Hour Points**:
