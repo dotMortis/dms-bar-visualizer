@@ -1,0 +1,13 @@
+{
+    "id": "lockRing",
+    "name": "Lock Ring",
+    "description": "A music visualizer clock for the lock screen: an analog and digital clock inside a ring",
+    "version": "0.5.0",
+    "author": "dotMortis",
+    "type": "desktop",
+    "capabilities": ["desktop-widget", "clock"],
+    "component": "./LockRing.qml",
+    "icon": "graphic_eq",
+    "requires_dms": ">=2.0.0",
+    "permissions": ["settings_read", "settings_write"]
+}
