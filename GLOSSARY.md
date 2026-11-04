@@ -29,5 +29,5 @@ The chromatic front a Kick sends out from the center of either visualizer, brigh
 _Avoid_: kick wave, kick blast, blast
 
 **Aura**:
-The soft spectrum-colored glow around the ribbons that grows with the music. On the Lock Ring it follows the music alone: a Kick doesn't brighten or widen it.
+The soft spectrum-colored glow around the ribbons that grows with the music. On the Lock Ring a Kick never brightens it, only pushes it outward a little.
 _Avoid_: halo, halo flow, glow

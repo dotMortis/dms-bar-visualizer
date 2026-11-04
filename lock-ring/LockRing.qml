@@ -8,8 +8,9 @@
 // music grows it into spectrum ribbons that wave around the swelling dial, and the ring swells
 // with its energy. shaders/ring.frag draws all of that. On every Kick a chromatic Shockwave
 // expands from the center (kicks.mjs) as the center punches white-lavender, sparks fly off the
-// ring and all hands flash; the ribbons surge and the hour points flash as its front crosses
-// them. The Aura around the ribbons stays calm: it follows the music alone. As the front crosses the
+// ring and all hands flash and get a small push; the ribbons surge and the hour points flash as
+// its front crosses them. The Aura around the ribbons doesn't flash: a Kick only pushes it outward
+// a little. As the front crosses the
 // digital time, drawn here, the time splits into the Shockwave's colors and glows (clock.mjs
 // timeHit()).
 // Every ring on every monitor draws from the one shared capture in LockAudio.

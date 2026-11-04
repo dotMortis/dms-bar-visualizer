@@ -7,9 +7,9 @@
 // ride on it, each flashing as a Shockwave's front reaches it. On every Kick a chromatic Shockwave
 // expands from the center, bigger on a harder hit, the center punches as it is born, the ribbons
 // surge where the front crosses them and a spray of sparks flies off the ring; up to KICKS of them
-// play at once. Nothing shakes, and the Aura stays calm: it follows the music alone. On top,
+// play at once. Nothing shakes, and the Aura doesn't flash: a Kick only pushes it outward a little. On top,
 // the clock's three floating hands as neon wave ribbons (hand()): they swing, thicken and glow
-// with their bands and flash on every Kick, around a straight axis through the center at the true
+// with their bands, and flash and get a small push on every Kick, around a straight axis through the center at the true
 // time. LockRing.qml draws only the digital time over it.
 // Compile: /usr/lib/qt6/bin/qsb --glsl "100 es,120,150" --hlsl 50 --msl 12 -o ring.frag.qsb ring.frag
 // (install-lock.sh does this).
@@ -73,6 +73,11 @@ const float SURGE_WIDTH = 0.006;
 const float SURGE_LIFT = 0.6;
 // centerPunch(): how fast the center punch fades, per second.
 const float PUNCH_FADE = 15.0;
+// auraPush(): how far a full Kick pushes the Aura outward (dial radii), and how fast it eases out
+// and back, per second.
+const float AURA_PUSH = 0.15;
+const float AURA_RISE = 25.0;
+const float AURA_FALL = 4.0;
 // shockwaveFront(): how far a Shockwave strays from round in its lobes and its ragged edge, how much
 // brighter one side is and how dark the edge flickers, and how wild a Kick's shape is from its
 // power (shapeChaos()).
@@ -154,6 +159,19 @@ float ribbonSurge(float r, float theta) {
         surge += kf.y * exp(-ds * ds / SURGE_WIDTH);
     }
     return SURGE_LIFT * surge;
+}
+
+// How far the Kicks push the Aura outward right now, 0..1 of AURA_PUSH: every Kick eases it out
+// and back, as far as its power; the farthest wins. lock-ring/kicks.mjs auraPush().
+float auraPush() {
+    float push = 0.0;
+    for (int j = 0; j < KICKS; j++) {
+        float age = max(kickAge(j), 0.0);
+        float power = kickPower(j);
+        if (power > 0.0 && age < PLAYED_OUT)
+            push = max(push, power * (1.0 - exp(-age * AURA_RISE)) * exp(-age * AURA_FALL));
+    }
+    return min(push, 1.0);
 }
 
 // How brightly the center punches right now, 0..1: every Kick as its Shockwave is born, at its own
@@ -390,11 +408,12 @@ void main() {
 
     // --- Spectrum Aura: a soft fill both ways from the ribbon's living spine, with the music only
     // The music's level without any Kick: no kick punch, no Shockwave surge, so it never flashes.
+    // A Kick only pushes the whole glow outward a little and eases it back (auraPush()).
     // From the spine, not a fixed circle, so nothing about the dial stands still. Symmetric:
     // brightest at the spine, with the same music-driven reach inward as outward, so there is no
     // inner edge. It reaches as far as the strands swing at this level (RIBBON_REACH, with the
     // treble's ripple), filling the ribbon's swing; the hands and the time stay clear of it.
-    float off = abs(r - ribbonRadius(theta, 0.0, 0));
+    float off = abs(r - ribbonRadius(theta, 0.0, 0) - AURA_PUSH * auraPush());
     float amp = min(1.0, 1.3 * spectrum(s));
     float aura = smoothstep(RIBBON_REACH * (1.0 + RIBBON_RIPPLE * ubuf.treble) * amp + 0.02, 0.0, off);
     // Added after the kick's punch below, which would brighten it with every Kick.

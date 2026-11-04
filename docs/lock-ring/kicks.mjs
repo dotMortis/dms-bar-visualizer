@@ -1,8 +1,8 @@
 // Kicks on the Lock Ring, apart from drawing: how each one's Shockwave grows out of the center,
 // how brightly it crosses a radius as it passes, how it lifts the ribbons, how the center punches
-// as it is born, and how the hands flash. Plain JS for tests/lock-kicks.test.mjs;
+// as it is born, how it pushes the Aura outward, and how the hands flash. Plain JS for tests/lock-kicks.test.mjs;
 // shaders/ring.frag mirrors kickAt(), shockwaveFront(), shockwaveCrossing(), ribbonSurge() and
-// centerPunch() and has the same constants (tests/lock-constants.test.mjs). The sparks a Kick
+// centerPunch() and auraPush() and has the same constants (tests/lock-constants.test.mjs). The sparks a Kick
 // flings off the ring are the shader's alone.
 // Distances are in dial radii (1 = the dial), ages in seconds, power is the shared detector's
 // hit strength (0.5..1, docs/kick.mjs).
@@ -175,6 +175,24 @@ export function centerPunch(ages, powers) {
     for (const { age, power } of shockwaves(ages, powers))
         punch = Math.max(punch, power * Math.exp(-age * PUNCH_FADE));
     return Math.min(1, punch);
+}
+
+// How a Kick pushes the Aura outward (auraPush()): how far at full power, in dial radii, how fast
+// the push eases out and how fast it eases back, per second. Slow enough to see, unlike the kick's
+// punch; it moves the glow, never brightens it.
+export const AURA_PUSH = 0.15;
+export const AURA_RISE = 25;
+export const AURA_FALL = 4;
+
+// How far the Kicks push the Aura outward right now, 0..1 of AURA_PUSH, from the pipeline's last
+// kicks (`ages`, `powers`, any order): every Kick eases it out at AURA_RISE and back at AURA_FALL,
+// as far as its power, so a soft Kick pushes less. Overlapping pushes take the farthest.
+// shaders/ring.frag's auraPush() mirrors it.
+export function auraPush(ages, powers) {
+    let push = 0;
+    for (const { age, power } of shockwaves(ages, powers))
+        push = Math.max(push, power * (1 - Math.exp(-age * AURA_RISE)) * Math.exp(-age * AURA_FALL));
+    return Math.min(1, push);
 }
 
 // How brightly the hands flash, 0..1, from the same kicks as the Shockwaves: every kick lights them

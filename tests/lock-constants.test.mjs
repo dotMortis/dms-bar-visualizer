@@ -9,7 +9,7 @@ import { describe, test } from "node:test";
 import { DIAL } from "../docs/demo.mjs";
 import { WAVE } from "../lock-ring/hands.mjs";
 import {
-    CROSSING_LEAD, CROSSING_TRAIL, KICK_FADE, KICK_GROW, KICK_ORIGIN, MAX_REACH, PLAYED_OUT, PUNCH_FADE,
+    AURA_FALL, AURA_PUSH, AURA_RISE, CROSSING_LEAD, CROSSING_TRAIL, KICK_FADE, KICK_GROW, KICK_ORIGIN, MAX_REACH, PLAYED_OUT, PUNCH_FADE,
     ROUGH_LIGHT, ROUGH_REACH, SHAPE_CALM, SHAPE_HARD, SHAPE_LIGHT, SHAPE_REACH, SHAPE_SOFT, SURGE_LIFT, SURGE_WIDTH,
 } from "../lock-ring/kicks.mjs";
 import { DIAL_RATIO, IDLE, RIBBON } from "../lock-ring/ring.mjs";
@@ -74,6 +74,12 @@ describe("ring.frag's constants match their modules", () => {
         close(frag.SHAPE_CALM, SHAPE_CALM, "SHAPE_CALM");
         close(frag.SHAPE_SOFT, SHAPE_SOFT, "SHAPE_SOFT");
         close(frag.SHAPE_HARD, SHAPE_HARD, "SHAPE_HARD");
+    });
+
+    test("how far and fast a Kick pushes the Aura (kicks.mjs auraPush())", () => {
+        close(frag.AURA_PUSH, AURA_PUSH, "AURA_PUSH");
+        close(frag.AURA_RISE, AURA_RISE, "AURA_RISE");
+        close(frag.AURA_FALL, AURA_FALL, "AURA_FALL");
     });
 
     test("how fast the center punch fades (kicks.mjs centerPunch())", () => {

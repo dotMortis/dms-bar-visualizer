@@ -9,7 +9,7 @@ import { describe, test } from "node:test";
 
 import { TIME_RADIUS } from "../lock-ring/clock.mjs";
 import { DEFAULTS } from "../docs/config.mjs";
-import { KICK_ORIGIN, EDGE, KICKS, centerPunch, handFlash, kickAt, kickSlots, ribbonSurge, shockwaveCrossing, shockwaveFront } from "../lock-ring/kicks.mjs";
+import { KICK_ORIGIN, EDGE, KICKS, auraPush, centerPunch, handFlash, kickAt, kickSlots, ribbonSurge, shockwaveCrossing, shockwaveFront } from "../lock-ring/kicks.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -292,6 +292,33 @@ describe("center punch", () => {
         const powers = [1, 0.6, ...empty.slice(2)];
         assert.ok(Math.abs(centerPunch(ages, powers) - 0.6) < 0.01);
         assert.ok(centerPunch(new Array(KICKS).fill(0), new Array(KICKS).fill(1)) <= 1);
+    });
+});
+
+// A Kick pushes the Aura outward and eases it back: slow enough to see, as far as the Kick's power.
+describe("Aura push", () => {
+    const empty = new Array(KICKS).fill(0);
+    const one = (age, power) => [[age, ...new Array(KICKS - 1).fill(100)], [power, ...empty.slice(1)]];
+    const peak = power => Math.max(...Array.from({ length: 100 }, (_, i) => auraPush(...one(i / 200, power))));
+
+    test("is still without kicks", () => {
+        assert.equal(auraPush([], []), 0);
+        assert.equal(auraPush(new Array(KICKS).fill(100), empty), 0);
+    });
+
+    test("eases out instead of jumping: nothing at the Kick itself", () => {
+        assert.equal(auraPush(...one(0, 1)), 0);
+        assert.ok(auraPush(...one(0.02, 1)) < auraPush(...one(0.1, 1)));
+    });
+
+    test("is a push you can see: still out a tenth of a second on, back within a second", () => {
+        assert.ok(auraPush(...one(0.1, 1)) > 0.5, `${auraPush(...one(0.1, 1))}`);
+        assert.ok(auraPush(...one(1, 1)) < 0.05, `${auraPush(...one(1, 1))}`);
+    });
+
+    test("a soft Kick pushes less than a hard one, and overlapping pushes never go past full", () => {
+        assert.ok(peak(0.5) < 0.6 * peak(1));
+        assert.ok(auraPush(new Array(KICKS).fill(0.1), new Array(KICKS).fill(1)) <= 1);
     });
 });
 

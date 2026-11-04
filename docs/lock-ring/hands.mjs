@@ -1,6 +1,7 @@
 // The Lock Ring's hands, apart from drawing: where they point and how they look. Each hand is a
 // neon wave ribbon, like the Bar Visualizer's (shaders/viz.frag), showing one band: the band
-// swings it, thickens it and lights it up, and a Kick only flashes it. The hands float: each starts a
+// swings it, thickens it and lights it up, and a Kick flashes it and gives it a small push: a
+// little whip and its tip a little farther out. The hands float: each starts a
 // small gap (INNER) out from the center, so they never meet there. The wave only bends a hand
 // sideways around its straight axis, which runs through the center at the true time: the angle
 // comes from clock.mjs alone. Plain JS for tests/lock-hands.test.mjs; shaders/ring.frag draws the
@@ -14,23 +15,26 @@
 // Lengths, widths and amplitudes are in dial radii (1 = the dial), as in the shader.
 import { handAngles } from "./clock.mjs";
 
-// Each hand: the band it shows and its plain shape in silence (length from the center and
-// thickness, in dial radii).
+// Each hand: the band it shows, its plain shape in silence (length from the center and thickness,
+// in dial radii), and its share of a Kick's push (the short, thick hour hand looks busy at a full
+// one).
 // Its color is ring.frag's (lavender, mauve, pink: Catppuccin Mocha, as in shaders/viz.frag).
 export const HANDS = {
-    hour: { band: "bass", length: 0.52, thickness: 0.02 },
-    minute: { band: "mid", length: 0.78, thickness: 0.013 },
-    second: { band: "treble", length: 0.88, thickness: 0.007 },
+    hour: { band: "bass", length: 0.52, thickness: 0.02, push: 0.55 },
+    minute: { band: "mid", length: 0.78, thickness: 0.013, push: 1 },
+    second: { band: "treble", length: 0.88, thickness: 0.007, push: 1 },
 };
 
 // Where every hand starts, in dial radii from the center: the gap that keeps them apart.
 export const INNER = 0.1;
 
-// How strongly the hands react at a band level of 1 (cava's full scale).
+// How strongly the hands react: at a band level of 1 (cava's full scale), and at a full kick flash.
 export const LOOK = {
     boost: 1.25,    // band levels are taken this much louder, so typical music already swings hard
     swing: 0.12,    // the wave's amplitude at full level, as a share of the hand's length
     thicken: 0.3,   // the hand gets this much thicker than plain at full level (0.3 = 1.3x): slim
+    whip: 0.06,     // a kick's push: added to the swing, as a share of the hand's length
+    reach: 0.08,    // a kick's push: how much longer the hand gets, its tip pushed outward
 };
 
 // The wave along a hand. u runs along it, 0 at its inner end to 1 at the tip; offsets are sideways
@@ -105,34 +109,37 @@ export function createHandMotion() {
 }
 
 // How a hand of `length` looks at band `level` (cava's 0..1) and kick `flash` (0..1,
-// kicks.mjs handFlash()), with the wave scaled by `strength` (the handWaves setting). The wave is
-// the band's alone: a kick only flashes the hand, it doesn't swing it.
+// kicks.mjs handFlash()), with the wave scaled by `strength` (the handWaves setting) and the kick's
+// push by `push` (its HANDS entry's). A kick only pushes a little: the swing is the band's.
 //   amplitude  the wave's sideways reach in dial radii (0 = a straight line)
 //   thicken    the factor on its plain thickness (1 = plain)
 //   glow       how much neon halo it has, 0..1
 //   flash      how brightly it flashes, 0..1
-export function handLook(length, level, flash = 0, strength = 1) {
+//   stretch    the factor on its plain length (1 = plain): the kick pushes its tip outward
+export function handLook(length, level, flash = 0, strength = 1, push = 1) {
     const l = clamp01(LOOK.boost * clamp01(level));
     const f = clamp01(flash);
     const s = Math.max(0, Number.isFinite(strength) ? strength : 1);
     return {
-        amplitude: length * s * LOOK.swing * l,
+        amplitude: length * s * (LOOK.swing * l + LOOK.whip * push * f),
         thicken: 1 + LOOK.thicken * l,
         glow: l,
         flash: f,
+        stretch: 1 + LOOK.reach * push * f,
     };
 }
 
 // Each hand's pose at the local time `date`, given bass/mid/treble on cava's 0..1 scale and
 // { flash, strength } (both optional): its angle (clockwise degrees from 12 o'clock, from the time
-// alone), where it starts (inner) and ends (length) and its width, in dial radii, and its look.
+// alone), where it starts (inner) and ends (length, pushed out by a kick) and its width, in dial
+// radii, and its look.
 export function handPoses(date, levels, { flash = 0, strength = 1 } = {}) {
     const angles = handAngles(date);
     const poses = {};
-    for (const [name, { band, length, thickness }] of Object.entries(HANDS)) {
-        const look = handLook(length, levels[band], flash, strength);
+    for (const [name, { band, length, thickness, push }] of Object.entries(HANDS)) {
+        const look = handLook(length, levels[band], flash, strength, push);
         // Object.assign: QML's JS engine has no object spread.
-        poses[name] = Object.assign({ angle: angles[name], inner: INNER, length, width: thickness * look.thicken }, look);
+        poses[name] = Object.assign({ angle: angles[name], inner: INNER, length: length * look.stretch, width: thickness * look.thicken }, look);
     }
     return poses;
 }

@@ -1,5 +1,5 @@
 // The Lock Ring's hands: each one is a wave ribbon showing its own band (hour = bass, minute =
-// mids, second = highs). The band swings, thickens and lights it, every Kick flashes it, and the
+// mids, second = highs). The band swings, thickens and lights it, every Kick flashes it and pushes it a little, and the
 // music never moves it off the true time.
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
@@ -69,19 +69,39 @@ describe("each hand shows its own band", () => {
     });
 });
 
-describe("a Kick only flashes the hands", () => {
-    test("a kick flashes every hand but leaves a silent one straight", () => {
+describe("a Kick flashes the hands and gives them a small push", () => {
+    test("a kick flashes every hand, swings even a silent one a little and pushes its tip out", () => {
         for (const [name, hand] of Object.entries(handPoses(at(10, 10), silence, { flash: 1 }))) {
-            assert.equal(hand.amplitude, 0, `${name} amplitude`);
+            assert.ok(hand.amplitude > 0, `${name} amplitude`);
+            assert.ok(hand.length > HANDS[name].length, `${name} length`);
             assert.equal(hand.flash, 1, `${name} flash`);
         }
     });
 
-    test("a kick doesn't change how far a hand swings with its band", () => {
-        const half = { bass: 0.5, mid: 0.5, treble: 0.5 };
-        const calm = handPoses(at(10, 10), half), kicked = handPoses(at(10, 10), half, { flash: 1 });
-        for (const name of Object.keys(HANDS))
-            assert.equal(kicked[name].amplitude, calm[name].amplitude, name);
+    test("the push is small: the band's full swing is bigger than a full kick's whip", () => {
+        const loud = handPoses(at(10, 10), { bass: 1, mid: 1, treble: 1 });
+        const kicked = handPoses(at(10, 10), silence, { flash: 1 });
+        for (const name of Object.keys(HANDS)) {
+            assert.ok(kicked[name].amplitude < loud[name].amplitude, name);
+            assert.ok(kicked[name].length <= 1.1 * HANDS[name].length, `${name} grows at most a tenth`);
+        }
+    });
+
+    // The short hour hand gets busy if it's pushed as hard as the long ones.
+    test("the hour hand is pushed less than the others, for its length", () => {
+        const kicked = handPoses(at(10, 10), silence, { flash: 1 });
+        const swing = name => kicked[name].amplitude / HANDS[name].length;
+        const reach = name => kicked[name].length / HANDS[name].length;
+        assert.ok(swing("hour") < swing("minute") && swing("hour") < swing("second"));
+        assert.ok(reach("hour") < reach("minute") && reach("hour") < reach("second"));
+        assert.ok(swing("hour") > 0 && reach("hour") > 1, "but it is still pushed");
+    });
+
+    test("the push fades with the flash", () => {
+        const pose = flash => handPoses(at(10, 10), silence, { flash }).minute;
+        assert.ok(pose(1).amplitude > pose(0.4).amplitude && pose(0.4).amplitude > pose(0).amplitude);
+        assert.ok(pose(1).length > pose(0.4).length && pose(0.4).length > pose(0).length);
+        assert.equal(pose(0).length, HANDS.minute.length, "no kick, plain length");
     });
 });
 

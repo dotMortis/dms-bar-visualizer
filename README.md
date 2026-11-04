@@ -217,7 +217,7 @@ The Lock Ring reads all its settings from the Bar Visualizer's `~/.config/bar-vi
 
 | Key | Default | What it does |
 | --- | --- | --- |
-| `lockRing.handWaves` | `1.0` | How far the hands swing with the music. `0` = straight hands |
+| `lockRing.handWaves` | `1.0` | How far the hands swing with the music and on kicks. `0` = straight hands |
 | `lockRing.ringSize` | `0.4` | The widget's default size, as a share of the screen height. Resizing the widget under Edit widgets still works |
 
 They apply to every Lock Ring at once, since all rings share one capture ([why](docs/adr/0002-lock-ring-settings-are-plugin-wide.md)). The Lock Ring never writes the file. A `config.json` from before the `lockRing` section existed works as it is: add the section to change those two. Without the Bar Visualizer the Lock Ring runs on the defaults; create the file by hand to change them (then `dms restart` if `~/.config/bar-visualizer/` didn't exist yet).

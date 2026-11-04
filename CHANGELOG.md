@@ -40,11 +40,12 @@ All notable changes to this project are documented here. The format follows
   and blue, spreading apart as the ring grows until it ends as loose points, more and bigger on a
   harder Kick. The ribbons' surge, the hour points and the time follow each front's own shape, on
   every ring alike.
-- The Lock Ring's hands are slimmer, and a Kick no longer whips them: they still flash on every
-  Kick, but only their own band swings them.
-- The Lock Ring's Aura no longer flashes on Kicks: it follows the music alone, so the glow around
-  the ribbons stays calm while the Shockwave, the ribbons and the hands take the hit. The Lock
-  Ring has no plasma haze anymore.
+- The Lock Ring's hands are slimmer, and a Kick only pushes them a little instead of whipping
+  them: they flash, swing a little and their tips reach a little farther out, the short hour hand
+  less than the others.
+- The Lock Ring's Aura no longer flashes on Kicks: a Kick pushes the glow around the ribbons a
+  little outward and eases it back, without brightening it, while the Shockwave and the ribbons
+  take the hit. The Lock Ring has no plasma haze anymore.
 
 ## [0.7.1] - 2026-11-04
 
