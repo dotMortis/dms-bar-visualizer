@@ -26,7 +26,7 @@ layout(std140, binding = 0) uniform buf {
 } ubuf;
 
 const float TAU = 6.28318530718;
-const int KICKS = 8;  // matches kickSlots in shell.qml
+const int KICKS = 8;  // matches kickSlots in audio/AudioPipeline.qml
 
 float band(int i) {
     int v = i / 4;

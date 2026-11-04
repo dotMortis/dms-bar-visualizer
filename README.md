@@ -19,6 +19,8 @@ Neon ribbons shaped by the spectrum, waves pushed outward by the music's energy,
 
 It runs as its own small [Quickshell](https://quickshell.org) config. DMS itself isn't modified, so DMS updates can't break it.
 
+For the lock screen, there's the separately installed [Lock Ring](#lock-ring): the same look as a ring around a clock.
+
 > [!NOTE]
 > The preview above is an SVG re-creation of `shaders/viz.frag` driven by a synthetic 120 bpm loop. For the real shader, try the **[live WebGL demo](https://dotmortis.github.io/dms-bar-visualizer/)**: it runs on a demo beat, a synth loop, your microphone or an audio file, with every tweakable on a slider.
 
@@ -141,9 +143,9 @@ To change colours, edit the `palette()` cycle and the `LAVENDER` / `MAUVE` / `PI
 
 The SVGs in `assets/` are generated. After tweaking `assets/generate.py`, run `python3 assets/generate.py`.
 
-`docs/index.html` is the live demo (served by GitHub Pages). It carries a GLSL ES port of `shaders/viz.frag`, so mirror shader changes there.
+`docs/index.html` is the live demo (served by GitHub Pages). It carries a GLSL ES port of `shaders/viz.frag`, so mirror shader changes there. Its Lock Ring view needs no mirroring: it fetches the ring's own shader and converts it to GLSL ES as the page loads (`docs/webgl.mjs`), and imports the plugin's modules. Those files (`ring.frag` and the ring's `.mjs` modules) live in `docs/lock-ring/`, because Pages publishes only `docs/` and doesn't follow symlinks, and `lock-ring/` links to them, as it does to `docs/kick.mjs`. Edit them there.
 
-Kick detection isn't mirrored: `docs/kick.mjs` is the one detector, and both `shell.qml` and the demo import it. It lives in `docs/` because Pages publishes only that directory. Browsers don't load module scripts over `file://`, so to run the demo locally, serve the directory and open http://localhost:8000:
+Kick detection isn't mirrored: `docs/kick.mjs` is the one detector, and both the visualizer's audio pipeline (`audio/AudioPipeline.qml`) and the demo import it. It lives in `docs/` because Pages publishes only that directory. Browsers don't load module scripts over `file://`, so to run the demo locally, serve the directory and open http://localhost:8000:
 
 ```sh
 python3 -m http.server -d docs
@@ -158,6 +160,59 @@ node --test
 ```
 
 It prints those numbers per track for the default and a sensitive kick setting. Other tests check that the kicks and their power don't depend on the volume, and that kicks come back soon after a 12 dB drop and after a cava restart. A sine sweep recorded the same way checks that `kickLowHz` and `kickHighHz` select the bands cava puts those frequencies in. `tests/fixtures/record.py` synthesizes and records the tracks; its header says how to re-record them or add one (needs cava, numpy and real time).
+
+## Lock Ring
+
+The Bar Visualizer can't show on the lock screen: while it's up, only DMS's own surfaces are visible. The **Lock Ring** is a separate DMS plugin for the lock screen: the same ribbons and colours bent into a circle that is the dial of an analog and digital clock, with 12 hour points riding on it and floating hands that react to the music but always show the true time. In silence the ribbon keeps breathing as a thin, faint wave. It follows the active player and detects kicks with the same `docs/kick.mjs` as the bar, and every monitor's ring runs from one capture. ([Why it's a plugin](docs/adr/0001-lock-ring-runs-inside-dms.md).)
+
+It installs separately from the Bar Visualizer. You can install either one alone or both, and installing or removing one never touches the other.
+
+### Install
+
+It needs DankMaterialShell 2.x, `cava` and `pactl` (libpulse).
+
+**Arch Linux:**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/dotMortis/dms-bar-visualizer/main/install-lock-arch.sh | bash
+```
+
+Or from a clone: `./install-lock-arch.sh`. It builds the pacman package `dms-lock-visualizer-git` from [`packaging/aur`](packaging/aur/dms-lock-visualizer-git/PKGBUILD), which installs the plugin into DMS's system plugin dir, `/etc/xdg/quickshell/dms-plugins/lockRing`. Run it again to update. It also removes a link left by `install-lock.sh`, which would otherwise shadow the package.
+
+**Other distros, or hacking on it:** from a clone, run `./install-lock.sh`. It compiles the ring shader, so it needs `qsb` (on Arch: `qt6-shadertools`), and links `lock-ring/` into your DMS plugin dir (`~/.config/dms/plugins/lockRing`). Edits in the checkout then go live after a DMS restart.
+
+Both scripts take `--uninstall`.
+
+### Set it up in DMS
+
+1. **Enable it:** the Lock Ring is a desktop plugin, so DMS loads it on its own, with no toggle. If it doesn't show up under **DMS Settings → Plugins**, restart DMS: `dms restart`.
+2. **Add the widget:** **DMS Settings → Lock Screen → Add widget → Lock Ring**.
+3. **Move the password field:** the ring and DMS's password field both start in the centre of the screen. Under **DMS Settings → Lock Screen → Edit widgets**, drag the password field below the ring. You can move and resize the ring there too.
+
+Its settings are in DMS's plugin settings, under the widget's options in Settings → Lock Screen. They apply right away and to every Lock Ring at once, since all rings share one capture ([why](docs/adr/0002-lock-ring-settings-are-plugin-wide.md)). It doesn't read the Bar Visualizer's `config.json`. The ones the bar has too default to the Bar Visualizer's values:
+
+| Setting | Key | Default | What it does |
+| --- | --- | --- | --- |
+| Intensity | `intensity` | `100 %` | Overall brightness of the ring |
+| Speed | `speed` | `100 %` | Animation speed |
+| Kick threshold | `kickThreshold` | `40 %` | How sharply the kick range must jump, as a share of its recent peak. Lower = more kicks |
+| Kick decay | `kickDecay` | `60` | How fast a kick's flash fades, in tenths. Higher = shorter |
+| Kick range from | `kickLowHz` | `20 Hz` | The lowest frequency the kick listens to |
+| Kick range to | `kickHighHz` | `90 Hz` | The highest frequency the kick listens to |
+| Kick cooldown | `kickCooldown` | `100 ms` | Shortest time between two kicks. `0` = no limit |
+| Bass stretch | `bassStretch` | `140 %` | Spreads the bass over more of the ring. `100 %` = linear |
+| Hand waves | `handWaves` | `100 %` | How far the hands swing with the music and on kicks. `0 %` = straight hands. Lock Ring only |
+| Ring size | `ringSize` | `40 %` | The widget's default size, as a share of the screen height (20 to 80 %). Resizing the widget under Edit widgets still works. Lock Ring only |
+
+DMS stores each as the integer its slider shows, under `lockRing` in `plugin_settings.json`.
+
+To tune it without locking the screen, open the [live demo's Lock Ring view](https://dotmortis.github.io/dms-bar-visualizer/#ring). Its sliders are these settings, in the same units.
+
+> [!NOTE]
+> DMS keeps a loaded plugin in memory, so after updating the Lock Ring (with either script, or by pulling the checkout), restart DMS to see the new version: `dms restart`.
+
+> [!IMPORTANT]
+> `install-lock.sh` links the checkout, but the compiled shader (`ring.frag.qsb`) is built once, at install. If you ran it from a checkout that later gets updated, such as the Bar Visualizer installer's `~/.local/share/dms-bar-visualizer`, run `install-lock.sh` from it again after the update so the shader is recompiled, then `dms restart`.
 
 ## Changelog
 
