@@ -108,7 +108,8 @@ function shockwaves(ages, powers, seeds, angle) {
         if (slots.powers[i] <= 0)
             continue;
         const age = Math.max(0, slots.ages[i]), power = slots.powers[i];
-        live.push({ age, power, ...shockwaveFront(age, power, slots.seeds[i], angle) });
+        // Object.assign, not `{ ...x }`: Qt's JS engine can't parse object spread.
+        live.push(Object.assign({ age, power }, shockwaveFront(age, power, slots.seeds[i], angle)));
     }
     return live;
 }

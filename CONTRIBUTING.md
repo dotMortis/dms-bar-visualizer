@@ -89,6 +89,8 @@ node --test
 
 Needs only node, nothing to install. Besides the Lock Ring's modules, the install scripts and the packages, it runs a replay suite that holds the Kick detector to account. The suite plays real cava output, recorded from synthesized tracks with known kick onsets, through `docs/kick.mjs`. It fails when a track gets more missed, doubled or stray Kicks, or a later median Kick, than its budget allows, and prints those numbers per track for the default and a sensitive setting. Other tests check that Kicks and their power don't depend on the volume, that Kicks come back soon after a 12 dB drop and after a cava restart, and that `kickLowHz` and `kickHighHz` select the bands cava puts those frequencies in.
 
+With Qt's `qml` runner installed (`qt6-declarative`), `tests/qml-modules.test.mjs` also loads every `.mjs` the QML imports through Qt's own JS engine. That engine rejects some syntax node accepts, object spread `{ ...x }` among it, and a module it rejects takes the whole plugin down with it. Without `qml` that test is skipped.
+
 `tests/fixtures/record.py` synthesizes and records the tracks. It needs cava, numpy and real time; its header says how to re-record them or add one:
 
 ```sh
