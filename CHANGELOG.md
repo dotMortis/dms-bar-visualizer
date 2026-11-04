@@ -8,6 +8,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- The Lock Ring's ribbons glow softer again, like neon instead of hard lines, and keep a defined
+  core. The glow is still measured in pixels, so it looks the same at every ring size; the hands,
+  lit like the ribbons, soften with them.
+- The Lock Ring's Aura spreads inward from the ribbon as smoothly as outward: it is brightest at
+  the ribbon, with no hard inner edge, and its inward reach grows with the music like its outward
+  reach.
 - The Lock Ring's hour points flash when a Kick's shockwave reaches them instead of at the
   instant of the Kick, so the wave visibly travels out and lights them as it passes, brighter on
   a harder hit. A soft Kick's shockwave stops short of the ring and leaves them dark. The hands
