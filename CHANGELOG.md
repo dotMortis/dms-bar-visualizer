@@ -19,6 +19,11 @@ All notable changes to this project are documented here. The format follows
   the music stops, it fades back to the faint dial. All Lock Rings on all monitors share one
   capture, so they pulse in sync, and it runs only while a Lock Ring is on screen.
   `install-lock.sh` now compiles the ring's shader, so it needs `qsb` (qt6-shadertools).
+- On Arch, `install-lock-arch.sh` builds and installs the Lock Ring as the pacman package
+  `dms-lock-visualizer-git`, into DMS's system plugin dir. Run it again to update, and pass
+  `--uninstall` to remove it. It's independent of the Bar Visualizer's package: either one
+  installs alone, and neither script touches the other. The README has a Lock Ring section on
+  installing it, adding the widget to the lock screen and moving DMS's password field below it.
 
 ## [0.5.0] - 2026-10-30
 
