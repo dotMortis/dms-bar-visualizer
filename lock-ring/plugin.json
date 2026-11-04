@@ -2,7 +2,7 @@
     "id": "lockRing",
     "name": "Lock Ring",
     "description": "A music visualizer clock for the lock screen: an analog and digital clock inside a ring",
-    "version": "0.8.1",
+    "version": "0.8.2",
     "author": "dotMortis",
     "type": "desktop",
     "capabilities": ["desktop-widget", "clock"],
