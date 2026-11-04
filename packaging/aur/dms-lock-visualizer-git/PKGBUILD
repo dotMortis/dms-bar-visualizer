@@ -1,0 +1,42 @@
+# Maintainer: dotMortis <nick.koellhofer@braun-its.de>
+pkgname=dms-lock-visualizer-git
+_name=dms-lock-visualizer
+_repo=dms-bar-visualizer
+pkgver=0.5.0
+pkgrel=1
+pkgdesc='Lock Ring: a music visualizer clock for the DankMaterialShell lock screen (DMS plugin)'
+arch=('any')
+url='https://github.com/dotMortis/dms-bar-visualizer'
+license=('MIT')
+depends=('quickshell' 'qt6-declarative' 'cava' 'libpulse')
+makedepends=('git' 'qt6-shadertools')
+optdepends=('dms-shell: the lock screen it is a plugin for')
+provides=("$_name")
+conflicts=("$_name")
+source=("git+$url.git")
+sha256sums=('SKIP')
+install="$pkgname.install"
+
+pkgver() {
+  cd "$_repo"
+  git describe --long --tags --abbrev=7 | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+}
+
+build() {
+  cd "$_repo"
+  /usr/lib/qt6/bin/qsb --glsl '100 es,120,150' --hlsl 50 --msl 12 \
+    -o lock-ring/shaders/ring.frag.qsb lock-ring/shaders/ring.frag
+}
+
+package() {
+  cd "$_repo"
+  # DMS's system plugin dir. The whole of lock-ring/, so new plugin files come along, with its
+  # links to the shared audio pipeline and kick detector resolved (-L): QML only finds imports
+  # inside the plugin dir.
+  local plugin="$pkgdir/etc/xdg/quickshell/dms-plugins/lockRing"
+  install -dm755 "$plugin"
+  cp -rL --no-preserve=ownership lock-ring/. "$plugin"
+
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$_name/README.md"
+}
