@@ -2,8 +2,9 @@
 // A clock: a faint ring with 12 hour notches as the dial, three hands that always point at the
 // true time (the second hand sweeps), and a small HH:MM below the hub in DMS's lock-screen font
 // and 12h/24h setting. Around the dial, spectrum ribbons (shaders/ring.frag) bulge outward with
-// the music and the ring swells with its energy; in silence only the faint dial is left. Every
-// ring on every monitor draws from the one shared capture in LockAudio.
+// the music and the ring swells with its energy; in silence only the faint dial is left. On every
+// Kick a chromatic shockwave expands from the hub, sparks fly off the ring and all hands flash.
+// Every ring on every monitor draws from the one shared capture in LockAudio.
 import QtQuick
 import qs.Common
 import qs.Modules.Plugins
@@ -62,7 +63,7 @@ DesktopPluginComponent {
         ShaderEffect {
             anchors.fill: parent
             fragmentShader: Qt.resolvedUrl("shaders/ring.frag.qsb")
-            visible: LockAudio.presence > 0.001
+            visible: LockAudio.presence > 0.001 || LockAudio.kickSlots.powers.some(p => p > 0)
 
             // Wrapped for 32-bit precision; 1200 s keeps the hue cycle (t*0.05) seamless.
             property real time: LockAudio.time % 1200
@@ -73,6 +74,12 @@ DesktopPluginComponent {
             property real dial: root.dialRadius / (root.size / 2)
             property real intensity: root.intensity
             property real bassStretch: root.bassStretch
+            property vector4d kickAge0: root.quad(LockAudio.kickSlots.ages, 0)
+            property vector4d kickAge1: root.quad(LockAudio.kickSlots.ages, 4)
+            property vector4d kickPower0: root.quad(LockAudio.kickSlots.powers, 0)
+            property vector4d kickPower1: root.quad(LockAudio.kickSlots.powers, 4)
+            property vector4d kickSeed0: root.quad(LockAudio.kickSlots.seeds, 0)
+            property vector4d kickSeed1: root.quad(LockAudio.kickSlots.seeds, 4)
             property vector4d b0: root.quad(LockAudio.values, 0)
             property vector4d b1: root.quad(LockAudio.values, 4)
             property vector4d b2: root.quad(LockAudio.values, 8)
@@ -167,6 +174,8 @@ DesktopPluginComponent {
         property real angle: 0
         property real length: 0
         property real thickness: 0
+        // 0..1: brightens the hand toward white. Every Kick flashes all hands together.
+        property real flash: LockAudio.flash
 
         width: thickness
         height: length
@@ -179,6 +188,15 @@ DesktopPluginComponent {
             origin.x: hand.width / 2
             origin.y: hand.height
             angle: hand.angle
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            radius: parent.radius
+            antialiasing: true
+            color: "white"
+            opacity: 0.7 * hand.flash
+            visible: opacity > 0.005
         }
     }
 }

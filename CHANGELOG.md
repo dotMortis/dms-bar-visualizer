@@ -19,6 +19,9 @@ All notable changes to this project are documented here. The format follows
   the music stops, it fades back to the faint dial. All Lock Rings on all monitors share one
   capture, so they pulse in sync, and it runs only while a Lock Ring is on screen.
   `install-lock.sh` now compiles the ring's shader, so it needs `qsb` (qt6-shadertools).
+- Kicks on the Lock Ring, detected exactly like the Bar Visualizer's: each one sends a chromatic
+  shockwave out of the center hub, sparks fly off the ring, and all hands flash. Harder hits make
+  bigger, brighter shockwaves, and up to 8 kicks play on top of each other.
 
 ## [0.5.0] - 2026-10-30
 
