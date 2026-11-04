@@ -57,14 +57,23 @@ function setup({ installed = [] } = {}) {
     return { home, run, calls, built: `${log}.build` };
 }
 
-// Every path under `home` with what it is, so a before/after shows anything that changed.
+// Every path under `home` with what it is, so a before/after shows anything that changed. Links
+// aren't followed: the Bar Visualizer link points at this checkout, which other test files change.
 function snapshot(home) {
     const out = {};
-    for (const rel of fs.readdirSync(home, { recursive: true })) {
-        const full = path.join(home, rel), stat = fs.lstatSync(full);
-        out[rel] = stat.isSymbolicLink() ? `-> ${fs.readlinkSync(full)}`
-            : stat.isDirectory() ? "dir" : fs.readFileSync(full, "utf8");
-    }
+    const visit = dir => {
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+            const full = path.join(dir, entry.name), rel = path.relative(home, full);
+            if (entry.isSymbolicLink())
+                out[rel] = `-> ${fs.readlinkSync(full)}`;
+            else if (entry.isDirectory()) {
+                out[rel] = "dir";
+                visit(full);
+            } else
+                out[rel] = fs.readFileSync(full, "utf8");
+        }
+    };
+    visit(home);
     return out;
 }
 
