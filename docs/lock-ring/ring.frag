@@ -5,11 +5,11 @@
 // outward with each band's level like the bar's around its center line, mirrored left and right
 // with bass at the bottom, and the ring's radius swells with the music's energy. 12 hour points
 // ride on it, each flashing as a Shockwave's front reaches it. On every Kick a chromatic Shockwave
-// expands from the center, bigger on a harder hit, the center punches as it is born, a plasma haze
-// flashes across the dial on a hard one, the ribbons surge where the front crosses them and a
-// spray of sparks flies off the ring; up to KICKS of them play at once. Nothing shakes. On top,
+// expands from the center, bigger on a harder hit, the center punches as it is born, the ribbons
+// surge where the front crosses them and a spray of sparks flies off the ring; up to KICKS of them
+// play at once. Nothing shakes, and the Aura stays calm: it follows the music alone. On top,
 // the clock's three floating hands as neon wave ribbons (hand()): they swing, thicken and glow
-// with their bands and whip on every Kick, around a straight axis through the center at the true
+// with their bands and flash on every Kick, around a straight axis through the center at the true
 // time. LockRing.qml draws only the digital time over it.
 // Compile: /usr/lib/qt6/bin/qsb --glsl "100 es,120,150" --hlsl 50 --msl 12 -o ring.frag.qsb ring.frag
 // (install-lock.sh does this).
@@ -358,14 +358,8 @@ void main() {
     float t = ubuf.time;
     float hueBase = t * 0.05 + s * 0.15;
     vec2 q = p / ubuf.dial;              // in dial radii, y down
-    float k2 = ubuf.kick * ubuf.kick;
-
-    // --- Plasma haze across the dial: transparent at rest and on soft kicks, flashes in on hard ones ---
-    // viz.frag's, with the square of the kick's impact; drifting with time, never shaking.
-    float n = sin(q.x * 1.9 + t * 0.9 + sin(q.y * 2.5 + t * 1.3) * 1.5)
-            + sin(r * 2.2 - t * 0.6 + ubuf.flow * 0.3)
-            + sin((q.x * 0.6 + q.y * 1.4) + t * 0.4);
-    vec3 col = pal(hueBase + n * 0.08, 0.85, (0.12 + 0.08 * (n * 0.5 + 0.5)) * k2);
+    // No plasma haze, unlike viz.frag: a wash across the whole dial on every Kick is too much here.
+    vec3 col = vec3(0.0);
 
     // Clockwise from 12 o'clock, 0..TAU: the idle wave runs all the way round.
     float theta = atan(p.x, -p.y);
@@ -380,13 +374,10 @@ void main() {
     // Lit with viz.frag's glow (ribbonLight()), a little softer: a neon line with a defined core,
     // the same at any ring size, wider on a kick.
     vec3 ribbon = vec3(0.0);
-    float amp = calm;                    // strand 0's level, surged: the Aura's
     for (int k = 0; k < 3; k++) {
         float fk = float(k);
         float surge = ribbonSurge(ribbonRadius(theta, calm, k), theta);
         float level = min(1.0, music + surge);
-        if (k == 0)
-            amp = level;
         float rr = ribbonRadius(theta, level, k);
         // Across the strand, not along the radius, so steep stretches stay as thin.
         float e = 0.002;
@@ -398,13 +389,16 @@ void main() {
     col += ribbon * mix(IDLE_GLOW, 1.0, ubuf.presence);
 
     // --- Spectrum Aura: a soft fill both ways from the ribbon's living spine, with the music only
+    // The music's level without any Kick: no kick punch, no Shockwave surge, so it never flashes.
     // From the spine, not a fixed circle, so nothing about the dial stands still. Symmetric:
     // brightest at the spine, with the same music-driven reach inward as outward, so there is no
     // inner edge. It reaches as far as the strands swing at this level (RIBBON_REACH, with the
     // treble's ripple), filling the ribbon's swing; the hands and the time stay clear of it.
     float off = abs(r - ribbonRadius(theta, 0.0, 0));
+    float amp = min(1.0, 1.3 * spectrum(s));
     float aura = smoothstep(RIBBON_REACH * (1.0 + RIBBON_RIPPLE * ubuf.treble) * amp + 0.02, 0.0, off);
-    col += pal(hueBase + 0.5 + s * 0.8, 0.8, 1.0) * aura * amp * 0.45 * ubuf.presence;
+    // Added after the kick's punch below, which would brighten it with every Kick.
+    vec3 auraCol = pal(hueBase + 0.5 + s * 0.8, 0.8, 1.0) * aura * amp * 0.45 * ubuf.presence;
 
     // --- Kick Shockwaves: a chromatic ring expanding from the center, one per Kick ---------------
     // kickFront(): front and strength (blast). A wide, soft front in lavender, mauve and blue, and
@@ -506,8 +500,10 @@ void main() {
     // (centerPunch()).
     col += mix(LAVENDER, vec3(1.0), 0.5) * centerPunch() * 0.35 * smoothstep(0.5, 0.0, r);
 
-    // The kick's punch, and the intensity, on everything but the hour points, as viz.frag's.
+    // The kick's punch, and the intensity, on everything but the hour points, as viz.frag's; the
+    // Aura takes only the intensity.
     col *= 1.0 + 0.4 * ubuf.kick;
+    col += auraCol;
     col *= ubuf.intensity;
 
     // --- Hour points, riding on the ribbon (hourPoints() in lock-ring/ring.mjs) -----------------

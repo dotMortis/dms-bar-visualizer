@@ -1,5 +1,5 @@
 // The Lock Ring's hands: each one is a wave ribbon showing its own band (hour = bass, minute =
-// mids, second = highs). The band swings, thickens and lights it, every Kick whips it, and the
+// mids, second = highs). The band swings, thickens and lights it, every Kick flashes it, and the
 // music never moves it off the true time.
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
@@ -69,33 +69,19 @@ describe("each hand shows its own band", () => {
     });
 });
 
-describe("every Kick whips the hands", () => {
-    test("a kick swings even a silent hand and flashes it", () => {
+describe("a Kick only flashes the hands", () => {
+    test("a kick flashes every hand but leaves a silent one straight", () => {
         for (const [name, hand] of Object.entries(handPoses(at(10, 10), silence, { flash: 1 }))) {
-            assert.ok(hand.amplitude > 0, `${name} amplitude`);
+            assert.equal(hand.amplitude, 0, `${name} amplitude`);
             assert.equal(hand.flash, 1, `${name} flash`);
         }
     });
 
-    test("a full kick at least doubles the long hands' swing at half scale, and adds half to the hour's", () => {
+    test("a kick doesn't change how far a hand swings with its band", () => {
         const half = { bass: 0.5, mid: 0.5, treble: 0.5 };
         const calm = handPoses(at(10, 10), half), kicked = handPoses(at(10, 10), half, { flash: 1 });
-        for (const name of ["minute", "second"])
-            assert.ok(kicked[name].amplitude >= 2 * calm[name].amplitude, name);
-        assert.ok(kicked.hour.amplitude >= 1.5 * calm.hour.amplitude, "hour");
-    });
-
-    // The short hour hand gets busy if it whips as hard as the long ones.
-    test("the hour hand whips less than the others, for its length", () => {
-        const kicked = handPoses(at(10, 10), silence, { flash: 1 });
-        const share = name => kicked[name].amplitude / kicked[name].length;
-        assert.ok(share("hour") < share("minute") && share("hour") < share("second"));
-        assert.ok(share("hour") > 0, "but it still whips");
-    });
-
-    test("the whip fades with the flash", () => {
-        const swing = flash => handPoses(at(10, 10), silence, { flash }).minute.amplitude;
-        assert.ok(swing(1) > swing(0.4) && swing(0.4) > swing(0));
+        for (const name of Object.keys(HANDS))
+            assert.equal(kicked[name].amplitude, calm[name].amplitude, name);
     });
 });
 

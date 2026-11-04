@@ -27,9 +27,8 @@ All notable changes to this project are documented here. The format follows
 - The Lock Ring's Shockwaves hit like the Bar Visualizer's Kicks: a wider, softer front in
   lavender, mauve and blue with a brighter wake behind it; the ribbons flare and bulge where the
   front crosses each strand, more on a harder Kick and adding up when Shockwaves overlap, with the
-  hour points riding them; a plasma haze flashes across the dial on a hard Kick (none at rest or on
-  a soft one); and the center punches white-lavender as every Shockwave is born, faintly on a soft
-  Kick and strongly on a hard one. Nothing shakes.
+  hour points riding them; and the center punches white-lavender as every Shockwave is born,
+  faintly on a soft Kick and strongly on a hard one. Nothing shakes.
 - The Lock Ring's digital time takes the Shockwave's hit: as the front crosses it, the digits
   split into lavender, mauve and blue copies pushed outward and flare toward white with a glow,
   faint for a soft Kick and full for a hard one. The digits stay in place, so the time stays
@@ -41,7 +40,11 @@ All notable changes to this project are documented here. The format follows
   and blue, spreading apart as the ring grows until it ends as loose points, more and bigger on a
   harder Kick. The ribbons' surge, the hour points and the time follow each front's own shape, on
   every ring alike.
-- The Lock Ring's hands are slimmer.
+- The Lock Ring's hands are slimmer, and a Kick no longer whips them: they still flash on every
+  Kick, but only their own band swings them.
+- The Lock Ring's Aura no longer flashes on Kicks: it follows the music alone, so the glow around
+  the ribbons stays calm while the Shockwave, the ribbons and the hands take the hit. The Lock
+  Ring has no plasma haze anymore.
 
 ## [0.7.1] - 2026-11-04
 

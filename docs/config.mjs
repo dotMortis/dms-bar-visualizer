@@ -23,7 +23,7 @@ export const DEFAULTS = {
     bassStretch: 1.4,     // >1 spreads bass wider; 1 = linear
     // The Lock Ring's own.
     lockRing: {
-        handWaves: 1.0,   // how far the hands swing with the music and on kicks; 0 = straight
+        handWaves: 1.0,   // how far the hands swing with the music; 0 = straight
         ringSize: 0.4,    // the widget's default size, as a share of the screen height
     },
 };

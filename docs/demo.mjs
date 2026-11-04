@@ -54,7 +54,7 @@ const BAR = [
 // The ring view's sliders: the shared ones, then the Lock Ring's own (config.json's lockRing).
 const RING = [
     ...SHARED,
-    slider("lockRing.handWaves", 0, 2, 0.05, "How far the hands swing with the music and on kicks. 0 = straight hands"),
+    slider("lockRing.handWaves", 0, 2, 0.05, "How far the hands swing with the music. 0 = straight hands"),
     slider("lockRing.ringSize", 0.2, 0.8, 0.05, "The widget's default size, as a share of the screen height"),
 ];
 
