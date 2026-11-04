@@ -143,7 +143,7 @@ To change colours, edit the `palette()` cycle and the `LAVENDER` / `MAUVE` / `PI
 
 The SVGs in `assets/` are generated. After tweaking `assets/generate.py`, run `python3 assets/generate.py`.
 
-`docs/index.html` is the live demo (served by GitHub Pages). It carries a GLSL ES port of `shaders/viz.frag`, so mirror shader changes there.
+`docs/index.html` is the live demo (served by GitHub Pages). It carries a GLSL ES port of `shaders/viz.frag`, so mirror shader changes there. Its Lock Ring view needs no mirroring: it fetches the ring's own shader and converts it to GLSL ES as the page loads (`docs/webgl.mjs`), and imports the plugin's modules. Those files (`ring.frag` and the ring's `.mjs` modules) live in `docs/lock-ring/`, because Pages publishes only `docs/` and doesn't follow symlinks, and `lock-ring/` links to them, as it does to `docs/kick.mjs`. Edit them there.
 
 Kick detection isn't mirrored: `docs/kick.mjs` is the one detector, and both the visualizer's audio pipeline (`audio/AudioPipeline.qml`) and the demo import it. It lives in `docs/` because Pages publishes only that directory. Browsers don't load module scripts over `file://`, so to run the demo locally, serve the directory and open http://localhost:8000:
 
@@ -190,6 +190,8 @@ Both scripts take `--uninstall`.
 3. **Move the password field:** the ring and DMS's password field both start in the centre of the screen. Under **DMS Settings → Lock Screen → Edit widgets**, drag the password field below the ring. You can move and resize the ring there too.
 
 Its settings (intensity, speed and the kick settings, at the Bar Visualizer's defaults) are in DMS's plugin settings, under the widget's options in Settings → Lock Screen. They apply right away and to every Lock Ring at once, since all rings share one capture. It doesn't read the Bar Visualizer's `config.json`.
+
+To tune it without locking the screen, open the [live demo's Lock Ring view](https://dotmortis.github.io/dms-bar-visualizer/#ring). Its sliders are these settings, in the same units.
 
 > [!NOTE]
 > DMS keeps a loaded plugin in memory, so after updating the Lock Ring (with either script, or by pulling the checkout), restart DMS to see the new version: `dms restart`.
