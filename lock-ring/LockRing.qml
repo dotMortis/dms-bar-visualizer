@@ -1,12 +1,13 @@
 // The Lock Ring: a DMS desktop plugin placed on the lock screen (Settings -> Lock Screen).
-// A clock: a faint ring with 12 hour notches as the dial, three hands that always point at the
-// true time (the second hand sweeps), and a small HH:MM below the hub in DMS's lock-screen font
-// and 12h/24h setting. The hands show the music too (hands.mjs): hour = bass, minute = mids,
-// second = highs, each a neon wave ribbon that swings, thickens and glows with its band around a
-// straight axis that never moves off the time. Around the dial, spectrum ribbons
-// (shaders/ring.frag, which draws the hands too) bulge outward with the music and the ring swells
-// with its energy; in silence only the faint dial and plain hands are left. On every Kick a
-// chromatic shockwave expands from the hub, sparks fly off the ring and all hands whip and flash.
+// A clock: a living neon ribbon as the dial with 12 hour points riding on it, three floating hands
+// that always point at the true time (the second hand sweeps), and a small HH:MM below the center
+// in DMS's lock-screen font and 12h/24h setting. The hands show the music too (hands.mjs): hour =
+// bass, minute = mids, second = highs, each a neon wave ribbon that swings, thickens and glows
+// with its band around a straight axis that never moves off the time. The ribbon (ring.mjs) idles
+// in silence as a thin, faint, breathing wave; music grows it into spectrum ribbons that bulge
+// outward, and the ring swells with its energy. shaders/ring.frag draws all of that. On every
+// Kick a chromatic shockwave expands from the center, sparks fly off the ring and all hands whip
+// and flash.
 // Every ring on every monitor draws from the one shared capture in LockAudio.
 import QtQuick
 import qs.Common
@@ -77,8 +78,7 @@ DesktopPluginComponent {
         height: root.size
         anchors.centerIn: parent
 
-        // The spectrum ribbons, around and under the dial, and the hands. Always on: it draws the
-        // hands even in silence.
+        // The ribbon that is the dial, its hour points and the hands. Always on: they're the clock.
         ShaderEffect {
             anchors.fill: parent
             fragmentShader: Qt.resolvedUrl("shaders/ring.frag.qsb")
@@ -87,6 +87,7 @@ DesktopPluginComponent {
             property real pixel: 1 / root.dialRadius
             property real handFlash: LockAudio.flash
             property vector4d handAngle: root.perHand("angle", Math.PI / 180)
+            property vector4d handInner: root.perHand("inner", 1)
             property vector4d handLength: root.perHand("length", 1)
             property vector4d handAmp: root.perHand("amplitude", 1)
             property vector4d handWidth: root.perHand("width", 1)
@@ -117,41 +118,7 @@ DesktopPluginComponent {
             property vector4d b7: root.quad(LockAudio.values, 28)
         }
 
-        // The dial: a thin, faint ring, no face.
-        Rectangle {
-            anchors.centerIn: parent
-            width: root.dialRadius * 2
-            height: width
-            radius: width / 2
-            color: "transparent"
-            border.width: Math.max(1, root.size * 0.004)
-            border.color: Qt.alpha(root.lavender, 0.22)
-        }
-
-        // 12 hour notches across the ring, slightly brighter than it.
-        Repeater {
-            model: 12
-
-            Rectangle {
-                id: notch
-
-                required property int index
-
-                width: Math.max(1.5, root.size * 0.008)
-                height: root.size * 0.035
-                radius: width / 2
-                color: Qt.alpha(root.lavender, 0.5)
-                x: dial.width / 2 - width / 2
-                y: dial.height / 2 - root.dialRadius - height / 2
-                transform: Rotation {
-                    origin.x: notch.width / 2
-                    origin.y: root.dialRadius + notch.height / 2
-                    angle: notch.index * 30
-                }
-            }
-        }
-
-        // The digital time, inside the dial below the hub.
+        // The digital time, inside the dial below the center.
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
             y: dial.height / 2 + root.dialRadius * 0.38
@@ -163,15 +130,6 @@ DesktopPluginComponent {
             font.family: SettingsData.lockScreenFontFamily !== "" ? SettingsData.lockScreenFontFamily : Theme.fontFamily
             font.pixelSize: Math.max(10, root.size * 0.075)
             font.weight: Font.Medium
-        }
-
-        // The hub.
-        Rectangle {
-            anchors.centerIn: parent
-            width: root.size * 0.028
-            height: width
-            radius: width / 2
-            color: root.lavender
         }
     }
 }

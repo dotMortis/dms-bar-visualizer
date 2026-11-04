@@ -99,6 +99,7 @@ export function ringUniforms(state) {
         { flash: state.flash, strength: state.handWaves });
     const perHand = (key, scale = 1) => [poses.hour[key] * scale, poses.minute[key] * scale, poses.second[key] * scale, 0];
     u.handAngle = perHand("angle", Math.PI / 180);
+    u.handInner = perHand("inner");
     u.handLength = perHand("length");
     u.handAmp = perHand("amplitude");
     u.handWidth = perHand("width");

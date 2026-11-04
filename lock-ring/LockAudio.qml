@@ -50,7 +50,7 @@ Singleton {
     // 0..1, how brightly all hands flash: lit by every kick together with its shockwave and sparks.
     readonly property real flash: Kicks.handFlash(kickAges, kickPowers, pipeline?.effective.kickDecay ?? 6)
     // The ring's motion (lock-ring/ring.mjs): radius growth as a fraction of the dial radius, and
-    // how strongly the ribbons show (0 = only the faint dial).
+    // how much music the ribbon shows (0 = only its calm idle wave).
     property real swell: 0
     property real presence: 0
 

@@ -1,4 +1,4 @@
-// Kicks on the Lock Ring: each one sends a chromatic shockwave out of the center hub, sparks fly
+// Kicks on the Lock Ring: each one sends a chromatic shockwave out of the center, sparks fly
 // off the ring, and the hands flash. Distances are in dial radii (1 = the dial), ages in seconds.
 // Power is the shared detector's hit strength, 0.5 (a soft hit) to 1 (the hardest next to the
 // recent kicks).
@@ -12,7 +12,7 @@ import { HUB, EDGE, KICKS, handFlash, kickAt, kickSlots } from "../lock-ring/kic
 const ROOT = path.resolve(import.meta.dirname, "..");
 
 describe("shockwave", () => {
-    test("starts at the center hub", () => {
+    test("starts at the center", () => {
         assert.equal(kickAt(0, 1).front, HUB);
         assert.equal(kickAt(0, 0.5).front, HUB);
     });

@@ -1,16 +1,17 @@
-// Kicks on the Lock Ring, apart from drawing: how each one's shockwave grows out of the center hub,
+// Kicks on the Lock Ring, apart from drawing: how each one's shockwave grows out of the center,
 // how its sparks fly off the ring, and how the hands flash. Plain JS for tests/lock-kicks.test.mjs; shaders/ring.frag mirrors kickAt().
 // Distances are in dial radii (1 = the dial), ages in seconds, power is the shared detector's
 // hit strength (0.5..1, docs/kick.mjs).
 
-// The hub's radius and the widget's edge, in dial radii (LockRing.qml: hub size*0.014, dial size*0.34).
+// Where a shockwave starts (a small round at the center; the hands float around it, no hub is
+// drawn) and the widget's edge, in dial radii (LockRing.qml: dial size*0.34).
 export const HUB = 0.014 / 0.34;
 export const EDGE = 0.5 / 0.34;
 // The hardest hit's shockwave stops here, where the ring's edge fade starts.
 const MAX_REACH = 0.9 * EDGE;
 
 // A kick `age` seconds after it fired:
-//   front     the shockwave's radius: eases out from the hub (fast burst, slowing at the edge) to a
+//   front     the shockwave's radius: eases out from the center (fast burst, slowing at the edge) to a
 //             reach that grows with power
 //   strength  how bright the shockwave is, 0..1
 //   sparks    how far out its spray of sparks has flown: from the ring (1) outward, farther on a

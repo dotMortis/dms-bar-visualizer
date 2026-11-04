@@ -77,11 +77,20 @@ describe("every Kick whips the hands", () => {
         }
     });
 
-    test("a full kick at least doubles a hand's swing at half scale", () => {
+    test("a full kick at least doubles the long hands' swing at half scale, and adds half to the hour's", () => {
         const half = { bass: 0.5, mid: 0.5, treble: 0.5 };
         const calm = handPoses(at(10, 10), half), kicked = handPoses(at(10, 10), half, { flash: 1 });
-        for (const name of Object.keys(HANDS))
+        for (const name of ["minute", "second"])
             assert.ok(kicked[name].amplitude >= 2 * calm[name].amplitude, name);
+        assert.ok(kicked.hour.amplitude >= 1.5 * calm.hour.amplitude, "hour");
+    });
+
+    // The short hour hand gets busy if it whips as hard as the long ones.
+    test("the hour hand whips less than the others, for its length", () => {
+        const kicked = handPoses(at(10, 10), silence, { flash: 1 });
+        const share = name => kicked[name].amplitude / kicked[name].length;
+        assert.ok(share("hour") < share("minute") && share("hour") < share("second"));
+        assert.ok(share("hour") > 0, "but it still whips");
     });
 
     test("the whip fades with the flash", () => {
@@ -122,11 +131,29 @@ describe("the music never moves the hands", () => {
     });
 });
 
-// The wave only ever bends a hand sideways around its straight hub-to-tip axis at the true angle:
-// it starts at the hub and leaves the tip on (or just beside) the axis, so the hand still reads.
-// u runs along the hand, 0 at the hub to 1 at the tip.
+// Floating hands: none of them reaches the center, so they never meet there. Each still lies on
+// the line through the center at its clock angle.
+describe("the hands float", () => {
+    test("every hand starts a small gap out from the center and runs out to its length", () => {
+        const poses = handPoses(at(10, 10), { bass: 1, mid: 1, treble: 1 }, { flash: 1 });
+        for (const [name, hand] of Object.entries(poses)) {
+            assert.ok(hand.inner >= 0.08 && hand.inner <= 0.12, `${name} inner ${hand.inner}`);
+            assert.ok(hand.length - hand.inner > 0.3, `${name} runs out from there`);
+        }
+    });
+
+    test("the gap is wider than any hand, so they never touch at the center", () => {
+        const poses = handPoses(at(10, 10), { bass: 1, mid: 1, treble: 1 });
+        for (const [name, hand] of Object.entries(poses))
+            assert.ok(hand.inner > 2 * hand.width, `${name}: gap ${hand.inner}, width ${hand.width}`);
+    });
+});
+
+// The wave only ever bends a hand sideways around its straight axis at the true angle: it starts
+// at the hand's inner end and leaves the tip on (or just beside) the axis, so the hand still
+// reads. u runs along the hand, 0 at its inner end to 1 at the tip.
 describe("the wave bends a hand around its axis", () => {
-    test("there is no bend at the hub", () => {
+    test("there is no bend at the hand's inner end", () => {
         assert.equal(waveEnvelope(0), 0);
         for (const phase of [0, 0.3, 1.7, 5])
             assert.equal(Math.abs(waveOffset(0, phase, 0.3, 1)), 0, `phase ${phase}`);

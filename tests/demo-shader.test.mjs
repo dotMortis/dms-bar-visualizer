@@ -111,6 +111,12 @@ describe("ring uniforms in the demo", () => {
         assert.deepEqual(silent.handGlow, [0, 0, 0, 0]);
     });
 
+    test("the hands float: each starts out from the center", () => {
+        const [hour, minute, second] = ringUniforms(state).handInner;
+        for (const inner of [hour, minute, second])
+            assert.ok(inner >= 0.08 && inner <= 0.12, `inner ${inner}`);
+    });
+
     test("one pixel is one pixel of the dial", () => {
         assert.equal(ringUniforms(state).pixel, 1 / 200);
     });

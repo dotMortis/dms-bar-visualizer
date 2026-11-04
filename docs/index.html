@@ -777,11 +777,10 @@ function drawRing() {
   rgl.drawArrays(rgl.TRIANGLE_STRIP, 0, 4);
 }
 
-// The dial, notches, digital time and hub LockRing.qml draws over the shader, with its sizes.
-// The hands are ring.frag's.
+// The digital time LockRing.qml draws over the shader, with its size. The dial (the living
+// ribbon), its hour points and the floating hands are ring.frag's.
 const face = document.getElementById("face");
 const fctx = face.getContext("2d");
-const LAVENDER = "#b4befe";
 function drawFace() {
   const dpr = resize(face);
   const size = Math.min(face.width, face.height), c = { x: face.width / 2, y: face.height / 2 };
@@ -790,28 +789,12 @@ function drawFace() {
   fctx.save();
   fctx.translate(c.x, c.y);
 
-  fctx.strokeStyle = "rgb(180 190 254 / .22)";
-  fctx.lineWidth = Math.max(dpr, size * 0.004);
-  fctx.beginPath(); fctx.arc(0, 0, dial, 0, Math.PI * 2); fctx.stroke();
-
-  fctx.strokeStyle = "rgb(180 190 254 / .5)";
-  fctx.lineCap = "round";
-  const notchW = Math.max(1.5 * dpr, size * 0.008), notchH = size * 0.035;
-  fctx.lineWidth = notchW;
-  for (let i = 0; i < 12; i++) {
-    const a = i * Math.PI / 6, sx = Math.sin(a), sy = -Math.cos(a);
-    const r0 = dial - notchH / 2 + notchW / 2, r1 = dial + notchH / 2 - notchW / 2;
-    fctx.beginPath(); fctx.moveTo(sx * r0, sy * r0); fctx.lineTo(sx * r1, sy * r1); fctx.stroke();
-  }
-
   const now = new Date();
   fctx.fillStyle = "rgb(180 190 254 / .85)";
   fctx.font = `500 ${Math.max(10 * dpr, size * 0.075)}px Inter, "Segoe UI", Roboto, Ubuntu, system-ui, sans-serif`;
   fctx.textAlign = "center"; fctx.textBaseline = "top";
   fctx.fillText(formatTime(now, { use24Hour: cfg.use24Hour }), 0, dial * 0.38);
 
-  fctx.fillStyle = LAVENDER;
-  fctx.beginPath(); fctx.arc(0, 0, size * 0.014, 0, Math.PI * 2); fctx.fill();
   fctx.restore();
 }
 

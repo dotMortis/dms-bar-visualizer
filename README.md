@@ -163,7 +163,7 @@ It prints those numbers per track for the default and a sensitive kick setting. 
 
 ## Lock Ring
 
-The Bar Visualizer can't show on the lock screen: while it's up, only DMS's own surfaces are visible. The **Lock Ring** is a separate DMS plugin for the lock screen: the same ribbons and colours bent into a circle around an analog and digital clock, whose hands react to the music but always show the true time. It follows the active player and detects kicks with the same `docs/kick.mjs` as the bar, and every monitor's ring runs from one capture. ([Why it's a plugin](docs/adr/0001-lock-ring-runs-inside-dms.md).)
+The Bar Visualizer can't show on the lock screen: while it's up, only DMS's own surfaces are visible. The **Lock Ring** is a separate DMS plugin for the lock screen: the same ribbons and colours bent into a circle that is the dial of an analog and digital clock, with 12 hour points riding on it and floating hands that react to the music but always show the true time. In silence the ribbon keeps breathing as a thin, faint wave. It follows the active player and detects kicks with the same `docs/kick.mjs` as the bar, and every monitor's ring runs from one capture. ([Why it's a plugin](docs/adr/0001-lock-ring-runs-inside-dms.md).)
 
 It installs separately from the Bar Visualizer. You can install either one alone or both, and installing or removing one never touches the other.
 

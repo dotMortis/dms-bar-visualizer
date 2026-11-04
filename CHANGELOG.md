@@ -9,24 +9,28 @@ All notable changes to this project are documented here. The format follows
 ### Added
 
 - Lock Ring, first part: a DMS desktop plugin (`lockRing`, in `lock-ring/`) that you add to the
-  lock screen under Settings → Lock Screen. It shows a clock so far: a faint ring with 12 hour
-  notches, hands that always point at the true time with a sweeping second hand, and a small
-  `HH:MM` in DMS's lock-screen font and 12h/24h setting. `install-lock.sh` links it into your
+  lock screen under Settings → Lock Screen. It shows a clock: a living neon ribbon as the dial
+  with 12 glowing hour points riding on it (brighter at 12, 3, 6 and 9), three floating hands
+  that don't meet at the center and always point at the true time, with a sweeping second hand,
+  and a small `HH:MM` in DMS's lock-screen font and 12h/24h setting. There is no hub and no fixed
+  circle or notches. `install-lock.sh` links it into your
   DMS plugin dir, and `--uninstall` removes it. Neither touches the Bar Visualizer install.
 - The Lock Ring hears the music: spectrum ribbons in the Bar Visualizer's colors wrap around the
   dial and bulge outward with each band, mirrored left and right with bass at the bottom, and the
   ring swells with the music's energy. It follows the Active Player like the Bar Visualizer. When
-  the music stops, it fades back to the faint dial. All Lock Rings on all monitors share one
+  the music stops, the ribbon settles into a thin, faint wave that slowly breathes and drifts
+  around the dial, calm enough to read the clock, and never stands still. All Lock Rings on all monitors share one
   capture, so they pulse in sync, and it runs only while a Lock Ring is on screen.
   `install-lock.sh` now compiles the ring's shader, so it needs `qsb` (qt6-shadertools).
 - The Lock Ring's hands react to the music: hour to the bass, minute to the mids, second to the
   highs. Each is a slim neon wave ribbon in the Bar Visualizer's style, with a white-hot core and
   extra strands. The louder its band, the wider it swings and the brighter it glows, and every
-  kick whips it. The wave only bends a hand around a straight line at the true time, so the hands
-  always point at the time and their tips stay on it. In silence they're calm, thin lines. A
+  kick whips it (the short hour hand a little less, so it stays readable). The wave only bends a
+  hand around a straight line through the center at the true time, so the hands always point at
+  the time and their tips stay on it. In silence they're calm, thin lines. A
   "Hand waves" setting sets how far they swing, down to straight hands at 0%.
 - Kicks on the Lock Ring, detected exactly like the Bar Visualizer's: each one sends a chromatic
-  shockwave out of the center hub, sparks fly off the ring, and all hands flash. Harder hits make
+  shockwave out of the center, sparks fly off the ring, and all hands and hour points flash. Harder hits make
   bigger, brighter shockwaves, and up to 8 kicks play on top of each other.
 - Lock Ring settings in DMS: open a Lock Ring widget's options under Settings → Lock Screen to
   set intensity, speed, kick threshold, kick decay, kick range, kick cooldown, bass stretch and
