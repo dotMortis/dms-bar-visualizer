@@ -8,39 +8,26 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
 import "audio"
+import "docs/config.mjs" as Config
 
 ShellRoot {
     id: root
 
     // --- Tweakables -------------------------------------------------------
-    // ~/.config/bar-visualizer/config.json overrides any of these by key and is re-read when it
-    // changes; a key removed from it falls back here. If the file is missing, it's created with these.
-    // Geometry must match the DMS bar. With a maximized window on a screen's active workspace,
-    // DMS drops the spacing and rounding (its "maximize detection"); followMaximize mirrors that.
-    readonly property var defaults: ({
-        barThickness: 40,     // DMS bar body height (from innerPadding/font scale)
-        spacing: 4,           // DMS "spacing"
-        radius: 12,           // DMS cornerRadius
-        followMaximize: true, // match DMS "maximizeDetection"
-        intensity: 1.0,       // overall brightness of the effect
-        speed: 1.0,           // animation speed multiplier
-        kickThreshold: 0.4,   // lower = more kicks detected
-        kickDecay: 6.0,       // higher = shorter impact flashes
-        kickLowHz: 20,        // frequency range the kick (shockwave + particles) listens to
-        kickHighHz: 90,
-        kickCooldown: 0.1,    // min seconds between kicks; 0 = no limit
-        bassStretch: 1.4      // >1 spreads bass (centre) wider; 1 = linear
-    })
+    // All in ~/.config/bar-visualizer/config.json, with their defaults in docs/config.mjs: one
+    // file for both visualizers (ADR 0004). It's re-read when it changes, and a key removed from
+    // it falls back to its default. If the file is missing, it's created with the defaults.
+    readonly property var defaults: Config.DEFAULTS
     property var config: defaults
 
-    readonly property string configDir: `${Quickshell.env("XDG_CONFIG_HOME") || Quickshell.env("HOME") + "/.config"}/bar-visualizer`
+    readonly property string configDir: Config.configDir(Quickshell.env("XDG_CONFIG_HOME"), Quickshell.env("HOME"))
 
     // FileView watches the file through its directory, so a directory that doesn't exist yet
     // (first run) would leave it unwatched until a restart. Create it before handing over the path.
     Process {
         running: true
         command: ["mkdir", "-p", root.configDir]
-        onExited: configFile.path = `${root.configDir}/config.json`
+        onExited: configFile.path = Config.configPath(Quickshell.env("XDG_CONFIG_HOME"), Quickshell.env("HOME"))
     }
 
     FileView {
@@ -52,7 +39,7 @@ ShellRoot {
         // file keeps the last good settings.
         onLoaded: {
             try {
-                root.config = Object.assign({}, root.defaults, JSON.parse(text()));
+                root.config = Config.parseConfig(text());
             } catch (e) {
                 console.warn(`config.json: ${e.message}; keeping the previous settings`);
             }

@@ -36,8 +36,8 @@ function pageFiles() {
 describe("demo publishing", () => {
     test("the page loads the Lock Ring's modules and shader", () => {
         const files = pageFiles();
-        for (const f of ["kick.mjs", "lock-ring/ring.mjs", "lock-ring/kicks.mjs", "lock-ring/hands.mjs",
-                         "lock-ring/clock.mjs", "lock-ring/settings.mjs", "lock-ring/ring.frag"])
+        for (const f of ["kick.mjs", "config.mjs", "lock-ring/ring.mjs", "lock-ring/kicks.mjs", "lock-ring/hands.mjs",
+                         "lock-ring/clock.mjs", "lock-ring/ring.frag"])
             assert.ok(files.includes(f), `the page loads ${f} (got ${files.join(", ")})`);
     });
 
@@ -54,11 +54,11 @@ describe("demo publishing", () => {
     test("the plugin loads the same files as the page", () => {
         const shared = {
             "lock-ring/docs/kick.mjs": "docs/kick.mjs",
+            "lock-ring/docs/config.mjs": "docs/config.mjs",
             "lock-ring/ring.mjs": "docs/lock-ring/ring.mjs",
             "lock-ring/kicks.mjs": "docs/lock-ring/kicks.mjs",
             "lock-ring/hands.mjs": "docs/lock-ring/hands.mjs",
             "lock-ring/clock.mjs": "docs/lock-ring/clock.mjs",
-            "lock-ring/settings.mjs": "docs/lock-ring/settings.mjs",
             "lock-ring/shaders/ring.frag": "docs/lock-ring/ring.frag",
         };
         for (const [plugin, page] of Object.entries(shared)) {

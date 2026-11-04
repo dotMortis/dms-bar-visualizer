@@ -1,8 +1,9 @@
 // The audio pipeline both visualizers draw from: follows the Active Player, captures the output it
 // plays to with cava, and turns that into bands, bass/mid/treble, Kicks and the wave phase.
-// Knows nothing about where it's drawn, so the Lock Ring can bundle it (with docs/kick.mjs, which it
-// imports from ../docs) without any Bar Visualizer code: lock-ring/audio/ and lock-ring/docs/ hold
-// relative symlinks to both, so the import resolves the same inside the plugin dir.
+// Knows nothing about where it's drawn, so the Lock Ring can bundle it (with docs/kick.mjs and
+// docs/config.mjs, which it imports from ../docs) without any Bar Visualizer code: lock-ring/audio/
+// and lock-ring/docs/ hold relative symlinks to them, so the imports resolve the same inside the
+// plugin dir.
 //
 //   AudioPipeline {
 //       settings: config         // speed, kickDecay, kickThreshold, kickLowHz, kickHighHz, kickCooldown
@@ -13,21 +14,16 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Services.Mpris
 import "../docs/kick.mjs" as Kick
+import "../docs/config.mjs" as Config
 
 Scope {
     id: root
 
     // --- Inputs -----------------------------------------------------------
-    // The kick and animation settings, by the same names in both visualizers. Missing keys fall
-    // back to these defaults; re-read whenever a new object is assigned, other keys are ignored.
-    readonly property var defaults: ({
-        speed: 1.0,           // animation speed multiplier
-        kickThreshold: 0.4,   // lower = more kicks detected
-        kickDecay: 6.0,       // higher = shorter impact flashes
-        kickLowHz: 20,        // frequency range the kick listens to
-        kickHighHz: 90,
-        kickCooldown: 0.1     // min seconds between kicks; 0 = no limit
-    })
+    // The kick and animation settings (speed, kick*), by the same names in both visualizers
+    // (docs/config.mjs). Missing keys fall back to its defaults; re-read whenever a new object is
+    // assigned, other keys are ignored.
+    readonly property var defaults: Config.DEFAULTS
     property var settings: defaults
     readonly property var effective: Object.assign({}, defaults, settings)
     // Where cava's config is written. Each visualizer uses its own, so their installers can find

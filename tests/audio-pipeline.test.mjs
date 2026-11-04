@@ -50,8 +50,8 @@ function importGraph(entry) {
 const read = file => fs.readFileSync(path.join(ROOT, file), "utf8");
 
 describe("audio pipeline", () => {
-    test("bundles with nothing but itself and the kick detector", () => {
-        assert.deepEqual(importGraph(PIPELINE).files, [PIPELINE, "docs/kick.mjs"]);
+    test("bundles with nothing but itself, the kick detector and the shared settings", () => {
+        assert.deepEqual(importGraph(PIPELINE).files, [PIPELINE, "docs/config.mjs", "docs/kick.mjs"]);
     });
 
     test("knows nothing about the bar: no compositor, window or bar settings", () => {

@@ -6,6 +6,11 @@
 // comes from clock.mjs alone. Plain JS for tests/lock-hands.test.mjs; shaders/ring.frag draws the
 // hands and mirrors waveEnvelope() and waveOffset().
 //
+// The bands differ a lot in level: in cava's output the highs (treble) sit far below the bass, so
+// read raw, the second hand would barely move. createHandMotion() measures each band against its
+// own recent peak instead, and runs each hand's wave at its own band's pace, so every hand shows
+// its band as clearly as the others.
+//
 // Lengths, widths and amplitudes are in dial radii (1 = the dial), as in the shader.
 import { handAngles } from "./clock.mjs";
 
@@ -62,13 +67,51 @@ export function waveOffset(u, phase, amplitude, treble) {
     return amplitude * waveEnvelope(u) * wave;
 }
 
+// Each band's level as a share of its own recent peak. The peak follows a louder level at once and
+// halves every `halfLife` seconds after it; `floor` is its least, on cava's 0..1, so a near-silent
+// band shows as near silent instead of being scaled up to full.
+export const LEVEL = { halfLife: 2.5, floor: 0.04 };
+
+// How fast a hand's wave travels out to its tip, in radians per second at speed 1: `calm` at all
+// times, plus `drive` at its band's full (normalized) level.
+export const PACE = { calm: Math.PI, drive: 6 };
+
+// Each hand's phase wraps here. ring.frag uses it times 1, 1.5 and 2 (one per strand), and those
+// times 1.7 (the ripple): all whole multiples of 2π at 40π, so the wrap is seamless.
+export const PHASE_WRAP = 40 * Math.PI;
+
+// The hands' motion, stepped once per frame with bass/mid/treble on cava's 0..1 scale, the frame
+// time in seconds and the speed setting. Each step returns
+//   levels  { bass, mid, treble }: each band as a share of its own recent peak, 0..1, for handPoses()
+//   phases  { hour, minute, second }: how far each hand's wave has travelled, in radians
+export function createHandMotion() {
+    const peaks = { bass: 0, mid: 0, treble: 0 };
+    const phases = { hour: 0, minute: 0, second: 0 };
+    return {
+        step(raw, dt, speed = 1) {
+            const keep = Math.pow(0.5, Math.max(0, dt) / LEVEL.halfLife);
+            const levels = {};
+            for (const band of Object.keys(peaks)) {
+                const level = clamp01(raw?.[band]);
+                peaks[band] = Math.max(level, peaks[band] * keep);
+                levels[band] = clamp01(level / Math.max(peaks[band], LEVEL.floor));
+            }
+            for (const [name, { band }] of Object.entries(HANDS)) {
+                const pace = PACE.calm + PACE.drive * levels[band];
+                phases[name] = (phases[name] + Math.max(0, dt) * speed * pace) % PHASE_WRAP;
+            }
+            return { levels, phases: Object.assign({}, phases) };
+        },
+    };
+}
+
 // How a hand of `length` looks at band `level` (cava's 0..1) and kick `flash` (0..1,
 // kicks.mjs handFlash()), with the wave scaled by `strength` (the handWaves setting) and the kick's
 // whip by `whip` (its HANDS entry's):
 //   amplitude  the wave's sideways reach in dial radii (0 = a straight line)
 //   thicken    the factor on its plain thickness (1 = plain)
 //   glow       how much neon halo it has, 0..1
-//   flash      how white-hot it flashes, 0..1
+//   flash      how brightly it flashes, 0..1
 export function handLook(length, level, flash = 0, strength = 1, whip = 1) {
     const l = clamp01(LOOK.boost * clamp01(level));
     const f = clamp01(flash);

@@ -6,6 +6,31 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- One settings file for both visualizers: the Lock Ring reads all its settings from the Bar
+  Visualizer's `~/.config/bar-visualizer/config.json`. It uses the bar's `intensity`, `speed`,
+  `kickThreshold`, `kickDecay`, `kickLowHz`, `kickHighHz`, `kickCooldown` and `bassStretch`, and
+  its own `handWaves` and `ringSize` are in the file's new `lockRing` section. Its settings page in
+  DMS is gone, and values set there before are ignored: copy any you changed into `config.json`
+  (`lockRing.handWaves` and `lockRing.ringSize` are the page's percentages divided by 100). The
+  defaults of every key are defined once, in `docs/config.mjs`.
+- `config.json` is read the same way by both visualizers: a value of the wrong type falls back to
+  its default, and keys the visualizers don't know are ignored.
+- Demo: the Lock Ring view's sliders have the names `config.json` has, and **Export config.json**
+  downloads the whole file, `lockRing` section included, in both views.
+- The Lock Ring's ribbons are as crisp as the Bar Visualizer's: their glow is measured in pixels,
+  as on the bar, instead of growing with the ring's size.
+- Kicks hit the Lock Ring as hard as the bar: the ribbons widen, swing further and brighten on
+  each kick, and the shockwave is brighter and crisper.
+- The Lock Ring's hands are lit like its ribbons, so they have the same color intensity: the same
+  deep palette and glow instead of a white-hot core, brighter and wider with their band and on a
+  kick, and scaled by `intensity` like the rest of the ring. They no longer outshine it.
+- Each Lock Ring hand now shows its own band clearly: the hour hand the bass, the minute hand the
+  mids, the second hand the highs, each measured against that band's own recent peak (the highs
+  are far quieter than the bass, so the second hand barely moved). Each hand's wave also travels
+  at its own band's pace instead of the bass's.
+
 ## [0.6.0] - 2026-11-04
 
 ### Added

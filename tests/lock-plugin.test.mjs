@@ -1,7 +1,7 @@
 // The Lock Ring ships as the DMS desktop plugin in lock-ring/ (ADR 0001). DMS finds it through
 // plugin.json, and the dir gets symlinked into the plugin folder, where QML resolves relative
 // imports on the symlink's path: everything the plugin imports has to sit inside lock-ring/.
-// Shared files (the audio pipeline, the kick detector) get there as relative symlinks, which a
+// Shared files (the audio pipeline, the kick detector, the shared settings) get there as relative symlinks, which a
 // package resolves by copying with cp -L.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -90,7 +90,7 @@ describe("lock ring plugin", () => {
     // detector, the ones the Bar Visualizer uses.
     test("the plugin runs the shared audio pipeline and kick detector", () => {
         const loaded = importGraph(PLUGIN).map(i => fs.realpathSync(path.join(PLUGIN, i.target)));
-        for (const shared of ["audio/AudioPipeline.qml", "docs/kick.mjs"])
+        for (const shared of ["audio/AudioPipeline.qml", "docs/kick.mjs", "docs/config.mjs"])
             assert.ok(loaded.includes(fs.realpathSync(path.join(ROOT, shared))), `the plugin loads ${shared}`);
     });
 
@@ -122,27 +122,31 @@ describe("lock ring plugin", () => {
         assert.match(fs.readFileSync(path.join(PLUGIN, "LockAudio.qml"), "utf8"), /^pragma Singleton$/m);
     });
 
-    // DMS opens it from the widget's options under Settings -> Lock Screen. Without
-    // settings_write, DMS shows an error instead of the settings.
-    test("plugin.json names a settings page that exists, and may write settings", () => {
+    // Its settings are all in config.json (ADR 0004), so DMS shows no settings page for it.
+    test("plugin.json has no settings page, and asks for no settings permissions", () => {
         const m = manifest();
-        assert.ok(m.settings, "plugin.json has settings");
-        const settings = path.normalize(m.settings);
-        assert.ok(!settings.startsWith(".."), settings);
-        assert.ok(fs.existsSync(path.join(PLUGIN, settings)), settings);
-        assert.ok(m.permissions.includes("settings_write"));
+        assert.equal(m.settings, undefined);
+        assert.equal(m.permissions, undefined);
+        assert.ok(!fs.existsSync(path.join(PLUGIN, "LockRingSettings.qml")));
     });
 
-    // The two visualizers are installed independently: removing or changing the bar's
-    // ~/.config/bar-visualizer/config.json must not touch the Lock Ring. Comments may mention it.
-    test("nothing the plugin loads reads the Bar Visualizer's config", () => {
+    // One file for both visualizers, the bar's config.json, with the Lock Ring's own settings in its
+    // lockRing section (ADR 0004). The Lock Ring only reads it: the file is the bar's, and without
+    // it the ring runs on the defaults.
+    test("reads every setting from the Bar Visualizer's config.json, and never writes it", () => {
         const stripComments = text => text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+        const audio = stripComments(fs.readFileSync(path.join(PLUGIN, "LockAudio.qml"), "utf8"));
+        assert.match(audio, /path: Config\.configPath\(Quickshell\.env\("XDG_CONFIG_HOME"\), Quickshell\.env\("HOME"\)\)/);
+        assert.match(audio, /watchChanges: true/);
+        assert.match(audio, /root\.settings = Config\.parseConfig\(text\(\)\)/);
+        assert.match(audio, /onLoadFailed: root\.settings = Config\.DEFAULTS/);
+        assert.match(audio, /handWaves: settings\.lockRing\.handWaves/);
+        assert.match(audio, /ringSize: settings\.lockRing\.ringSize/);
+        assert.doesNotMatch(audio, /pluginSettings|PluginService/, "nothing comes from DMS's plugin settings");
         const files = importGraph(PLUGIN).map(i => i.target).filter(t => /\.(qml|m?js)$/.test(t));
-        assert.ok(files.includes("LockAudio.qml") && files.includes("audio/AudioPipeline.qml"), "walks the audio code");
         for (const file of files) {
             const code = stripComments(fs.readFileSync(path.join(PLUGIN, file), "utf8"));
-            for (const banned of [/config\.json/, /bar-visualizer(?!-cava)/, /\bFileView\b/])
-                assert.doesNotMatch(code, banned, `${file} must not read the bar's config`);
+            assert.doesNotMatch(code, /setText|mkdir/, `${file} must not write the bar's config`);
         }
     });
 });

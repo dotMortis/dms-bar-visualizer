@@ -9,30 +9,33 @@ pragma Singleton
 //   Component.onDestruction: LockAudio.leave(ring)
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import qs.Common
 import "audio"
 import "share.mjs" as Share
 import "ring.mjs" as Ring
 import "kicks.mjs" as Kicks
+import "hands.mjs" as Hands
 import "docs/kick.mjs" as Kick
-import "settings.mjs" as Settings
+import "docs/config.mjs" as Config
 
 Singleton {
     id: root
 
     // --- Inputs -----------------------------------------------------------
-    // The Lock Ring's settings (settings.mjs), in real units: one plugin-wide set from DMS's
-    // plugin settings, so every ring runs the same kick detector (ADR 0002). DMS replaces
-    // pluginSettings on every change, so edits apply live. Never the bar's config.json.
-    readonly property var settings: Settings.resolve(SettingsData.pluginSettings[Settings.PLUGIN_ID])
+    // Every setting from the Bar Visualizer's config.json (docs/config.mjs): the bar's, which the
+    // Lock Ring shares, and its own in the lockRing section. One file for both, tuned in one place
+    // (ADR 0004). Its defaults while there is none; the Lock Ring never writes it. Watched, so an
+    // edit applies by the next lock.
+    property var settings: Config.DEFAULTS
 
     // --- Outputs ----------------------------------------------------------
     // The look settings, the same for every ring.
     readonly property real intensity: settings.intensity
     readonly property real bassStretch: settings.bassStretch
-    readonly property real handWaves: settings.handWaves
+    readonly property real handWaves: settings.lockRing.handWaves
     // The widget's default size, as a share of the screen height.
-    readonly property real ringSize: settings.ringSize
+    readonly property real ringSize: settings.lockRing.ringSize
     readonly property bool running: pipeline !== null
     readonly property int bandCount: Kick.BANDS
     readonly property var values: pipeline?.values ?? new Array(bandCount).fill(0)
@@ -41,6 +44,8 @@ Singleton {
     readonly property real treble: pipeline?.treble ?? 0
     readonly property real time: pipeline?.time ?? 0
     readonly property real flow: pipeline?.flow ?? 0
+    // 0..1, the last kick's impact, fading at kickDecay: the ribbons' kick punch.
+    readonly property real kick: pipeline?.kick ?? 0
     // Kicks, for the shockwave and flashing hands: the last kickSlots kicks.
     readonly property var kickAges: pipeline?.kickAges ?? []
     readonly property var kickPowers: pipeline?.kickPowers ?? []
@@ -53,6 +58,10 @@ Singleton {
     // how much music the ribbon shows (0 = only its calm idle wave).
     property real swell: 0
     property real presence: 0
+    // The hands' motion (hands.mjs createHandMotion()): each band as a share of its own recent
+    // peak, for the hands' looks, and how far each hand's wave has travelled.
+    property var handLevels: ({ bass: 0, mid: 0, treble: 0 })
+    property var handPhases: ({ hour: 0, minute: 0, second: 0 })
 
     // How many rings hold the capture.
     property int holders: 0
@@ -70,13 +79,32 @@ Singleton {
     readonly property var share: Share.createShare()
     readonly property var pipeline: loader.item ?? null
     property var motion: Ring.createRingMotion()
+    property var handMotion: Hands.createHandMotion()
 
     onRunningChanged: {
         if (running)
             return;
         motion = Ring.createRingMotion();
+        handMotion = Hands.createHandMotion();
         swell = 0;
         presence = 0;
+        handLevels = ({ bass: 0, mid: 0, treble: 0 });
+    }
+
+    // config.json. Missing means the defaults, broken the last good settings.
+    FileView {
+        path: Config.configPath(Quickshell.env("XDG_CONFIG_HOME"), Quickshell.env("HOME"))
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: {
+            try {
+                root.settings = Config.parseConfig(text());
+            } catch (e) {
+                console.warn(`lockRing: config.json: ${e.message}; keeping the previous settings`);
+            }
+        }
+        onLoadFailed: root.settings = Config.DEFAULTS
     }
 
     LazyLoader {
@@ -93,9 +121,13 @@ Singleton {
     FrameAnimation {
         running: root.running
         onTriggered: {
-            const m = root.motion.step({ bass: root.bass, mid: root.mid, treble: root.treble }, frameTime);
+            const levels = { bass: root.bass, mid: root.mid, treble: root.treble };
+            const m = root.motion.step(levels, frameTime);
             root.swell = m.swell;
             root.presence = m.presence;
+            const h = root.handMotion.step(levels, frameTime, root.settings.speed);
+            root.handLevels = h.levels;
+            root.handPhases = h.phases;
         }
     }
 }
