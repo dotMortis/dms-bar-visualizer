@@ -152,7 +152,7 @@
 </footer>
 
 <script type="module">
-// The visualizer's own kick detector, shared with shell.qml.
+// The visualizer's own kick detector, shared with audio/AudioPipeline.qml.
 import { BANDS, HIGH_HZ, LOW_HZ, createKickDetector } from "./kick.mjs";
 
 // ---- Shader: viz.frag ported to GLSL ES 3.00 (keep in sync with shaders/viz.frag) ----
@@ -341,14 +341,14 @@ const kickDetector = createKickDetector(cfg);
 const st = {
   values: new Float32Array(BANDS), bass: 0, mid: 0, treble: 0, kick: 0,
   time: 0, flow: 0, kickCount: 0,
-  // Same ring buffer as kickTimes/kickPowers/kickSeeds in shell.qml.
+  // Same ring buffer as kickTimes/kickPowers/kickSeeds in audio/AudioPipeline.qml.
   kickTimes: new Array(8).fill(-100), kickPowers: new Float32Array(8), kickSeeds: new Float32Array(8),
   inset: cfg.spacing, cornerRadius: cfg.radius,
 };
 
 const avg = (from, to) => { let s = 0; for (let i = from; i < to; i++) s += st.values[i]; return s / (to - from); };
 
-// Same as onValuesChanged in shell.qml. now is the page clock in seconds: the detector follows the
+// Same as onValuesChanged in audio/AudioPipeline.qml. now is the page clock in seconds: the detector follows the
 // music in real time at any frame rate and speed, and scales kickCooldown by cfg.speed itself.
 function onValues(now) {
   st.bass = avg(0, 6);
@@ -670,7 +670,7 @@ function readouts() {
   clock.textContent = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-// ---- Frame loop (the FrameAnimation in shell.qml) --------------------------------------------
+// ---- Frame loop (the FrameAnimation in audio/AudioPipeline.qml) -----------------------------
 // The bands come 60 times a second on a 60 Hz clock, like cava's frames, at any display refresh
 // rate. Read once per refresh, a 144 Hz display saw the analyser rise in finer steps, so near the
 // threshold it fired on fewer beats than a 60 Hz one.

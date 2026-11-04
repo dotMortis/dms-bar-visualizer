@@ -2,7 +2,7 @@
 """Record the kick replay fixtures: synthesized tracks with known kick onsets, played through real cava.
 
 Each scenario synthesizes a short track whose kick onsets are known to the sample, streams it through
-cava with the visualizer's own cava settings (shell.qml) in real time, and saves every line cava prints
+cava with the visualizer's own cava settings (audio/AudioPipeline.qml) in real time, and saves every line cava prints
 with the time it arrived. tests/kick-replay.test.mjs replays these lines through docs/kick.mjs. The test
 run only reads the committed fixtures; recording is a manual step.
 
@@ -42,7 +42,7 @@ import numpy as np
 OUT = Path(__file__).resolve().parent
 SR = 44100
 
-# shell.qml's cava config, with the input swapped from pulse to a fifo. Keep the two in sync, and the
+# audio/AudioPipeline.qml's cava config, with the input swapped from pulse to a fifo. Keep the two in sync, and the
 # layout (bars, cutoffs, sample rate) with docs/kick.mjs.
 CAVA_CONF = """[general]
 framerate=60

@@ -18,7 +18,7 @@ export const FIXTURES = Object.fromEntries(SCENARIOS.map(s => [s, readFixture(s)
 export const TRACKS = SCENARIOS.filter(s => FIXTURES[s].onsets.length);
 
 // A fixture recorded by fixtures/record.py: its JSON header (scenario, about, cava, onsets, ...)
-// plus frames, [{ time, values }], parsed the way shell.qml parses cava's lines.
+// plus frames, [{ time, values }], parsed the way audio/AudioPipeline.qml parses cava's lines.
 function readFixture(scenario) {
     const text = fs.readFileSync(new URL(`fixtures/${scenario}.txt`, import.meta.url), "utf8");
     const [header, ...lines] = text.trimEnd().split("\n");

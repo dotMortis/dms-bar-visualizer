@@ -1,7 +1,7 @@
-// Kick detection, shared by the visualizer (shell.qml) and the demo (index.html) so they can't drift.
+// Kick detection, shared by the visualizer (audio/AudioPipeline.qml) and the demo (index.html) so they can't drift.
 // Plain ECMAScript that QML, browsers and node all load. In docs/, as GitHub Pages serves only that.
 
-// cava's layout, which shell.qml configures it with: 32 bands from 30 Hz to 14 kHz, bass first.
+// cava's layout, which audio/AudioPipeline.qml configures it with: 32 bands from 30 Hz to 14 kHz, bass first.
 export const BANDS = 32;
 export const LOW_HZ = 30;
 export const HIGH_HZ = 14000;
