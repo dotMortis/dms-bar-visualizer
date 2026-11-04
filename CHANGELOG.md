@@ -22,6 +22,11 @@ All notable changes to this project are documented here. The format follows
 - The Lock Ring's hands react to the music: hour to the bass, minute to the mids, second to the
   highs. Each thickens, glows and shimmers along its length with its band. The music never moves
   them: they always point at the true time. In silence they're plain.
+- On Arch, `install-lock-arch.sh` builds and installs the Lock Ring as the pacman package
+  `dms-lock-visualizer-git`, into DMS's system plugin dir. Run it again to update, and pass
+  `--uninstall` to remove it. It's independent of the Bar Visualizer's package: either one
+  installs alone, and neither script touches the other. The README has a Lock Ring section on
+  installing it, adding the widget to the lock screen and moving DMS's password field below it.
 
 ## [0.5.0] - 2026-10-30
 
