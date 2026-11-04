@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { describe, test } from "node:test";
+import { slidersFor } from "../docs/demo.mjs";
 import { PLUGIN_ID, SETTINGS, isPluginWide, resolve, sliderOf } from "../lock-ring/settings.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -69,13 +70,11 @@ describe("lock ring settings", () => {
         }
     });
 
-    // The slider ranges are the demo's (docs/index.html SLIDERS), so a value tuned there fits here.
+    // The slider ranges are the demo's bar sliders (docs/demo.mjs), so a value tuned there fits here.
     test("the slider ranges are the demo's", () => {
-        const html = fs.readFileSync(path.join(ROOT, "docs/index.html"), "utf8");
-        for (const setting of SETTINGS) {
-            const [, min, max] = html.match(new RegExp(`\\["${setting.key}",\\s*([\\d.]+),\\s*([\\d.]+)`));
-            assert.deepEqual([setting.min, setting.max], [Number(min), Number(max)], setting.key);
-        }
+        const bar = new Map(slidersFor("bar").map(s => [s.key, s]));
+        for (const setting of SETTINGS)
+            assert.deepEqual([setting.min, setting.max], [bar.get(setting.key).min, bar.get(setting.key).max], setting.key);
     });
 
     // DMS stores desktop-plugin settings per widget, but all rings share one capture, so the

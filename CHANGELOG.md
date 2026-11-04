@@ -35,6 +35,12 @@ All notable changes to this project are documented here. The format follows
   `--uninstall` to remove it. It's independent of the Bar Visualizer's package: either one
   installs alone, and neither script touches the other. The README has a Lock Ring section on
   installing it, adding the widget to the lock screen and moving DMS's password field below it.
+- Demo: a Lock Ring view, so you can tune the ring without locking the screen. Switch between
+  the Bar Visualizer and the Lock Ring at the top of the controls, or open the demo with `#ring`.
+  It runs on the same sources (demo beat, synth, microphone, audio file) and draws with the
+  plugin's own shader and modules. Its sliders are the plugin's settings, shown in the units of
+  its settings page, plus the ring's size and a 12h/24h toggle, and "Export lockRing settings"
+  downloads the values DMS stores for them.
 
 ## [0.5.0] - 2026-10-30
 
