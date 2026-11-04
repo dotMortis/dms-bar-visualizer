@@ -1,0 +1,17 @@
+post_install() {
+  cat <<'MSG'
+==> If DMS doesn't list the Lock Ring under Settings -> Plugins, restart it (as your user): dms restart
+==> Add it to the lock screen: DMS Settings -> Lock Screen -> Add widget -> Lock Ring
+==> The ring and DMS's password field both start centered: move the password field below the ring.
+    See /usr/share/doc/dms-lock-visualizer/README.md
+MSG
+}
+
+# DMS caches the plugin's types for the life of the process.
+post_upgrade() {
+  echo '==> Restart DMS to load the new version (as your user): dms restart'
+}
+
+pre_remove() {
+  echo '==> Restart DMS afterwards (as your user) so it drops the plugin: dms restart'
+}

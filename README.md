@@ -19,6 +19,8 @@ Neon ribbons shaped by the spectrum, waves pushed outward by the music's energy,
 
 It runs as its own small [Quickshell](https://quickshell.org) config. DMS itself isn't modified, so DMS updates can't break it.
 
+For the lock screen, there's the separately installed [Lock Ring](#lock-ring): the same look as a ring around a clock.
+
 > [!NOTE]
 > The preview above is an SVG re-creation of `shaders/viz.frag` driven by a synthetic 120 bpm loop. For the real shader, try the **[live WebGL demo](https://dotmortis.github.io/dms-bar-visualizer/)**: it runs on a demo beat, a synth loop, your microphone or an audio file, with every tweakable on a slider.
 
@@ -158,6 +160,39 @@ node --test
 ```
 
 It prints those numbers per track for the default and a sensitive kick setting. Other tests check that the kicks and their power don't depend on the volume, and that kicks come back soon after a 12 dB drop and after a cava restart. A sine sweep recorded the same way checks that `kickLowHz` and `kickHighHz` select the bands cava puts those frequencies in. `tests/fixtures/record.py` synthesizes and records the tracks; its header says how to re-record them or add one (needs cava, numpy and real time).
+
+## Lock Ring
+
+The Bar Visualizer can't show on the lock screen: while it's up, only DMS's own surfaces are visible. The **Lock Ring** is a separate DMS plugin for the lock screen: the same ribbons and colours bent into a circle around an analog and digital clock, whose hands react to the music but always show the true time. It follows the active player and detects kicks with the same `docs/kick.mjs` as the bar, and every monitor's ring runs from one capture. ([Why it's a plugin](docs/adr/0001-lock-ring-runs-inside-dms.md).)
+
+It installs separately from the Bar Visualizer. You can install either one alone or both, and installing or removing one never touches the other.
+
+### Install
+
+It needs DankMaterialShell 2.x, `cava` and `pactl` (libpulse).
+
+**Arch Linux:**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/dotMortis/dms-bar-visualizer/main/install-lock-arch.sh | bash
+```
+
+Or from a clone: `./install-lock-arch.sh`. It builds the pacman package `dms-lock-visualizer-git` from [`packaging/aur`](packaging/aur/dms-lock-visualizer-git/PKGBUILD), which installs the plugin into DMS's system plugin dir, `/etc/xdg/quickshell/dms-plugins/lockRing`. Run it again to update. It also removes a link left by `install-lock.sh`, which would otherwise shadow the package.
+
+**Other distros, or hacking on it:** from a clone, run `./install-lock.sh`. It compiles the ring shader, so it needs `qsb` (on Arch: `qt6-shadertools`), and links `lock-ring/` into your DMS plugin dir (`~/.config/dms/plugins/lockRing`). Edits in the checkout then go live after a DMS restart.
+
+Both scripts take `--uninstall`.
+
+### Set it up in DMS
+
+1. **Enable it:** the Lock Ring is a desktop plugin, so DMS loads it on its own, with no toggle. If it doesn't show up under **DMS Settings → Plugins**, restart DMS: `dms restart`.
+2. **Add the widget:** **DMS Settings → Lock Screen → Add widget → Lock Ring**.
+3. **Move the password field:** the ring and DMS's password field both start in the centre of the screen. Under **DMS Settings → Lock Screen → Edit widgets**, drag the password field below the ring. You can move and resize the ring there too.
+
+Its settings are in DMS's plugin settings, under the widget's options in Settings → Lock Screen. It doesn't read the Bar Visualizer's `config.json`.
+
+> [!NOTE]
+> DMS keeps a loaded plugin in memory, so after updating the Lock Ring (with either script, or by pulling the checkout), restart DMS to see the new version: `dms restart`.
 
 ## Changelog
 
