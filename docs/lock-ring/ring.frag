@@ -3,8 +3,8 @@
 // the ribbon is the dial: in silence a thin, faint wave that breathes and drifts around the dial
 // radius, never a fixed circle; with music its strands wave around the swelling dial, inward and
 // outward with each band's level like the bar's around its center line, mirrored left and right
-// with bass at the bottom, and the ring's radius swells with the music's energy. 12 hour
-// points ride on it. On every Kick a chromatic shockwave expands from the center, bigger on a
+// with bass at the bottom, and the ring's radius swells with the music's energy. 12 hour points
+// ride on it, each flashing as a shockwave's front reaches it. On every Kick a chromatic shockwave expands from the center, bigger on a
 // harder hit, and a spray of sparks flies off the ring; up to KICKS of them play at once. On top,
 // the clock's three floating hands as neon wave ribbons (hand()): they swing, thicken and glow with
 // their bands and whip on every Kick, around a straight axis through the center at the true time.
@@ -60,6 +60,9 @@ const float MAX_REACH = 0.9 * 0.5 / DIAL_RATIO;
 const float KICK_GROW = 4.5;
 const float KICK_FADE = 2.2;
 const float PLAYED_OUT = 3.0;
+// shockwaveCrossing(): how far ahead of and behind a shockwave's front a radius feels it crossing.
+const float CROSSING_LEAD = 0.1;
+const float CROSSING_TRAIL = 0.3;
 
 float band(int i) {
     int v = i / 4;
@@ -72,6 +75,25 @@ float band(int i) {
 float kickAge(int i) { return i < 4 ? ubuf.kickAge0[i] : ubuf.kickAge1[i - 4]; }
 float kickPower(int i) { return i < 4 ? ubuf.kickPower0[i] : ubuf.kickPower1[i - 4]; }
 float kickSeed(int i) { return i < 4 ? ubuf.kickSeed0[i] : ubuf.kickSeed1[i - 4]; }
+
+// How brightly a shockwave's front is crossing radius r (dial radii) right now, 0..1: each kick's
+// strength, shaped by how near its front is; the brightest wins. lock-ring/kicks.mjs
+// shockwaveCrossing().
+float shockwaveCrossing(float r) {
+    float crossing = 0.0;
+    for (int j = 0; j < KICKS; j++) {
+        float age = max(kickAge(j), 0.0);
+        float power = kickPower(j);
+        if (power <= 0.0 || age >= PLAYED_OUT)
+            continue;
+        float reach = KICK_ORIGIN + (MAX_REACH - KICK_ORIGIN) * power;
+        float front = KICK_ORIGIN + (reach - KICK_ORIGIN) * (1.0 - exp(-age * KICK_GROW));
+        float ds = r - front;                 // > 0 ahead of the front, < 0 behind it
+        float near = ds >= 0.0 ? 1.0 - smoothstep(0.0, CROSSING_LEAD, ds) : 1.0 - smoothstep(0.0, CROSSING_TRAIL, -ds);
+        crossing = max(crossing, power * exp(-age * KICK_FADE) * near);
+    }
+    return min(crossing, 1.0);
+}
 
 float hash1(float n) {
     return fract(sin(n * 12.9898) * 43758.5453);
@@ -155,10 +177,13 @@ vec3 pal(float h, float s, float v) {
 }
 
 // The ribbons' light at dp pixels from a strand's centre, at a level of 0..1 (louder = brighter)
-// and a kick of 0..1 (wider): viz.frag's glow, measured in pixels so the line is as crisp as the
-// bar's at any ring size. 1.125 = viz.frag's 18 / glowW over its 40 px bar.
+// and a kick of 0..1 (wider): viz.frag's glow, measured in pixels so it looks the same at any ring
+// size. RIBBON_FALLOFF sets how fast it falls off: softer than the bar's 1.125 (viz.frag's 18 / glowW
+// over its 40 px bar, half bright at ~0.9 px, a hard line on a ring), sharper than the old glow that
+// grew with the ring (~3 px at the default size): half bright at ~1.8 px, neon with a defined core.
+const float RIBBON_FALLOFF = 0.3;
 float ribbonLight(float dp, float level, float kick) {
-    return 1.0 / (1.0 + dp * dp * 1.125 / (1.0 + 3.0 * kick)) * (0.6 + 1.8 * level) * 0.7;
+    return 1.0 / (1.0 + dp * dp * RIBBON_FALLOFF / (1.0 + 3.0 * kick)) * (0.6 + 1.8 * level) * 0.7;
 }
 
 // --- Hands: neon wave ribbons ----------------------------------------------------------------
@@ -261,9 +286,10 @@ void main() {
     // --- The ribbon: the dial itself --------------------------------------------------------
     // Neon strands like the bar's. In silence they idle as a thin, faint, breathing wave around the
     // dial radius; music grows them into the spectrum ribbons, which wave around the swelling dial,
-    // inward and outward, their waves travelling around the ring from the bottom up, advanced by audio energy (ubuf.flow): loud = racing, quiet = crawling.
-    // Lit with viz.frag's glow (ribbonLight()): the same crisp line with a soft falloff as the bar's
-    // at any ring size, wider on a kick.
+    // inward and outward, their waves travelling around the ring from the bottom up, advanced by
+    // audio energy (ubuf.flow): loud = racing, quiet = crawling.
+    // Lit with viz.frag's glow (ribbonLight()), a little softer: a neon line with a defined core,
+    // the same at any ring size, wider on a kick.
     vec3 ribbon = vec3(0.0);
     for (int k = 0; k < 3; k++) {
         float fk = float(k);
@@ -277,10 +303,11 @@ void main() {
     }
     col += ribbon * mix(IDLE_GLOW, 1.0, ubuf.presence);
 
-    // --- Spectrum aura: a soft fill outward from the ribbon's living spine, with the music only ---
-    // From the spine, not a fixed circle, so nothing about the dial stands still.
-    float out_ = r - ribbonRadius(theta, 0.0, 0);
-    float aura = out_ >= 0.0 ? smoothstep(0.32 * amp * 0.7 + 0.02, 0.0, out_) : 0.5 * exp(out_ * 60.0);
+    // --- Spectrum aura: a soft fill both ways from the ribbon's living spine, with the music only ---
+    // From the spine, not a fixed circle, so nothing about the dial stands still. Symmetric: brightest
+    // at the spine, with the same music-driven reach inward as outward, so there is no inner edge.
+    float off = abs(r - ribbonRadius(theta, 0.0, 0));
+    float aura = smoothstep(0.32 * amp * 0.7 + 0.02, 0.0, off);
     col += pal(hueBase + 0.5 + s * 0.8, 0.8, 1.0) * aura * amp * 0.45 * ubuf.presence;
 
     // --- Kick shockwaves: a chromatic ring expanding from the center, one per kick ----------------
@@ -346,19 +373,22 @@ void main() {
     col *= ubuf.intensity;
 
     // --- Hour points, riding on the ribbon (hourPoints() in lock-ring/ring.mjs) -----------------
-    // Clock marks, so at full brightness whatever the intensity.
+    // Clock marks, so at full brightness whatever the intensity. Each flashes as a shockwave's
+    // front reaches its radius (shockwaveCrossing()), not at the kick's instant.
     for (int i = 0; i < 12; i++) {
         float th = float(i) * TAU / 12.0;
         float ai = abs(th - PI);
         float level = min(1.0, 1.3 * spectrum(pow(ai / PI, ubuf.bassStretch)));
-        vec2 at = ribbonRadius(th, level, 0) * vec2(sin(th), -cos(th));
+        float ri = ribbonRadius(th, level, 0);
+        vec2 at = ri * vec2(sin(th), -cos(th));
         float quarter = i - (i / 3) * 3 == 0 ? 1.0 : 0.0;
-        float glow = mix(0.6, 1.0, quarter) * (0.6 + 0.4 * ubuf.presence) + 0.8 * ubuf.handFlash;
+        float hit = shockwaveCrossing(ri);
+        float glow = mix(0.6, 1.0, quarter) * (0.6 + 0.4 * ubuf.presence) + 0.8 * hit;
         vec2 dq = q - at;
         float d2 = dot(dq, dq);
         float core = exp(-d2 / (POINT_SIZE * POINT_SIZE));
         float halo = 1.0 / (1.0 + d2 / (POINT_SIZE * POINT_SIZE * 9.0)) * smoothstep(0.2, 0.05, sqrt(d2));
-        vec3 c = mix(LAVENDER, vec3(1.0), 0.35 * quarter + 0.3 * ubuf.handFlash);
+        vec3 c = mix(LAVENDER, vec3(1.0), 0.35 * quarter + 0.3 * hit);
         col += (c * core * 1.1 + pow(LAVENDER, vec3(2.0)) * halo * 0.25) * glow;
     }
 

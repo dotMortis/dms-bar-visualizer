@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import { IDLE, createRingMotion, hourPoints, ribbonRadius, spectrumAt, spectrumLevel } from "../lock-ring/ring.mjs";
+import { kickAt, shockwaveCrossing } from "../lock-ring/kicks.mjs";
 
 const near = (actual, expected, msg) => assert.ok(Math.abs(actual - expected) < 1e-9, `${msg ?? ""} ${actual} != ${expected}`);
 
@@ -142,7 +143,7 @@ describe("the living ribbon", () => {
 
 describe("the hour points", () => {
     const values = Array.from({ length: 32 }, (_, i) => (i % 5) / 5);
-    const state = { values, flow: 2, time: 7, treble: 0.3, swell: 0.04, presence: 1, bassStretch: 1.4, flash: 0 };
+    const state = { values, flow: 2, time: 7, treble: 0.3, swell: 0.04, presence: 1, bassStretch: 1.4 };
 
     test("there are 12, one at every hour", () => {
         assert.deepEqual(hourPoints(state).map(p => p.angle), [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330]);
@@ -161,15 +162,32 @@ describe("the hour points", () => {
         assert.ok(now.some((p, i) => Math.abs(p.radius - later[i].radius) > 1e-3));
     });
 
-    test("12, 3, 6 and 9 are brighter, and a kick flashes them all", () => {
+    test("12, 3, 6 and 9 are brighter", () => {
         const points = hourPoints(state);
         for (const p of points)
             if (p.angle % 90 !== 0)
                 assert.ok(p.glow < points[0].glow && p.glow > 0, `${p.angle}`);
         for (const i of [3, 6, 9])
             near(points[i].glow, points[0].glow);
-        const kicked = hourPoints(Object.assign({}, state, { flash: 1 }));
-        kicked.forEach((p, i) => assert.ok(p.glow > points[i].glow, `${p.angle}`));
+    });
+
+    // A hard kick, `age` seconds ago: its shockwave crossing the ring (kicks.mjs).
+    const kicked = age => Object.assign({}, state, { crossing: r => shockwaveCrossing(r, [age], [1]) });
+
+    test("a kick doesn't flash them at its instant, while its shockwave is still near the center", () => {
+        const points = hourPoints(state);
+        for (const age of [0, 0.05])
+            hourPoints(kicked(age)).forEach((p, i) => near(p.glow, points[i].glow, `${p.angle} at ${age} s`));
+    });
+
+    test("each flashes as the shockwave's front reaches its radius", () => {
+        const points = hourPoints(state);
+        points.forEach((p, i) => {
+            let age = 0;
+            while (kickAt(age, 1).front < p.radius)
+                age += 0.001;
+            assert.ok(hourPoints(kicked(age))[i].glow > p.glow + 0.2, `${p.angle} at ${age} s`);
+        });
     });
 
     test("they stay visible in silence, a little dimmer", () => {

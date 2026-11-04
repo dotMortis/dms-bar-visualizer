@@ -8,7 +8,7 @@ import { describe, test } from "node:test";
 
 import { DIAL } from "../docs/demo.mjs";
 import { WAVE } from "../lock-ring/hands.mjs";
-import { KICK_FADE, KICK_GROW, KICK_ORIGIN, MAX_REACH, PLAYED_OUT } from "../lock-ring/kicks.mjs";
+import { CROSSING_LEAD, CROSSING_TRAIL, KICK_FADE, KICK_GROW, KICK_ORIGIN, MAX_REACH, PLAYED_OUT } from "../lock-ring/kicks.mjs";
 import { DIAL_RATIO, IDLE, RIBBON } from "../lock-ring/ring.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -50,6 +50,11 @@ describe("ring.frag's constants match their modules", () => {
         close(frag.PLAYED_OUT, PLAYED_OUT, "PLAYED_OUT");
     });
 
+    test("how near a shockwave's front a radius feels it crossing (kicks.mjs shockwaveCrossing())", () => {
+        close(frag.CROSSING_LEAD, CROSSING_LEAD, "CROSSING_LEAD");
+        close(frag.CROSSING_TRAIL, CROSSING_TRAIL, "CROSSING_TRAIL");
+    });
+
     test("the ribbon's idle wave (ring.mjs IDLE)", () => {
         for (const [key, value] of Object.entries(IDLE))
             close(frag[`IDLE_${key.toUpperCase()}`], value, `IDLE_${key.toUpperCase()}`);
@@ -68,6 +73,14 @@ describe("ring.frag's constants match their modules", () => {
     // hands.mjs PHASE_WRAP is seamless only for these strand multiples (tests/lock-hands.test.mjs).
     test("the hands' strands run at their hand's phase times 1, 1.5 and 2", () => {
         assert.match(read("lock-ring/shaders/ring.frag"), /float phase = wave \* \(1\.0 \+ 0\.5 \* fk\)/);
+    });
+
+    // ring.mjs hourPoints(): they flash with the shockwave crossing their radius, not the hands' flash.
+    test("the hour points flash by the shockwave crossing them", () => {
+        const frag = read("lock-ring/shaders/ring.frag").replace(/\/\/.*$/gm, "");
+        const points = frag.slice(frag.indexOf("for (int i = 0; i < 12; i++)"), frag.indexOf("col = col / (1.0"));
+        assert.match(points, /shockwaveCrossing\(/);
+        assert.doesNotMatch(points, /handFlash/);
     });
 
     test("ring.frag spells out no other copy of the dial ratio", () => {
