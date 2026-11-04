@@ -121,4 +121,28 @@ describe("lock ring plugin", () => {
         assert.match(qmldir, /^singleton LockAudio \S+ LockAudio\.qml$/m);
         assert.match(fs.readFileSync(path.join(PLUGIN, "LockAudio.qml"), "utf8"), /^pragma Singleton$/m);
     });
+
+    // DMS opens it from the widget's options under Settings -> Lock Screen. Without
+    // settings_write, DMS shows an error instead of the settings.
+    test("plugin.json names a settings page that exists, and may write settings", () => {
+        const m = manifest();
+        assert.ok(m.settings, "plugin.json has settings");
+        const settings = path.normalize(m.settings);
+        assert.ok(!settings.startsWith(".."), settings);
+        assert.ok(fs.existsSync(path.join(PLUGIN, settings)), settings);
+        assert.ok(m.permissions.includes("settings_write"));
+    });
+
+    // The two visualizers are installed independently: removing or changing the bar's
+    // ~/.config/bar-visualizer/config.json must not touch the Lock Ring. Comments may mention it.
+    test("nothing the plugin loads reads the Bar Visualizer's config", () => {
+        const stripComments = text => text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+        const files = importGraph(PLUGIN).map(i => i.target).filter(t => /\.(qml|m?js)$/.test(t));
+        assert.ok(files.includes("LockAudio.qml") && files.includes("audio/AudioPipeline.qml"), "walks the audio code");
+        for (const file of files) {
+            const code = stripComments(fs.readFileSync(path.join(PLUGIN, file), "utf8"));
+            for (const banned of [/config\.json/, /bar-visualizer(?!-cava)/, /\bFileView\b/])
+                assert.doesNotMatch(code, banned, `${file} must not read the bar's config`);
+        }
+    });
 });

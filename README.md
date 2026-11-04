@@ -189,7 +189,7 @@ Both scripts take `--uninstall`.
 2. **Add the widget:** **DMS Settings → Lock Screen → Add widget → Lock Ring**.
 3. **Move the password field:** the ring and DMS's password field both start in the centre of the screen. Under **DMS Settings → Lock Screen → Edit widgets**, drag the password field below the ring. You can move and resize the ring there too.
 
-Its settings are in DMS's plugin settings, under the widget's options in Settings → Lock Screen. It doesn't read the Bar Visualizer's `config.json`.
+Its settings (intensity, speed and the kick settings, at the Bar Visualizer's defaults) are in DMS's plugin settings, under the widget's options in Settings → Lock Screen. They apply right away and to every Lock Ring at once, since all rings share one capture. It doesn't read the Bar Visualizer's `config.json`.
 
 > [!NOTE]
 > DMS keeps a loaded plugin in memory, so after updating the Lock Ring (with either script, or by pulling the checkout), restart DMS to see the new version: `dms restart`.

@@ -1,2 +1,3 @@
 LockRing 1.0 LockRing.qml
+LockRingSettings 1.0 LockRingSettings.qml
 singleton LockAudio 1.0 LockAudio.qml

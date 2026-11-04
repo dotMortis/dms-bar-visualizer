@@ -7,6 +7,7 @@
     "type": "desktop",
     "capabilities": ["desktop-widget", "clock"],
     "component": "./LockRing.qml",
+    "settings": "./LockRingSettings.qml",
     "icon": "graphic_eq",
     "requires_dms": ">=2.0.0",
     "permissions": ["settings_read", "settings_write"]

@@ -25,6 +25,11 @@ All notable changes to this project are documented here. The format follows
 - Kicks on the Lock Ring, detected exactly like the Bar Visualizer's: each one sends a chromatic
   shockwave out of the center hub, sparks fly off the ring, and all hands flash. Harder hits make
   bigger, brighter shockwaves, and up to 8 kicks play on top of each other.
+- Lock Ring settings in DMS: open a Lock Ring widget's options under Settings → Lock Screen to
+  set intensity, speed, kick threshold, kick decay, kick range, kick cooldown and bass stretch.
+  The defaults are the Bar Visualizer's. They apply right away, and to every Lock Ring at once,
+  because all rings share one capture. The Lock Ring never reads the Bar Visualizer's
+  `config.json`.
 - On Arch, `install-lock-arch.sh` builds and installs the Lock Ring as the pacman package
   `dms-lock-visualizer-git`, into DMS's system plugin dir. Run it again to update, and pass
   `--uninstall` to remove it. It's independent of the Bar Visualizer's package: either one
