@@ -187,7 +187,7 @@ To change colours, edit the `palette()` cycle and the `LAVENDER` / `MAUVE` / `PI
 
 The SVGs in `assets/` are generated. After tweaking `assets/generate.py`, run `python3 assets/generate.py`.
 
-`docs/index.html` is the live demo (served by GitHub Pages). It carries a GLSL ES port of `shaders/viz.frag`, so mirror shader changes there. Its Lock Ring view needs no mirroring: it fetches the ring's own shader and converts it to GLSL ES as the page loads (`docs/webgl.mjs`), and imports the plugin's modules. Those files (`ring.frag` and the ring's `.mjs` modules) live in `docs/lock-ring/`, because Pages publishes only `docs/` and doesn't follow symlinks, and `lock-ring/` links to them, as it does to `docs/kick.mjs`. Edit them there.
+`docs/index.html` is the live demo (served by GitHub Pages). It carries a GLSL ES port of `shaders/viz.frag`, so mirror shader changes there. Its Lock Ring view needs no mirroring: it fetches the ring's own shader and converts it to GLSL ES as the page loads (`docs/webgl.mjs`), and imports the plugin's modules. Those files (`ring.frag` and the ring's `.mjs` modules) live in `docs/lock-ring/`, because Pages publishes only `docs/` and doesn't follow symlinks, and `lock-ring/` links to them, as it does to `docs/kick.mjs` and `docs/config.mjs`. Edit them there.
 
 Kick detection isn't mirrored: `docs/kick.mjs` is the one detector, and both the visualizer's audio pipeline (`audio/AudioPipeline.qml`) and the demo import it. It lives in `docs/` because Pages publishes only that directory. Browsers don't load module scripts over `file://`, so to run the demo locally, serve the directory and open http://localhost:8000:
 
