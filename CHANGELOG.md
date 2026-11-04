@@ -18,6 +18,11 @@ All notable changes to this project are documented here. The format follows
   instant of the Kick, so the wave visibly travels out and lights them as it passes, brighter on
   a harder hit. A soft Kick's shockwave stops short of the ring and leaves them dark. The hands
   still flash on the Kick itself.
+- The Lock Ring's Shockwaves hit like the Bar Visualizer's Kicks: a wider, softer front in
+  lavender, mauve and blue with a brighter wake behind it; the ribbons flare and bulge as the front
+  crosses them, more on a harder Kick and adding up when Shockwaves overlap, with the hour points
+  riding them; a plasma haze flashes across the dial on a hard Kick (none at rest or on a soft
+  one); and the center punches white-lavender as a Shockwave is born. Nothing shakes.
 
 ## [0.7.1] - 2026-11-04
 

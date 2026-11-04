@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import { IDLE, createRingMotion, hourPoints, ribbonRadius, spectrumAt, spectrumLevel } from "../lock-ring/ring.mjs";
-import { kickAt, shockwaveCrossing } from "../lock-ring/kicks.mjs";
+import { kickAt, ribbonSurge, shockwaveCrossing } from "../lock-ring/kicks.mjs";
 
 const near = (actual, expected, msg) => assert.ok(Math.abs(actual - expected) < 1e-9, `${msg ?? ""} ${actual} != ${expected}`);
 
@@ -187,6 +187,25 @@ describe("the hour points", () => {
             while (kickAt(age, 1).front < p.radius)
                 age += 0.001;
             assert.ok(hourPoints(kicked(age))[i].glow > p.glow + 0.2, `${p.angle} at ${age} s`);
+        });
+    });
+
+    // A hard kick whose shockwave's front is at the ribbon's rest radius (1 + swell): the ribbons surge there.
+    const surging = (() => {
+        let age = 0;
+        while (kickAt(age, 1).front < 1 + state.swell)
+            age += 0.001;
+        return Object.assign({}, state, { surge: r => ribbonSurge(r, [age], [1]) });
+    })();
+
+    test("they ride the ribbon as a shockwave surges it, lifted with it", () => {
+        const lift = surging.surge(1 + state.swell);
+        assert.ok(lift > 0.2, `the surge at the ring: ${lift}`);
+        const calm = hourPoints(state);
+        hourPoints(surging).forEach((point, i) => {
+            const level = Math.min(1, 1.3 * spectrumLevel(values, spectrumAt(point.angle, 1.4)) + lift);
+            near(point.radius, ribbonRadius(point.angle, Object.assign({}, state, { level, strand: 0 })), `${point.angle}`);
+            assert.ok(point.radius >= calm[i].radius - 1e-12, `${point.angle}`);
         });
     });
 

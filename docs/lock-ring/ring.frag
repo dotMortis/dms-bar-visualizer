@@ -4,7 +4,9 @@
 // radius, never a fixed circle; music grows it outward with each band's level, mirrored left and
 // right with bass at the bottom, and the ring's radius swells with the music's energy. 12 hour
 // points ride on it, each flashing as a shockwave's front reaches it. On every Kick a chromatic shockwave expands from the center, bigger on a
-// harder hit, and a spray of sparks flies off the ring; up to KICKS of them play at once. On top,
+// harder hit, the center punches, a plasma haze flashes across the dial on a hard one, the ribbons
+// surge where the front crosses them and a spray of sparks flies off the ring; up to KICKS of
+// them play at once. Nothing shakes. On top,
 // the clock's three floating hands as neon wave ribbons (hand()): they swing, thicken and glow with
 // their bands and whip on every Kick, around a straight axis through the center at the true time.
 // LockRing.qml draws only the digital time over it.
@@ -62,6 +64,10 @@ const float PLAYED_OUT = 3.0;
 // shockwaveCrossing(): how far ahead of and behind a shockwave's front a radius feels it crossing.
 const float CROSSING_LEAD = 0.1;
 const float CROSSING_TRAIL = 0.3;
+// ribbonSurge(): how far either side of a shockwave's front the ribbons surge (a Gaussian's 2σ²,
+// in dial radii squared), and how much they lift at full strength, in spectrum level.
+const float SURGE_WIDTH = 0.006;
+const float SURGE_LIFT = 0.6;
 
 float band(int i) {
     int v = i / 4;
@@ -92,6 +98,24 @@ float shockwaveCrossing(float r) {
         crossing = max(crossing, power * exp(-age * KICK_FADE) * near);
     }
     return min(crossing, 1.0);
+}
+
+// How much the shockwaves lift the ribbons at radius r (dial radii) right now, in spectrum level:
+// each kick's strength where its front is, falling off within about 0.1 either side; overlapping
+// surges add up, as viz.frag's. lock-ring/kicks.mjs ribbonSurge().
+float ribbonSurge(float r) {
+    float surge = 0.0;
+    for (int j = 0; j < KICKS; j++) {
+        float age = max(kickAge(j), 0.0);
+        float power = kickPower(j);
+        if (power <= 0.0 || age >= PLAYED_OUT)
+            continue;
+        float reach = KICK_ORIGIN + (MAX_REACH - KICK_ORIGIN) * power;
+        float front = KICK_ORIGIN + (reach - KICK_ORIGIN) * (1.0 - exp(-age * KICK_GROW));
+        float ds = r - front;
+        surge += power * exp(-age * KICK_FADE) * exp(-ds * ds / SURGE_WIDTH);
+    }
+    return SURGE_LIFT * surge;
 }
 
 float hash1(float n) {
@@ -239,13 +263,22 @@ void main() {
     float a = atan(abs(p.x), p.y);
     // Where on the spectrum this angle sits: spectrumAt() in lock-ring/ring.mjs.
     float s = pow(a / PI, ubuf.bassStretch);
-    float amp = min(1.0, 1.3 * spectrum(s) * (1.0 + 0.7 * ubuf.kick));
     float base = 1.0 + ubuf.swell;
+    // The ribbons surge as a shockwave's front crosses them, at their rest radius, so the whole
+    // ring flares and bulges at once; overlapping kicks add up (ribbonSurge()).
+    float surge = ribbonSurge(base);
+    float amp = min(1.0, 1.3 * spectrum(s) * (1.0 + 0.7 * ubuf.kick) + surge);
     float t = ubuf.time;
     float hueBase = t * 0.05 + s * 0.15;
     vec2 q = p / ubuf.dial;              // in dial radii, y down
+    float k2 = ubuf.kick * ubuf.kick;
 
-    vec3 col = vec3(0.0);
+    // --- Plasma haze across the dial: transparent at rest and on soft kicks, flashes in on hard ones ---
+    // viz.frag's, with the square of the kick's impact; drifting with time, never shaking.
+    float n = sin(q.x * 1.9 + t * 0.9 + sin(q.y * 2.5 + t * 1.3) * 1.5)
+            + sin(r * 2.2 - t * 0.6 + ubuf.flow * 0.3)
+            + sin((q.x * 0.6 + q.y * 1.4) + t * 0.4);
+    vec3 col = pal(hueBase + n * 0.08, 0.85, (0.12 + 0.08 * (n * 0.5 + 0.5)) * k2);
 
     // Clockwise from 12 o'clock, 0..TAU: the idle wave runs all the way round.
     float theta = atan(p.x, -p.y);
@@ -267,7 +300,7 @@ void main() {
         float slope = (ribbonRadius(theta + e, amp, k) - ribbonRadius(theta - e, amp, k)) / (2.0 * e * max(r, 0.05));
         float d = (r - rr) / sqrt(1.0 + slope * slope) / ubuf.pixel;
         vec3 c = pal(hueBase + fk * 0.33 + s * 0.6 + amp * 0.2, 0.9, 1.0);
-        ribbon += c * ribbonLight(d, amp, ubuf.kick);
+        ribbon += c * ribbonLight(d, amp, ubuf.kick + surge);  // wider where it surges
     }
     col += ribbon * mix(IDLE_GLOW, 1.0, ubuf.presence);
 
@@ -279,7 +312,8 @@ void main() {
     col += pal(hueBase + 0.5 + s * 0.8, 0.8, 1.0) * aura * amp * 0.45 * ubuf.presence;
 
     // --- Kick shockwaves: a chromatic ring expanding from the center, one per kick ----------------
-    // kickAt() in lock-ring/kicks.mjs: front and strength (blast).
+    // kickAt() in lock-ring/kicks.mjs: front and strength (blast). A wide, soft front in lavender,
+    // mauve and blue, and a bright wake filling in behind it.
     vec3 wakeCol = pal(hueBase + 0.3, 0.9, 1.0);
     for (int j = 0; j < KICKS; j++) {
         float age = kickAge(j);
@@ -290,13 +324,13 @@ void main() {
         float front = KICK_ORIGIN + (reach - KICK_ORIGIN) * (1.0 - exp(-age * KICK_GROW));
         float blast = power * exp(-age * KICK_FADE);
         float ds = r - front;                 // > 0 ahead of the front, < 0 behind it
-        float eL = exp(-ds * ds / 0.0008);
-        float eM = exp(-(ds + 0.035) * (ds + 0.035) / 0.0008);
-        float eB = exp(-(ds + 0.07) * (ds + 0.07) / 0.0008);
+        float eL = exp(-ds * ds / 0.0024);
+        float eM = exp(-(ds + 0.05) * (ds + 0.05) / 0.0024);
+        float eB = exp(-(ds + 0.1) * (ds + 0.1) / 0.0024);
         col += (pow(LAVENDER, vec3(1.6)) * eL + pow(MAUVE, vec3(2.0)) * eM * 0.85 + pow(BLUE, vec3(2.0)) * eB * 0.75)
-               * blast * 1.4;
-        float wake = ds < 0.0 && r > KICK_ORIGIN ? exp(ds * 5.0) : 0.0;
-        col += wakeCol * wake * blast * 0.2;
+               * blast * 1.1;
+        float wake = ds < 0.0 && r > KICK_ORIGIN ? exp(ds * 4.0) : 0.0;
+        col += wakeCol * wake * blast * 0.35;
     }
 
     // --- Kick sparks: a spray flung off the ring, streaking outward, one per kick ---------------
@@ -336,6 +370,10 @@ void main() {
     col += hand(q, 1.0, ubuf.handAngle.y, ubuf.handInner.y, ubuf.handLength.y, ubuf.handAmp.y, ubuf.handWidth.y, ubuf.handGlow.y, ubuf.handPhase.y, MAUVE);
     col += hand(q, 2.0, ubuf.handAngle.z, ubuf.handInner.z, ubuf.handLength.z, ubuf.handAmp.z, ubuf.handWidth.z, ubuf.handGlow.z, ubuf.handPhase.z, PINK);
 
+    // The center punch: a white-lavender flash at the center as a shockwave is born, as viz.frag's,
+    // only on a hard kick.
+    col += mix(LAVENDER, vec3(1.0), 0.5) * k2 * k2 * 0.35 * smoothstep(0.5, 0.0, r);
+
     // The kick's punch, and the intensity, on everything but the hour points, as viz.frag's.
     col *= 1.0 + 0.4 * ubuf.kick;
     col *= ubuf.intensity;
@@ -346,7 +384,7 @@ void main() {
     for (int i = 0; i < 12; i++) {
         float th = float(i) * TAU / 12.0;
         float ai = abs(th - PI);
-        float level = min(1.0, 1.3 * spectrum(pow(ai / PI, ubuf.bassStretch)));
+        float level = min(1.0, 1.3 * spectrum(pow(ai / PI, ubuf.bassStretch)) + surge);
         float ri = ribbonRadius(th, level, 0);
         vec2 at = ri * vec2(sin(th), -cos(th));
         float quarter = i - (i / 3) * 3 == 0 ? 1.0 : 0.0;
