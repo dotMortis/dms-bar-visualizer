@@ -1,7 +1,8 @@
 // The audio pipeline both visualizers draw from: follows the Active Player, captures the output it
 // plays to with cava, and turns that into bands, bass/mid/treble, Kicks and the wave phase.
 // Knows nothing about where it's drawn, so the Lock Ring can bundle it (with docs/kick.mjs, which it
-// imports from ../docs) without any Bar Visualizer code.
+// imports from ../docs) without any Bar Visualizer code: lock-ring/audio/ and lock-ring/docs/ hold
+// relative symlinks to both, so the import resolves the same inside the plugin dir.
 //
 //   AudioPipeline {
 //       settings: config         // speed, kickDecay, kickThreshold, kickLowHz, kickHighHz, kickCooldown

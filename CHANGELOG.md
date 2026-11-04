@@ -11,9 +11,14 @@ All notable changes to this project are documented here. The format follows
 - Lock Ring, first part: a DMS desktop plugin (`lockRing`, in `lock-ring/`) that you add to the
   lock screen under Settings → Lock Screen. It shows a clock so far: a faint ring with 12 hour
   notches, hands that always point at the true time with a sweeping second hand, and a small
-  `HH:MM` in DMS's lock-screen font and 12h/24h setting. It doesn't react to music yet.
-  `install-lock.sh` links it into your DMS plugin dir, and `--uninstall` removes it. Neither
-  touches the Bar Visualizer install.
+  `HH:MM` in DMS's lock-screen font and 12h/24h setting. `install-lock.sh` links it into your
+  DMS plugin dir, and `--uninstall` removes it. Neither touches the Bar Visualizer install.
+- The Lock Ring hears the music: spectrum ribbons in the Bar Visualizer's colors wrap around the
+  dial and bulge outward with each band, mirrored left and right with bass at the bottom, and the
+  ring swells with the music's energy. It follows the Active Player like the Bar Visualizer. When
+  the music stops, it fades back to the faint dial. All Lock Rings on all monitors share one
+  capture, so they pulse in sync, and it runs only while a Lock Ring is on screen.
+  `install-lock.sh` now compiles the ring's shader, so it needs `qsb` (qt6-shadertools).
 
 ## [0.5.0] - 2026-10-30
 

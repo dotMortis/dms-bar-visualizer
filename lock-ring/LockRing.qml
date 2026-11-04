@@ -1,7 +1,9 @@
 // The Lock Ring: a DMS desktop plugin placed on the lock screen (Settings -> Lock Screen).
-// For now a clock: a faint ring with 12 hour notches as the dial, three hands that always point at
-// the true time (the second hand sweeps), and a small HH:MM below the hub in DMS's lock-screen
-// font and 12h/24h setting. Doesn't react to music yet.
+// A clock: a faint ring with 12 hour notches as the dial, three hands that always point at the
+// true time (the second hand sweeps), and a small HH:MM below the hub in DMS's lock-screen font
+// and 12h/24h setting. Around the dial, spectrum ribbons (shaders/ring.frag) bulge outward with
+// the music and the ring swells with its energy; in silence only the faint dial is left. Every
+// ring on every monitor draws from the one shared capture in LockAudio.
 import QtQuick
 import qs.Common
 import qs.Modules.Plugins
@@ -29,8 +31,21 @@ DesktopPluginComponent {
     property var now: new Date()
     readonly property var angles: Clock.handAngles(now)
 
+    // Look settings, at the Bar Visualizer's defaults.
+    readonly property real intensity: 1.0
+    readonly property real bassStretch: 1.4
+
     readonly property real size: Math.min(width, height)
-    readonly property real dialRadius: size * 0.46
+    // Leaves room around the dial for the ribbons to bulge into.
+    readonly property real dialRadius: size * 0.34
+
+    // Holds the shared capture while this ring exists: from lock to unlock.
+    Component.onCompleted: LockAudio.join(root)
+    Component.onDestruction: LockAudio.leave(root)
+
+    function quad(arr, i) {
+        return Qt.vector4d(arr[i] ?? 0, arr[i + 1] ?? 0, arr[i + 2] ?? 0, arr[i + 3] ?? 0);
+    }
 
     FrameAnimation {
         running: root.visible
@@ -42,6 +57,31 @@ DesktopPluginComponent {
         width: root.size
         height: root.size
         anchors.centerIn: parent
+
+        // The spectrum ribbons, around and under the dial.
+        ShaderEffect {
+            anchors.fill: parent
+            fragmentShader: Qt.resolvedUrl("shaders/ring.frag.qsb")
+            visible: LockAudio.presence > 0.001
+
+            // Wrapped for 32-bit precision; 1200 s keeps the hue cycle (t*0.05) seamless.
+            property real time: LockAudio.time % 1200
+            property real flow: LockAudio.flow
+            property real treble: LockAudio.treble
+            property real swell: LockAudio.swell
+            property real presence: LockAudio.presence
+            property real dial: root.dialRadius / (root.size / 2)
+            property real intensity: root.intensity
+            property real bassStretch: root.bassStretch
+            property vector4d b0: root.quad(LockAudio.values, 0)
+            property vector4d b1: root.quad(LockAudio.values, 4)
+            property vector4d b2: root.quad(LockAudio.values, 8)
+            property vector4d b3: root.quad(LockAudio.values, 12)
+            property vector4d b4: root.quad(LockAudio.values, 16)
+            property vector4d b5: root.quad(LockAudio.values, 20)
+            property vector4d b6: root.quad(LockAudio.values, 24)
+            property vector4d b7: root.quad(LockAudio.values, 28)
+        }
 
         // The dial: a thin, faint ring, no face.
         Rectangle {

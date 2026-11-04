@@ -76,6 +76,17 @@ describe("install-lock.sh", () => {
         assert.equal(fs.realpathSync(link(home, "dms")), fs.realpathSync(PLUGIN));
     });
 
+    // The .qsb is a build product (gitignored), so a fresh checkout has none.
+    test("compiles the ring shader the plugin loads, and only that one", () => {
+        const qsb = path.join(PLUGIN, "shaders", "ring.frag.qsb");
+        const barQsb = path.join(ROOT, "shaders", "viz.frag.qsb");
+        const barBefore = fs.existsSync(barQsb) ? fs.statSync(barQsb).mtimeMs : null;
+        fs.rmSync(qsb, { force: true });
+        run(configHome(["dms"]));
+        assert.ok(fs.statSync(qsb).size > 0, "ring.frag.qsb");
+        assert.equal(fs.existsSync(barQsb) ? fs.statSync(barQsb).mtimeMs : null, barBefore, "the bar's viz.frag.qsb");
+    });
+
     test("installing twice leaves one link", () => {
         const home = configHome(["dms"]);
         run(home);

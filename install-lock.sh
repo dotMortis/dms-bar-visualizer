@@ -35,8 +35,27 @@ plugin_dir() {
     fi
 }
 
+find_qsb() {
+    command -v qsb 2>/dev/null && return
+    for p in /usr/lib/qt6/bin/qsb /usr/lib64/qt6/bin/qsb /usr/libexec/qt6/qsb; do
+        [[ -x "$p" ]] && { echo "$p"; return; }
+    done
+    return 1
+}
+
+# The ring's shader, into the plugin dir the link points at. Only the Lock Ring's: the Bar
+# Visualizer's viz.frag.qsb is install.sh's.
+compile_shader() {
+    local qsb
+    qsb="$(find_qsb)" || die "qsb not found: install qt6-shadertools (on Arch: sudo pacman -S --needed qt6-shadertools)"
+    info "Compiling the ring shader"
+    "$qsb" --glsl "100 es,120,150" --hlsl 50 --msl 12 \
+        -o "$PLUGIN_SRC/shaders/ring.frag.qsb" "$PLUGIN_SRC/shaders/ring.frag"
+}
+
 install() {
     [[ -f "$PLUGIN_SRC/plugin.json" ]] || die "$PLUGIN_SRC/plugin.json not found"
+    compile_shader
     local dir link
     dir="$(plugin_dir)"
     link="$dir/$PLUGIN_ID"
@@ -55,7 +74,7 @@ install() {
 
 DMS picks the plugin up on its own. Add it to the lock screen:
   DMS Settings -> Lock Screen -> Add widget -> Lock Ring
-If it doesn't show up, restart DMS: dms restart
+If it doesn't show up, or after updating the checkout, restart DMS: dms restart
 EOF
 }
 
