@@ -8,46 +8,44 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
-- Lock Ring, first part: a DMS desktop plugin (`lockRing`, in `lock-ring/`) that you add to the
-  lock screen under Settings → Lock Screen. It shows a clock: a living neon ribbon as the dial
-  with 12 glowing hour points riding on it (brighter at 12, 3, 6 and 9), three floating hands
-  that don't meet at the center and always point at the true time, with a sweeping second hand,
-  and a small `HH:MM` in DMS's lock-screen font and 12h/24h setting. There is no hub and no fixed
-  circle or notches. `install-lock.sh` links it into your
-  DMS plugin dir, and `--uninstall` removes it. Neither touches the Bar Visualizer install.
-- The Lock Ring hears the music: spectrum ribbons in the Bar Visualizer's colors wrap around the
-  dial and bulge outward with each band, mirrored left and right with bass at the bottom, and the
-  ring swells with the music's energy. It follows the Active Player like the Bar Visualizer. When
-  the music stops, the ribbon settles into a thin, faint wave that slowly breathes and drifts
-  around the dial, calm enough to read the clock, and never stands still. All Lock Rings on all monitors share one
-  capture, so they pulse in sync, and it runs only while a Lock Ring is on screen.
-  `install-lock.sh` now compiles the ring's shader, so it needs `qsb` (qt6-shadertools).
-- The Lock Ring's hands react to the music: hour to the bass, minute to the mids, second to the
-  highs. Each is a slim neon wave ribbon in the Bar Visualizer's style, with a white-hot core and
-  extra strands. The louder its band, the wider it swings and the brighter it glows, and every
-  kick whips it (the short hour hand a little less, so it stays readable). The wave only bends a
-  hand around a straight line through the center at the true time, so the hands always point at
-  the time and their tips stay on it. In silence they're calm, thin lines. A
-  "Hand waves" setting sets how far they swing, down to straight hands at 0%.
+- The Lock Ring: a music visualizer for DMS's lock screen, as a DMS desktop plugin (`lockRing`,
+  in `lock-ring/`) that you add under Settings → Lock Screen. It's a clock: a living neon ribbon
+  is the dial, with 12 glowing hour points riding on it (brighter at 12, 3, 6 and 9), three
+  floating hands that don't meet at the center and always point at the true time, with a
+  sweeping second hand, and a small `HH:MM` in DMS's lock-screen font and 12h/24h setting.
+- The Lock Ring hears the music, from the same Active Player as the Bar Visualizer. Spectrum
+  ribbons in the Bar Visualizer's colors grow out of the dial and bulge outward with each band,
+  mirrored left and right with bass at the bottom, and the ring swells with the music's energy.
+  The hands react too: hour to the bass, minute to the mids, second to the highs. Each is a slim
+  neon wave ribbon with a white-hot core that swings wider and glows brighter the louder its band
+  is, bending only around a straight line through the center at the true time, so the hands
+  always point at the time. In silence the ribbon settles into a thin, faint wave that slowly
+  breathes and drifts around the dial, and the hands into calm, thin lines.
 - Kicks on the Lock Ring, detected exactly like the Bar Visualizer's: each one sends a chromatic
-  shockwave out of the center, sparks fly off the ring, and all hands and hour points flash. Harder hits make
-  bigger, brighter shockwaves, and up to 8 kicks play on top of each other.
-- Lock Ring settings in DMS: open a Lock Ring widget's options under Settings → Lock Screen to
-  set intensity, speed, kick threshold, kick decay, kick range, kick cooldown, bass stretch and
-  hand waves. The ones the bar has too default to the Bar Visualizer's values. They apply right
-  away, and to every Lock Ring at once, because all rings share one capture. The Lock Ring never reads the Bar Visualizer's
-  `config.json`.
-- On Arch, `install-lock-arch.sh` builds and installs the Lock Ring as the pacman package
-  `dms-lock-visualizer-git`, into DMS's system plugin dir. Run it again to update, and pass
-  `--uninstall` to remove it. It's independent of the Bar Visualizer's package: either one
-  installs alone, and neither script touches the other. The README has a Lock Ring section on
-  installing it, adding the widget to the lock screen and moving DMS's password field below it.
+  shockwave out of the center, sparks fly off the ring, the hands whip, and the hands and hour
+  points flash. Harder hits make bigger, brighter shockwaves, and up to 8 kicks play on top of
+  each other.
+- All Lock Rings on all monitors share one audio capture, so they pulse in sync, and it runs only
+  while a Lock Ring is on screen.
+- Lock Ring settings in DMS: open a Lock Ring widget's options under Settings → Lock Screen to set
+  intensity, speed, kick threshold, kick decay, kick range, kick cooldown, bass stretch, hand
+  waves (how far the hands swing, down to straight hands at 0%) and ring size (the widget's
+  default size, as a share of the screen height; you can still resize it). The ones the bar has
+  too default to the Bar Visualizer's values. They apply right away, and to every Lock Ring at
+  once. The Lock Ring never reads the Bar Visualizer's `config.json`.
+- Installing the Lock Ring, independently of the Bar Visualizer: either one installs alone, and
+  neither's scripts touch the other. On Arch, `install-lock-arch.sh` builds and installs the
+  pacman package `dms-lock-visualizer-git` into DMS's system plugin dir; run it again to update.
+  Elsewhere, `install-lock.sh` compiles the ring's shader (it needs `qsb` from qt6-shadertools)
+  and links `lock-ring/` into your DMS plugin dir. Both take `--uninstall`. The README has a Lock
+  Ring section on installing it, adding the widget to the lock screen and moving DMS's password
+  field below it.
 - Demo: a Lock Ring view, so you can tune the ring without locking the screen. Switch between
   the Bar Visualizer and the Lock Ring at the top of the controls, or open the demo with `#ring`.
   It runs on the same sources (demo beat, synth, microphone, audio file) and draws with the
-  plugin's own shader and modules. Its sliders are the plugin's settings, shown in the units of
-  its settings page, plus the ring's size and a 12h/24h toggle, and "Export lockRing settings"
-  downloads the values DMS stores for them.
+  plugin's own shader and modules. Its sliders are the plugin's settings, in the units of its
+  settings page, plus a 12h/24h toggle, and "Export lockRing settings" downloads the values DMS
+  stores for them.
 
 ## [0.5.0] - 2026-10-30
 
