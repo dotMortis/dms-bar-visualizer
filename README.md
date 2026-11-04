@@ -37,7 +37,7 @@ For the lock screen, there's the separately installed [Lock Ring](#lock-ring): t
 ## Requirements
 
 - Hyprland
-- DankMaterialShell (top bar)
+- DankMaterialShell (top bar; 2.x for the Lock Ring)
 - PipeWire or PulseAudio
 
 On Arch:
@@ -48,38 +48,49 @@ sudo pacman -S --needed quickshell cava libpulse qt6-shadertools
 
 ## Install
 
-> [!TIP]
-> Piping a script from the internet into `bash` runs it without showing it to you. Both scripts are short; read them first ([install-arch.sh](install-arch.sh), [install.sh](install.sh)) if you like.
+There are two parts, and you can install either one alone or both:
 
-> [!IMPORTANT]
-> Whichever way you install, make the bar background transparent: **DMS Settings → Dank Bar → Transparency = 0**.
+- the **Bar Visualizer**, behind the top bar: its own Quickshell config, started by a systemd user service
+- the **[Lock Ring](#lock-ring)**, on the lock screen: a DMS plugin
+
+Installing or removing one never touches the other. After installing, [set it up](#set-up).
+
+> [!TIP]
+> Piping a script from the internet into `bash` runs it without showing it to you. The scripts are short; read them first ([install-arch.sh](install-arch.sh), [install-lock-arch.sh](install-lock-arch.sh), [install.sh](install.sh), [install-lock.sh](install-lock.sh)) if you like.
 
 ### Arch Linux (recommended)
 
+Each part is a real pacman package, built from [`packaging/aur`](packaging/aur) with `makepkg`, so pacman tracks every file:
+
 ```sh
+# Bar Visualizer
 curl -fsSL https://raw.githubusercontent.com/dotMortis/dms-bar-visualizer/main/install-arch.sh | bash
+# Lock Ring
+curl -fsSL https://raw.githubusercontent.com/dotMortis/dms-bar-visualizer/main/install-lock-arch.sh | bash
 ```
 
-Or from a clone: `git clone https://github.com/dotMortis/dms-bar-visualizer && cd dms-bar-visualizer && ./install-arch.sh`.
+Or from a clone: `git clone https://github.com/dotMortis/dms-bar-visualizer && cd dms-bar-visualizer`, then `./install-arch.sh` and/or `./install-lock-arch.sh`.
 
-The script builds a real pacman package (`dms-bar-visualizer-git`) from [`packaging/aur`](packaging/aur/dms-bar-visualizer-git/PKGBUILD) with `makepkg`, so pacman tracks every file. It:
+Run a script again to update its part to the latest commit.
+
+`install-arch.sh` builds `dms-bar-visualizer-git`. It:
 
 1. installs `base-devel` and `git` if they're missing, and pulls in dependencies through pacman
 2. installs to `/usr/share/dms-bar-visualizer` and registers the Quickshell config as `bar-visualizer`
 3. cleans up a previous `install.sh` setup, which would otherwise shadow the package
 4. enables the systemd user service (skip with `--no-service`, then run `qs -c bar-visualizer`)
 
-Run it again to update to the latest commit. To remove it, pass `--uninstall` (piped: `... | bash -s -- --uninstall`).
+`install-lock-arch.sh` builds `dms-lock-visualizer-git`, which installs the plugin into DMS's system plugin dir, `/etc/xdg/quickshell/dms-plugins/lockRing`. It also removes a link left by `install-lock.sh`, which would otherwise shadow the package. After an update, run `dms restart`.
 
 ### Other distros, or hacking on it
+
+**Bar Visualizer:**
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/dotMortis/dms-bar-visualizer/main/install.sh | bash
 ```
 
-Piped like this, it checks the repo out to `~/.local/share/dms-bar-visualizer` (or updates it there) and runs from that checkout. To hack on it, clone wherever you like and run `./install.sh` from there instead.
-
-The script:
+Piped like this, it checks the repo out to `~/.local/share/dms-bar-visualizer` (or updates it there) and runs from that checkout. To hack on it, clone wherever you like and run `./install.sh` from there instead. The script:
 
 1. compiles the shader
 2. symlinks the repo to `~/.config/quickshell/bar-visualizer`
@@ -87,12 +98,42 @@ The script:
 
 Use `--no-service` to skip autostart and run it yourself with `qs -c bar-visualizer`.
 
-### Uninstall
+**Lock Ring:** it needs a clone. `install-lock.sh` can't be piped.
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/dotMortis/dms-bar-visualizer/main/install-arch.sh | bash -s -- --uninstall   # Arch package
-curl -fsSL https://raw.githubusercontent.com/dotMortis/dms-bar-visualizer/main/install.sh | bash -s -- --uninstall        # source install
+git clone https://github.com/dotMortis/dms-bar-visualizer && cd dms-bar-visualizer
+./install-lock.sh
 ```
+
+It compiles the ring shader, so it needs `qsb` (on Arch: `qt6-shadertools`), and links `lock-ring/` into your DMS plugin dir (`~/.config/dms/plugins/lockRing`). Edits in the checkout then go live after `dms restart`.
+
+### Uninstall
+
+Every script takes `--uninstall`. Piped, it goes after `bash -s --`:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/dotMortis/dms-bar-visualizer/main/install-arch.sh | bash -s -- --uninstall        # Bar Visualizer, Arch package
+curl -fsSL https://raw.githubusercontent.com/dotMortis/dms-bar-visualizer/main/install.sh | bash -s -- --uninstall             # Bar Visualizer, source install
+curl -fsSL https://raw.githubusercontent.com/dotMortis/dms-bar-visualizer/main/install-lock-arch.sh | bash -s -- --uninstall   # Lock Ring, Arch package
+./install-lock.sh --uninstall                                                                                                 # Lock Ring, from its clone
+```
+
+After removing the Lock Ring, run `dms restart` so DMS drops it.
+
+## Set up
+
+### Set up the Bar Visualizer
+
+1. **Make the bar transparent:** **DMS Settings → Dank Bar → Transparency = 0**. The visualizer draws behind the bar, so an opaque bar hides it.
+2. **Match the bar's geometry:** set `barThickness`, `spacing` and `radius` in `~/.config/bar-visualizer/config.json` to your DankBar's (see [Configuration](#configuration)). The file appears on first start. `hyprctl layers` shows the `dms:bar` surface, whose height is `barThickness + spacing`.
+3. **Check it runs:** play some music. It should move behind the bar. If it doesn't, run `systemctl --user status bar-visualizer`, or see [Troubleshooting](#troubleshooting).
+
+### Set up the Lock Ring
+
+1. **Enable it:** the Lock Ring is a desktop plugin, so DMS loads it on its own, with no toggle. If it doesn't show up under **DMS Settings → Plugins**, restart DMS: `dms restart`.
+2. **Add the widget:** **DMS Settings → Lock Screen → Add widget → Lock Ring**.
+3. **Move the password field:** the ring and DMS's password field both start in the centre of the screen. Under **DMS Settings → Lock Screen → Edit widgets**, drag the password field below the ring. You can move and resize the ring there too.
+4. **Check it runs:** play some music and lock the screen. Its settings are under the widget's options in **Settings → Lock Screen** (see [Lock Ring settings](#lock-ring-settings)).
 
 ## Configuration
 
@@ -165,29 +206,9 @@ It prints those numbers per track for the default and a sensitive kick setting. 
 
 The Bar Visualizer can't show on the lock screen: while it's up, only DMS's own surfaces are visible. The **Lock Ring** is a separate DMS plugin for the lock screen: the same ribbons and colours bent into a circle that is the dial of an analog and digital clock, with 12 hour points riding on it and floating hands that react to the music but always show the true time. In silence the ribbon keeps breathing as a thin, faint wave. It follows the active player and detects kicks with the same `docs/kick.mjs` as the bar, and every monitor's ring runs from one capture. ([Why it's a plugin](docs/adr/0001-lock-ring-runs-inside-dms.md).)
 
-It installs separately from the Bar Visualizer. You can install either one alone or both, and installing or removing one never touches the other.
+To install it and set it up, see [Install](#install) and [Set up the Lock Ring](#set-up-the-lock-ring).
 
-### Install
-
-It needs DankMaterialShell 2.x, `cava` and `pactl` (libpulse).
-
-**Arch Linux:**
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/dotMortis/dms-bar-visualizer/main/install-lock-arch.sh | bash
-```
-
-Or from a clone: `./install-lock-arch.sh`. It builds the pacman package `dms-lock-visualizer-git` from [`packaging/aur`](packaging/aur/dms-lock-visualizer-git/PKGBUILD), which installs the plugin into DMS's system plugin dir, `/etc/xdg/quickshell/dms-plugins/lockRing`. Run it again to update. It also removes a link left by `install-lock.sh`, which would otherwise shadow the package.
-
-**Other distros, or hacking on it:** from a clone, run `./install-lock.sh`. It compiles the ring shader, so it needs `qsb` (on Arch: `qt6-shadertools`), and links `lock-ring/` into your DMS plugin dir (`~/.config/dms/plugins/lockRing`). Edits in the checkout then go live after a DMS restart.
-
-Both scripts take `--uninstall`.
-
-### Set it up in DMS
-
-1. **Enable it:** the Lock Ring is a desktop plugin, so DMS loads it on its own, with no toggle. If it doesn't show up under **DMS Settings → Plugins**, restart DMS: `dms restart`.
-2. **Add the widget:** **DMS Settings → Lock Screen → Add widget → Lock Ring**.
-3. **Move the password field:** the ring and DMS's password field both start in the centre of the screen. Under **DMS Settings → Lock Screen → Edit widgets**, drag the password field below the ring. You can move and resize the ring there too.
+### Lock Ring settings
 
 Its settings are in DMS's plugin settings, under the widget's options in Settings → Lock Screen. They apply right away and to every Lock Ring at once, since all rings share one capture ([why](docs/adr/0002-lock-ring-settings-are-plugin-wide.md)). It doesn't read the Bar Visualizer's `config.json`. The ones the bar has too default to the Bar Visualizer's values:
 
