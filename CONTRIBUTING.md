@@ -125,7 +125,7 @@ drift hold still in it.
 | `ring-anatomy.webp` | The Lock Ring with its parts labeled |
 | `layers.webp` | The layer diagram above |
 
-They're SVG animations (SMIL), so they move on GitHub without a video. The Bar Visualizer is re-created from `shaders/viz.frag`. The Lock Ring is drawn from the plugin's own modules in `docs/lock-ring/*.mjs`, so its Ribbons, Shockwaves, Hour Points, Hands and Digital Time move as on the lock screen; only the glow is approximated with SVG filters. Keep each file under 1 MB, since GitHub gets slow on big SVGs.
+The Bar Visualizer is re-created from `shaders/viz.frag`. The Lock Ring is drawn from the plugin's own modules in `docs/lock-ring/*.mjs`, so its Ribbons, Shockwaves, Hour Points, Hands and Digital Time move as on the lock screen; only the glow is approximated with SVG filters. Keep each WebP around 1 MB or less, so the README loads quickly (`QUALITY=60 node assets/render.mjs` makes them smaller).
 
 ## Releases
 
