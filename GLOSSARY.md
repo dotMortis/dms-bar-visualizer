@@ -22,6 +22,16 @@ _Avoid_: current player, source
 One detected bass-drum hit, fired once per hit when a band in the kick range rises sharply above its recent level.
 _Avoid_: beat, onset
 
+## Lyrics
+
+**Lyric Line**:
+The line of the Active Player's song being sung right now, taken from lyrics timed to the song. Only one Lyric Line is ever on screen, as its Lyric Words, and nothing when there is none: plain, untimed lyrics are never shown.
+_Avoid_: lyrics (for the single line), caption, subtitle
+
+**Lyric Words**:
+The words of the Lyric Line, each appearing as it is sung at a random spot on a Ribbon (or, on the Lock Ring, a Hand) and moving with it, glowing in that Ribbon's color. Each pops in with a small flash as it lands. They pile up until the line's end, then dissolve together. Background vocals are smaller and dimmer. They are decoration, not meant to be read along.
+_Avoid_: lyric sparks, lyric particles, floating words
+
 ## Look
 
 **Shockwave**:
