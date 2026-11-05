@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- The Lock Ring shows Lyric Words: the words of the playing song's line, from DMS's lyrics
+  service (DMS v2.0+), each landing as it is sung on a Ribbon (about two thirds) or a Hand (about
+  one third), glowing in the color there, popping in harder on a Kick, splitting like the
+  Digital Time as a Shockwave crosses it, and dissolving with the line. `lockRing.lyrics` in
+  `config.json` (default `true`) turns it off.
+- The Bar Visualizer shows Lyric Words too: each word of the playing song's line appears as it is
+  sung on a Ribbon, the line's first word at a random spot and the rest after it in a row, rides
+  its wave gently, glows in its color, pops in harder on a Kick, flares and splits as a Shockwave
+  passes, and lingers a moment after the line ends before slowly dissolving, while the next line
+  already comes in. The new top-level `lyrics` key in `config.json` (default `true`) turns
+  it off.
+- The bar's Lyric Words need a running DMS v2.0 or later: the bar asks DMS for the lyrics over
+  its socket ([ADR 0006](docs/adr/0006-bar-visualizer-asks-dms-for-lyrics.md)). Without it the
+  bar works as before, just without them. With lyrics on, DMS sends the playing track's title,
+  artist and album to its lyrics providers, even with DMS's own Lyrics setting off.
+
+### Changed
+
+- The README's animations are animated WebPs now, rendered from the generated SVGs by
+  `assets/render.mjs`: the animated SVGs kept a CPU core busy for as long as the page was open.
+
 ## [0.9.0] - 2026-11-04
 
 ### Added

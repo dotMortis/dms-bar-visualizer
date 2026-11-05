@@ -18,9 +18,11 @@ describe("config.json", () => {
             barThickness: 40, spacing: 4, radius: 12, followMaximize: true,
             intensity: 1.0, speed: 1.0, kickThreshold: 0.4, kickDecay: 6.0,
             kickLowHz: 20, kickHighHz: 90, kickCooldown: 0.1, bassStretch: 1.4,
+            lyrics: true,
             lockRing: {
                 handWaves: 1.0, ringSize: 0.4, intensityPercent: 100, kickLowHzPercent: 100,
                 kickHighHzPercent: 100, kickThresholdPercent: 100, kickCooldownPercent: 100,
+                lyrics: true,
             },
         });
     });
@@ -41,6 +43,12 @@ describe("config.json", () => {
         assert.deepEqual(parseConfig('{"kickLowHz": "35", "speed": null, "kickDecay": true, "followMaximize": 0}'), DEFAULTS);
     });
 
+    // The bar's Lyric Words switch, on by default; it doesn't follow DMS's own Lyrics setting.
+    test("the bar's lyrics switch is read like any other key", () => {
+        assert.equal(parseConfig('{"lyrics": false}').lyrics, false);
+        assert.equal(parseConfig('{"lyrics": "off"}').lyrics, true);
+    });
+
     test("keys without a default are dropped", () => {
         const c = parseConfig('{"barThickness": 48, "junk": 1, "lockRing": {"ringSize": 0.5, "junk": 2}}');
         assert.equal(c.barThickness, 48);
@@ -53,6 +61,11 @@ describe("config.json", () => {
         assert.deepEqual(parseConfig('{"lockRing": {"handWaves": 1.5}}').lockRing, Object.assign({}, DEFAULTS.lockRing, { handWaves: 1.5 }));
         for (const section of ["", ', "lockRing": 3', ', "lockRing": null', ', "lockRing": [1]'])
             assert.deepEqual(parseConfig(`{"speed": 1.2${section}}`).lockRing, DEFAULTS.lockRing, section);
+    });
+
+    test("lockRing.lyrics switches the Lock Ring's Lyric Words; not a boolean, it's on", () => {
+        assert.equal(parseConfig('{"lockRing": {"lyrics": false}}').lockRing.lyrics, false);
+        assert.equal(parseConfig('{"lockRing": {"lyrics": 0}}').lockRing.lyrics, true);
     });
 
     test("a fresh copy each time, so a change can't leak into the defaults", () => {
@@ -78,7 +91,7 @@ describe("config.json", () => {
     test("every number in it has a slider in the demo, inside its range", () => {
         const sliders = new Map([...slidersFor("bar"), ...slidersFor("ring")].map(s => [s.key, s]));
         const keys = [...Object.keys(DEFAULTS).filter(k => typeof DEFAULTS[k] === "number"),
-            ...Object.keys(DEFAULTS.lockRing).map(k => `lockRing.${k}`)];
+            ...Object.keys(DEFAULTS.lockRing).filter(k => typeof DEFAULTS.lockRing[k] === "number").map(k => `lockRing.${k}`)];
         for (const key of keys) {
             const s = sliders.get(key), value = valueAt(DEFAULTS, key);
             assert.ok(s && s.min <= value && value <= s.max, key);

@@ -21,6 +21,7 @@ export const DEFAULTS = {
     kickHighHz: 90,
     kickCooldown: 0.1,    // min seconds between kicks; 0 = no limit
     bassStretch: 1.4,     // >1 spreads bass wider; 1 = linear
+    lyrics: true,         // the bar's Lyric Words, asked of DMS over its socket (ADR 0006)
     // The Lock Ring's own.
     lockRing: {
         handWaves: 1.0,   // how far the hands swing with the music and on kicks; 0 = straight
@@ -31,6 +32,7 @@ export const DEFAULTS = {
         kickHighHzPercent: 100,
         kickThresholdPercent: 100,
         kickCooldownPercent: 100,
+        lyrics: true,     // Lyric Words on the Lock Ring, from DMS's lyrics service (DMS v2.0+)
     },
 };
 

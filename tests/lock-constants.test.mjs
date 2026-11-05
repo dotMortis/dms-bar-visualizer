@@ -7,11 +7,13 @@ import path from "node:path";
 import { describe, test } from "node:test";
 
 import { DIAL } from "../docs/demo.mjs";
-import { WAVE } from "../lock-ring/hands.mjs";
+import { HAND_NAMES, RIBBONS } from "../docs/lyric-words.mjs";
+import { HANDS, WAVE } from "../lock-ring/hands.mjs";
 import {
     AURA_FALL, AURA_PUSH, AURA_RISE, CROSSING_LEAD, CROSSING_TRAIL, KICK_FADE, KICK_GROW, KICK_ORIGIN, MAX_REACH, PLAYED_OUT, PUNCH_FADE,
     ROUGH_LIGHT, ROUGH_REACH, SHAPE_CALM, SHAPE_HARD, SHAPE_LIGHT, SHAPE_REACH, SHAPE_SOFT, SURGE_LIFT, SURGE_WIDTH,
 } from "../lock-ring/kicks.mjs";
+import { COLORS, HAND_COLORS, HAND_PHASE, PALETTE, RIBBON_HUE, RIBBON_MUSIC, SATURATION } from "../lock-ring/lyrics.mjs";
 import { AURA, DIAL_RATIO, IDLE, RIBBON } from "../lock-ring/ring.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -141,6 +143,60 @@ describe("ring.frag's constants match their modules", () => {
     test("ring.frag spells out no other copy of the dial ratio", () => {
         const code = read("lock-ring/shaders/ring.frag").replace(/\/\/.*$/gm, "");
         assert.equal(code.match(/0\.34\b/g)?.length, 1, "only in DIAL_RATIO");
+    });
+});
+
+// docs/lyric-words.mjs places a word on one of RIBBONS strands or on one of HAND_NAMES, copies of
+// what ring.frag draws and hands.mjs names.
+describe("the Lyric Words land on the Ribbons and Hands the Lock Ring draws", () => {
+    test("RIBBONS is the number of strands ring.frag draws the ribbon with", () => {
+        const frag = read("lock-ring/shaders/ring.frag").replace(/\/\/.*$/gm, "");
+        const main = frag.slice(frag.indexOf("void main()"));
+        const loop = main.slice(main.indexOf("vec3 ribbon = vec3(0.0);")).match(/for \(int k = 0; k < (\d+); k\+\+\)/);
+        assert.ok(loop, "ring.frag's ribbon loop");
+        assert.equal(RIBBONS, Number(loop[1]));
+    });
+
+    test("HAND_NAMES are hands.mjs's HANDS, in ring.frag's order", () => {
+        assert.deepEqual(HAND_NAMES, Object.keys(HANDS));
+        assert.deepEqual(HAND_NAMES, ["hour", "minute", "second"]);
+    });
+});
+
+// lock-ring/lyrics.mjs lays words on the strands and hands as ring.frag draws them, and colours
+// them as ring.frag does. ring.frag spells some of those numbers out inline; these are its lines.
+describe("the Lyric Words ride and glow like ring.frag's strands and hands (lyrics.mjs)", () => {
+    const code = read("lock-ring/shaders/ring.frag").replace(/\/\/.*$/gm, "");
+    const main = code.slice(code.indexOf("void main()"));
+    const n = x => String(x).replace(".", "\\.");
+
+    test("Catppuccin's colours (COLORS) are ring.frag's", () => {
+        for (const [name, hex] of Object.entries(COLORS)) {
+            const m = code.match(new RegExp(`const vec3 ${name.toUpperCase()}\\s*= vec3\\(([^)]+)\\);`));
+            assert.ok(m, name);
+            const want = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
+            m[1].split(",").map(Number).forEach((v, i) => assert.ok(Math.abs(v - want[i]) < 0.002, `${name}[${i}]`));
+        }
+    });
+
+    test("palette() cycles through PALETTE, and the strands and hands deepen it by SATURATION", () => {
+        assert.ok(code.includes(`vec3 c[7] = vec3[7](${PALETTE.map(c => c.toUpperCase()).join(", ")});`));
+        assert.match(main, new RegExp(`pal\\([^;]*, ${n(SATURATION)}, 1\\.0\\);\\s*ribbon \\+=`));
+        assert.ok(code.includes(`pow(color, vec3(1.0 + 1.5 * ${SATURATION}))`));
+    });
+
+    test("a Ribbon's level and hue (RIBBON_MUSIC, RIBBON_HUE)", () => {
+        assert.ok(main.includes(`float music = ${RIBBON_MUSIC.gain} * ribbonSpectrum(s) * (1.0 + ${RIBBON_MUSIC.kick} * ubuf.kick);`));
+        assert.ok(main.includes(`float hueBase = t * ${RIBBON_HUE.time} + s * ${RIBBON_HUE.spectrum};`));
+        assert.ok(main.includes(`pal(hueBase + fk * ${RIBBON_HUE.ribbon} + s * ${RIBBON_HUE.along} + level * ${RIBBON_HUE.level}, `));
+    });
+
+    test("each hand's colour (HAND_COLORS) and its main strand's phase (HAND_PHASE)", () => {
+        HAND_NAMES.forEach((hand, i) => {
+            const axis = "xyz"[i];
+            assert.match(main, new RegExp(`hand\\(q, ${i}\\.0, ubuf\\.handAngle\\.${axis},[^;]*, ${HAND_COLORS[hand].toUpperCase()}\\);`), hand);
+        });
+        assert.ok(code.includes(`float phase = wave * (1.0 + 0.5 * fk) + fk * 2.1 + index * ${HAND_PHASE};`));
     });
 });
 

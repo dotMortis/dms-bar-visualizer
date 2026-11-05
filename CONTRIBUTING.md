@@ -14,13 +14,17 @@ How the pieces fit together, and how to change them. For installing and using th
 | `shell.qml` | The Bar Visualizer: a Quickshell config, one surface per screen |
 | `shaders/viz.frag` | The Bar Visualizer's look |
 | `audio/AudioPipeline.qml` | The shared audio pipeline: follows the Active Player, runs cava, detects Kicks |
-| `lock-ring/` | The Lock Ring plugin (`LockRing.qml`, `LockAudio.qml`, `plugin.json`) |
+| `lock-ring/` | The Lock Ring plugin (`LockRing.qml`, `LockAudio.qml`, `LockLyrics.qml`, `plugin.json`) |
 | `docs/` | The live demo (GitHub Pages), plus the plain-JS modules both visualizers and the demo import |
 | `docs/kick.mjs` | The one Kick detector |
 | `docs/config.mjs` | The defaults of every `config.json` key |
-| `docs/lock-ring/` | The Lock Ring's shader (`ring.frag`) and its modules (`ring.mjs`, `kicks.mjs`, `hands.mjs`, `clock.mjs`) |
+| `docs/bar-ribbons.mjs` | The Bar Visualizer's Ribbons: each one's height and color at any x across the bar, and the Shockwaves crossing it |
+| `docs/bar-words.mjs` | The Bar Visualizer's Lyric Words: each letter on its Ribbon, and their pop, flare and dissolve |
+| `lyrics/` | The Bar Visualizer's Lyric Words in QML: asks DMS's socket for lyrics (`BarLyrics.qml`), draws them (`LyricWordsLayer.qml`) |
+| `docs/lyric-words.mjs` | The one Lyric Words module: which words of the Lyric Line show when |
+| `docs/lock-ring/` | The Lock Ring's shader (`ring.frag`) and its modules (`ring.mjs`, `kicks.mjs`, `hands.mjs`, `clock.mjs`, `lyrics.mjs`: where its Lyric Words sit and how they look) |
 | `packaging/aur/` | The two Arch packages' PKGBUILDs |
-| `assets/` | The README's animated SVGs and their generator |
+| `assets/` | The README's animations: the generated SVGs, the animated WebPs rendered from them, and both scripts |
 | `tests/` | `node --test` suites |
 
 GitHub Pages publishes only `docs/` and doesn't follow symlinks, so every file the demo needs lives there. `lock-ring/` links to them (`lock-ring/shaders/ring.frag`, `lock-ring/*.mjs`, `lock-ring/docs/`, `lock-ring/audio/`). Edit the files under `docs/` and `audio/`, not the links.
@@ -37,7 +41,7 @@ The pipeline writes cava's config to `$XDG_RUNTIME_DIR/bar-visualizer-cava.conf`
 
 ## Layers
 
-<p align="center"><img src="assets/layers.svg" alt="Layer diagram: the transparent DankBar on the top layer, the Bar Visualizer on the bottom layer, the wallpaper below" width="720"></p>
+<p align="center"><img src="assets/layers.webp" alt="Layer diagram: the transparent DankBar on the top layer, the Bar Visualizer on the bottom layer, the wallpaper below" width="720"></p>
 
 The Bar Visualizer is a Wayland layer surface on the `bottom` layer (namespace `bar-visualizer`): click-through (an empty input mask), ignoring exclusive zones, and sized and inset exactly like the DankBar. The DMS bar draws on the `top` layer, so with a transparent bar background the Bar Visualizer shows through. With a maximized window on a monitor's active workspace, it drops its gap and rounding together with the bar, by the same rule DMS uses.
 
@@ -63,7 +67,7 @@ Then restart it: `systemctl --user restart bar-visualizer`. Qt caches the compil
 
 Then `dms restart`.
 
-The Lock Ring's shader mirrors functions and constants from the Lock Ring's modules. `tests/lock-constants.test.mjs` checks the constants match, so change both sides together.
+The Lock Ring's shader mirrors functions and constants from the Lock Ring's modules. `tests/lock-constants.test.mjs` checks the constants match, so change both sides together. It also holds `lyrics.mjs`, which lays the Lyric Words on the strands and Hands and colors them as `ring.frag` does, to `ring.frag`'s inline numbers. Likewise the Bar Visualizer's shader, and the demo's port of it, mirror the Ribbon shape and color in `docs/bar-ribbons.mjs`, checked by `tests/bar-constants.test.mjs`.
 
 Colors are Catppuccin Mocha: the `palette()` cycle and the `LAVENDER` / `MAUVE` / `PINK` / `BLUE` constants in each shader.
 
@@ -100,20 +104,28 @@ python3 tests/fixtures/record.py all          # re-record all of them (about 4 m
 
 ## The README's animations
 
-The SVGs in `assets/` are generated. Change `assets/generate.mjs`, then run:
+The animations in `assets/` are generated. `assets/generate.mjs` draws them as animated SVGs, and
+`assets/render.mjs` renders those to the animated WebPs the README shows. The SVGs' glow filters
+keep a browser's CPU busy for as long as the page is open; the WebPs don't. Change
+`assets/generate.mjs`, then run both (`render.mjs` needs Chromium or Chrome, and ffmpeg with
+libwebp):
 
 ```sh
 node assets/generate.mjs
+node assets/render.mjs
 ```
+
+Each WebP is one loop of its SVG's main animation, so the SVGs' slower hue cycle and wallpaper
+drift hold still in it.
 
 | File | What it shows |
 | --- | --- |
-| `hero.svg` | Both visualizers on one synthetic 120 bpm loop that builds to a drop |
-| `bar-anatomy.svg` | The Bar Visualizer with its parts labeled |
-| `ring-anatomy.svg` | The Lock Ring with its parts labeled |
-| `layers.svg` | The layer diagram above |
+| `hero.webp` | Both visualizers on one synthetic 120 bpm loop that builds to a drop |
+| `bar-anatomy.webp` | The Bar Visualizer with its parts labeled |
+| `ring-anatomy.webp` | The Lock Ring with its parts labeled |
+| `layers.webp` | The layer diagram above |
 
-They're SVG animations (SMIL), so they move on GitHub without a video. The Bar Visualizer is re-created from `shaders/viz.frag`. The Lock Ring is drawn from the plugin's own modules in `docs/lock-ring/*.mjs`, so its Ribbons, Shockwaves, Hour Points, Hands and Digital Time move as on the lock screen; only the glow is approximated with SVG filters. Keep each file under 1 MB, since GitHub gets slow on big SVGs.
+The Bar Visualizer is re-created from `shaders/viz.frag`. The Lock Ring is drawn from the plugin's own modules in `docs/lock-ring/*.mjs`, so its Ribbons, Shockwaves, Hour Points, Hands and Digital Time move as on the lock screen; only the glow is approximated with SVG filters. Keep each WebP around 1 MB or less, so the README loads quickly (`QUALITY=60 node assets/render.mjs` makes them smaller).
 
 ## Releases
 

@@ -70,6 +70,14 @@ Singleton {
     // peak, for the hands' looks, and how far each hand's wave has travelled.
     property var handLevels: ({ bass: 0, mid: 0, treble: 0 })
     property var handPhases: ({ hour: 0, minute: 0, second: 0 })
+    // The Lyric Words visible right now (docs/lyric-words.mjs words()), the same on every ring:
+    // none while lockRing.lyrics is off, on a DMS without its lyrics service, or without synced
+    // lyrics for the Active Player's song. Each says where it landed; LockRing.qml draws them. By
+    // their id (LockLyrics.qml wordId()).
+    readonly property var lyricWords: lyrics.item?.current ?? ({})
+    // The same words as a model (LockLyrics.qml wordModel): one entry (wordId, text) per word
+    // shown, kept while it is, so each keeps its drawing. Its wordId looks it up in lyricWords.
+    readonly property var lyricWordModel: lyrics.item?.wordModel ?? null
 
     // How many rings hold the capture.
     property int holders: 0
@@ -111,8 +119,42 @@ Singleton {
             } catch (e) {
                 console.warn(`lockRing: config.json: ${e.message}; keeping the previous settings`);
             }
+            root.settingsRead = true;
         }
-        onLoadFailed: root.settings = Config.DEFAULTS
+        onLoadFailed: {
+            root.settings = Config.DEFAULTS;
+            root.settingsRead = true;
+        }
+    }
+
+    // Whether config.json has been read (or found missing) yet: until then lockRing.lyrics isn't
+    // known, and with it off, the track must not go to the lyrics providers even for a moment.
+    property bool settingsRead: false
+
+    // DMS's lyrics service, if this DMS has one (v2.0+). Looked for as a file, so an older DMS
+    // never compiles LockLyrics.qml and logs nothing.
+    property bool lyricsService: false
+
+    FileView {
+        path: Quickshell.shellPath("Services/LyricsService.qml")
+        printErrors: false
+        onLoaded: root.lyricsService = true
+        onLoadFailed: root.lyricsService = false
+    }
+
+    // The Lyric Words' source, while a ring is shown and lyrics are on; it holds DMS's lyrics
+    // subscription while loaded. A change to lockRing.lyrics applies at once.
+    LazyLoader {
+        id: lyrics
+        active: root.holders > 0 && root.lyricsService && root.settingsRead && root.settings.lockRing.lyrics
+        // Set only then: LazyLoader compiles its source even while inactive.
+        source: root.lyricsService ? Qt.resolvedUrl("LockLyrics.qml") : ""
+    }
+
+    // Every Kick, with its power, so a word landing with it pops harder.
+    Connections {
+        target: root.pipeline
+        function onKicked(power) { lyrics.item?.kick(power); }
     }
 
     LazyLoader {

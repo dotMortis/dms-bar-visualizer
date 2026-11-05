@@ -13,6 +13,8 @@
 // a little. As the front crosses the
 // digital time, drawn here, the time splits into the Shockwave's colors and glows (clock.mjs
 // timeHit()).
+// The Lyric Words of the playing song (LockAudio.lyricWords, from DMS's lyrics service) land on
+// the ribbons and hands as they are sung, drawn here (lyrics.mjs).
 // Every ring on every monitor draws from the one shared capture in LockAudio.
 import QtQuick
 import QtQuick.Effects
@@ -20,6 +22,8 @@ import qs.Common
 import qs.Modules.Plugins
 import "clock.mjs" as Clock
 import "hands.mjs" as Hands
+import "kicks.mjs" as Kicks
+import "lyrics.mjs" as Lyrics
 import "ring.mjs" as Ring
 
 DesktopPluginComponent {
@@ -54,6 +58,24 @@ DesktopPluginComponent {
     // Look settings, shared by every ring (LockAudio: the bar's config.json, ADR 0004).
     readonly property real intensity: LockAudio.intensity
     readonly property real bassStretch: LockAudio.bassStretch
+
+    // What the Lyric Words ride on this frame (lyrics.mjs wordPlacement()): the ring's inputs as
+    // ring.frag gets them, and the hands.
+    readonly property var lyricScene: ({
+        dialRadius: root.dialRadius,
+        values: LockAudio.values,
+        flow: LockAudio.flow,
+        time: LockAudio.time % 1200,
+        treble: LockAudio.treble,
+        swell: LockAudio.swell,
+        kick: LockAudio.kick,
+        bassStretch: root.bassStretch,
+        kickAges: LockAudio.kickAges,
+        kickPowers: LockAudio.kickPowers,
+        kickSeeds: LockAudio.kickSeeds,
+        poses: root.poses,
+        phases: LockAudio.handPhases
+    })
 
     readonly property real size: Math.min(width, height)
     // Leaves room around the dial for the ribbons to wave into (ring.mjs).
@@ -192,6 +214,129 @@ DesktopPluginComponent {
                 blurMax: Math.max(1, Math.round(Clock.TIME_HIT.glow.radius * time.em))
                 shadowScale: time.hit.glow.scale
                 shadowOpacity: time.hit.glow.opacity
+            }
+        }
+
+        // The Lyric Words (LockAudio.lyricWords, the same on every ring): each lands on a Ribbon,
+        // bent along its curve and riding its wave, or on a Hand, lying along it and turning with
+        // it (lyrics.mjs wordPlacement()). Each glows in the colour there with a bright core, pops
+        // in oversized with a flash (harder with a Kick), dissolves with its line, and splits and
+        // flares as a Shockwave's front crosses it, as the Digital Time does (lyrics.mjs wordLook()).
+        Repeater {
+            // One delegate per word, kept from its pop-in to its dissolve (LockAudio.lyricWordModel).
+            model: LockAudio.lyricWordModel
+
+            Item {
+                id: word
+                required property string wordId
+                required property string text
+                readonly property var entry: LockAudio.lyricWords[wordId] ?? null
+                readonly property var chars: Array.from(text)
+                // A word keeps its size (lead or background vocal), so its box and spacing do too.
+                readonly property real em: Math.max(8, root.size * Lyrics.WORD_FONT * (entry?.size ?? 1))
+                // Measured in the letters' font: read through metrics.font, so it's measured again
+                // once the font is set (a method call alone wouldn't tie it to the font).
+                readonly property var advances: metrics.font.pixelSize > 0 ? chars.map(c => metrics.advanceWidth(c)) : []
+                readonly property real span: advances.reduce((sum, a) => sum + a, 0)
+                readonly property var place: entry ? Lyrics.wordPlacement(entry.spot, advances, root.lyricScene) : null
+                readonly property real crossing: place ? Kicks.shockwaveCrossing(place.radius, LockAudio.kickAges, LockAudio.kickPowers, LockAudio.kickSeeds, place.theta) : 0
+                readonly property var look: Lyrics.wordLook(entry ?? {}, crossing)
+                readonly property color glow: place?.color ?? root.lavender
+                // Outward, away from the center: where the Shockwave's copies are pushed.
+                readonly property real outX: place ? place.x / Math.max(1, Math.hypot(place.x, place.y)) : 0
+                readonly property real outY: place ? place.y / Math.max(1, Math.hypot(place.x, place.y)) : 1
+                // A square around the word's middle, wide enough for its letters however they bend.
+                readonly property real box: Math.ceil(span + 3 * em)
+
+                visible: place !== null && look.opacity > 0
+                width: box
+                height: box
+                x: dial.width / 2 + (place?.x ?? 0) - box / 2
+                y: dial.height / 2 + (place?.y ?? 0) - box / 2
+                scale: look.scale
+                opacity: look.opacity
+
+                FontMetrics {
+                    id: metrics
+                    font: letterFont.font
+                }
+
+                Text {
+                    id: letterFont
+                    visible: false
+                    font.family: SettingsData.lockScreenFontFamily !== "" ? SettingsData.lockScreenFontFamily : Theme.fontFamily
+                    font.pixelSize: word.em
+                    font.weight: Font.DemiBold
+                }
+
+                // The letters, each on its own spot along the curve; drawn only through the effects.
+                Item {
+                    id: letters
+                    visible: false
+                    width: word.box
+                    height: word.box
+
+                    Repeater {
+                        model: word.chars.length
+
+                        Text {
+                            required property int index
+                            readonly property var glyph: word.place?.glyphs[index] ?? { x: 0, y: 0, rotation: 0 }
+                            text: word.chars[index]
+                            font: letterFont.font
+                            // A bright core in the word's colour.
+                            color: Qt.tint(word.glow, Qt.rgba(1, 1, 1, Lyrics.WORD_LOOK.core))
+                            x: word.box / 2 + glyph.x - (word.place?.x ?? 0) - width / 2
+                            y: word.box / 2 + glyph.y - (word.place?.y ?? 0) - height / 2
+                            rotation: glyph.rotation
+                        }
+                    }
+                }
+
+                // The Shockwave's chromatic split, as the Digital Time's: the word in each of its
+                // colours, pushed outward, behind the word.
+                Repeater {
+                    model: Clock.TIME_HIT.split.length
+
+                    MultiEffect {
+                        required property int index
+                        readonly property var copy: word.look.hit.copies[index]
+                        source: letters
+                        width: word.box
+                        height: word.box
+                        x: word.outX * copy.offset * word.em
+                        y: word.outY * copy.offset * word.em
+                        visible: copy.opacity > 0
+                        opacity: copy.opacity
+                        colorization: 1
+                        colorizationColor: copy.color
+                        blurEnabled: true
+                        blur: 1
+                        blurMax: Math.max(1, Math.round(Clock.TIME_HIT.soften * word.em))
+                    }
+                }
+
+                // The word, glowing in its colour (toward the Shockwave's glow as it crosses),
+                // flashing toward white as it lands and as a front crosses it, blurring away as it
+                // dissolves.
+                MultiEffect {
+                    source: letters
+                    anchors.fill: parent
+                    colorization: word.look.white
+                    colorizationColor: "white"
+                    // Always on, blurring by 0 until it dissolves: switching it rebuilds the effect,
+                    // a visible hitch just as the word starts to dissolve.
+                    blurEnabled: true
+                    blur: word.look.blur
+                    shadowEnabled: true
+                    shadowColor: Qt.tint(word.glow, Qt.alpha(Clock.TIME_HIT.glow.color, word.look.hit.glow.opacity * 0.6))
+                    shadowHorizontalOffset: 0
+                    shadowVerticalOffset: 0
+                    shadowBlur: 1
+                    blurMax: Math.max(1, Math.round(Lyrics.WORD_LOOK.glow.radius * word.em))
+                    shadowScale: word.look.hit.glow.scale + Lyrics.WORD_LOOK.glow.spread
+                    shadowOpacity: 1
+                }
             }
         }
     }

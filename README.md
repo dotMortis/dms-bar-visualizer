@@ -1,6 +1,6 @@
 <div align="center">
 
-<a href="https://dotmortis.github.io/dms-bar-visualizer/"><img src="assets/hero.svg" alt="Animated preview: the Bar Visualizer's neon Ribbons and Shockwaves crossing the Lock Ring's Dial, both hitting on the same beat" width="100%"></a>
+<a href="https://dotmortis.github.io/dms-bar-visualizer/"><img src="assets/hero.webp" alt="Animated preview: the Bar Visualizer's neon Ribbons and Shockwaves crossing the Lock Ring's Dial, both hitting on the same beat" width="100%"></a>
 
 <br>
 
@@ -28,17 +28,21 @@ Try them in your browser first: the **[live demo](https://dotmortis.github.io/dm
 
 ### Bar Visualizer
 
-<p align="center"><img src="assets/bar-anatomy.svg" alt="The Bar Visualizer with its parts labeled: Ribbons, Aura, Shockwave, Spray, Center Punch, Haze and Treble Sparks" width="100%"></p>
+<p align="center"><img src="assets/bar-anatomy.webp" alt="The Bar Visualizer with its parts labeled: Ribbons, Aura, Shockwave, Spray, Center Punch, Haze and Treble Sparks" width="100%"></p>
 
 Neon **Ribbons** shaped by the spectrum swing around the bar's center line, inside a soft **Aura** that grows with the music. On every **Kick**, a **Shockwave** runs out from the center with a **Center Punch** where it starts and a **Spray** of sparks that streak and bounce. Hard Kicks flash the **Haze** across the bar. **Treble Sparks** twinkle with the treble.
 
+With a song that has timed lyrics, the words of the line being sung appear as **Lyric Words**, each as it is sung, in a row on a Ribbon: the line's first word at a random spot, the rest after it. They ride its wave gently, glow in its color and pop in with a flash, harder on a Kick. A passing Shockwave makes them flare and split into colored copies. After the line ends it lingers a moment, then slowly dissolves while the next line already comes in. The lyrics come from DMS 2.0 or later ([`lyrics`](#configuration)).
+
 ### Lock Ring
 
-<p align="center"><img src="assets/ring-anatomy.svg" alt="The Lock Ring with its parts labeled: Ribbons, Aura, Dial, Hour Points, Hands, Digital Time, Shockwave with Beads, Spray and Center Punch" width="80%"></p>
+<p align="center"><img src="assets/ring-anatomy.webp" alt="The Lock Ring with its parts labeled: Ribbons, Aura, Dial, Hour Points, Hands, Digital Time, Shockwave with Beads, Spray and Center Punch" width="80%"></p>
 
 Soft neon **Ribbons** wave outward from the **Dial**, which swells with the music, in round curves. A symmetric **Aura** glows both ways around the Dial. In silence the ribbon keeps breathing as a thin, faint wave.
 
 On every Kick, a ragged, flickering **Shockwave** tears out from the center, carrying **Beads** of light. It's calm on a soft Kick and torn wide on a hard one. As its front passes, the Ribbons surge, the 12 **Hour Points** flash and the **Digital Time** splits into lavender, mauve and blue copies. The **Hands** swing with the bass, mids and treble and flash on the Kick itself, but always show the true time. The Lock Ring has no Haze.
+
+**Lyric Words:** while a song with lyrics timed to it plays, its words appear around the Lock Ring as they are sung, each at a random spot, mostly on a Ribbon (bent along its curve, riding its wave), about one in three on a Hand (lying along it, turning with it). They glow in the color there, pop in with a flash, harder on a Kick, and split and flare like the Digital Time when a Shockwave crosses them. The words of a line pile up and dissolve together at its end; pause freezes them, a seek or a new track clears them. Songs without timed lyrics look as before. The lyrics are DMS's own, so this needs DMS v2.0 or later; turn it off with `lockRing.lyrics`. While it's on, DMS sends the playing track's title, artist and album to its lyrics providers on the lock screen, even with DMS's own Lyrics setting off.
 
 ## How it works
 
@@ -47,12 +51,12 @@ On every Kick, a ragged, flickering **Shockwave** tears out from the center, car
 - **One capture for all screens.** Every monitor's Bar Visualizer, and every monitor's Lock Ring, runs from one capture, so all screens pulse together. The Lock Ring captures only while the screen is locked.
 - **Layering.** The Bar Visualizer is a click-through surface behind the DankBar. With a transparent bar, it shows through.
 
-  <p align="center"><img src="assets/layers.svg" alt="Layer diagram: the transparent DankBar on the top layer, the Bar Visualizer on the bottom layer, the wallpaper below" width="640"></p>
+  <p align="center"><img src="assets/layers.webp" alt="Layer diagram: the transparent DankBar on the top layer, the Bar Visualizer on the bottom layer, the wallpaper below" width="640"></p>
 
 ## Requirements
 
 - Hyprland
-- DankMaterialShell: any version with a top bar for the Bar Visualizer, 2.x for the Lock Ring
+- DankMaterialShell: any version with a top bar for the Bar Visualizer, 2.x for the Lock Ring. The Bar Visualizer's Lyric Words need DMS 2.0 or later running; without it, the bar works as before, just without them
 - PipeWire or PulseAudio
 - Quickshell, cava, libpulse and qt6-shadertools. On Arch:
 
@@ -165,6 +169,7 @@ Both visualizers read one file, `~/.config/bar-visualizer/config.json` ([why one
 | `kickLowHz` | `20` | both | Bottom of the frequency range that fires a Kick |
 | `kickHighHz` | `90` | both | Top of that range. Raise both to hit on snares or claps instead of the kick drum |
 | `kickCooldown` | `0.1` | both | Minimum seconds between Kicks, scaled by `speed`. `0` = no limit |
+| `lyrics` | `true` | Bar | Show the Lyric Words of the playing song on the bar. Off with `false` |
 | `bassStretch` | `1.4` | both | Above 1 spreads the bass wider: around the bar's center, so center widgets don't hide it, and around the Lock Ring's bottom |
 | `lockRing.handWaves` | `1.0` | Lock Ring | How far the Hands swing with the music and on Kicks. `0` = straight Hands |
 | `lockRing.ringSize` | `0.4` | Lock Ring | The widget's default size, as a share of the screen height. Resizing it under Edit widgets still works |
@@ -173,6 +178,9 @@ Both visualizers read one file, `~/.config/bar-visualizer/config.json` ([why one
 | `lockRing.kickHighHzPercent` | `100` | Lock Ring | The top of the Lock Ring's kick range, in percent of `kickHighHz` |
 | `lockRing.kickThresholdPercent` | `100` | Lock Ring | The Lock Ring's `kickThreshold`, in percent of it. Lower = more Kicks |
 | `lockRing.kickCooldownPercent` | `100` | Lock Ring | The Lock Ring's `kickCooldown`, in percent of it. With `kickCooldown` at `0` it stays `0` |
+| `lockRing.lyrics` | `true` | Lock Ring | Show the playing song's [Lyric Words](#lock-ring) on the Lock Ring (DMS v2.0+). Sends the track's title, artist and album to DMS's lyrics providers. Applies at once |
+
+The bar's `lyrics` asks DMS for the playing track's lyrics over its socket ([why](docs/adr/0006-bar-visualizer-asks-dms-for-lyrics.md)). DMS then sends the track's title, artist and album to its lyrics providers, even with lyrics turned off in DMS's own settings: the switch here alone decides. If DankBar's Music widget shows lyrics too, the bar shows the same line twice; turn one of them off.
 
 The `lockRing` settings apply to every Lock Ring at once, since all of them share one capture ([why](docs/adr/0002-lock-ring-settings-are-plugin-wide.md)). A `config.json` from before the `lockRing` section existed works as it is; add the section to change them.
 

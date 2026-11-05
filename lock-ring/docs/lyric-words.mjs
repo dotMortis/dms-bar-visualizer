@@ -1,0 +1,1 @@
+../../docs/lyric-words.mjs

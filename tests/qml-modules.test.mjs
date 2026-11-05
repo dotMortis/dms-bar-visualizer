@@ -27,7 +27,7 @@ function qmlFiles(dir) {
 // Every .mjs a QML file imports, resolved on the path as written (as QML does, not via symlinks).
 function importedModules() {
     const modules = new Set();
-    for (const file of [path.join(ROOT, "shell.qml"), ...qmlFiles(path.join(ROOT, "audio")), ...qmlFiles(path.join(ROOT, "lock-ring"))]) {
+    for (const file of [path.join(ROOT, "shell.qml"), ...qmlFiles(path.join(ROOT, "audio")), ...qmlFiles(path.join(ROOT, "lyrics")), ...qmlFiles(path.join(ROOT, "lock-ring"))]) {
         for (const [, rel] of fs.readFileSync(file, "utf8").matchAll(/^import\s+"([^"]+\.m?js)"/gm))
             modules.add(path.resolve(path.dirname(file), rel));
     }
@@ -70,6 +70,8 @@ describe("modules the QML imports", { skip: !QML && "Qt's qml runner isn't insta
         const rel = importedModules().map((m) => path.relative(ROOT, m));
         assert.ok(rel.includes("lock-ring/kicks.mjs"), rel.join(", "));
         assert.ok(rel.includes("docs/config.mjs"), rel.join(", "));
+        assert.ok(rel.includes("docs/lyric-words.mjs"), rel.join(", "));
+        assert.ok(rel.includes("docs/bar-words.mjs"), rel.join(", "));
     });
 
     for (const module of importedModules()) {
@@ -77,4 +79,20 @@ describe("modules the QML imports", { skip: !QML && "Qt's qml runner isn't insta
             assert.equal(qtLoadError(module), null);
         });
     }
+});
+
+// Inside a component, an Item's own properties hide ids of the same name: an id `layer` reads as
+// the Item's `layer` (QQuickItemLayer) in every delegate below it, and the lookups fail at runtime.
+const ITEM_PROPERTIES = ["layer", "parent", "data", "children", "resources", "state", "states", "transitions",
+    "anchors", "enabled", "visible", "opacity", "width", "height", "x", "y", "z", "scale", "rotation",
+    "clip", "focus", "transform", "antialiasing", "smooth", "baselineOffset", "implicitWidth", "implicitHeight"];
+
+describe("QML ids", () => {
+    test("none is named like an Item's own property", () => {
+        const files = [path.join(ROOT, "shell.qml"), ...["audio", "lyrics", "lock-ring"].flatMap(d => qmlFiles(path.join(ROOT, d)))];
+        const clashes = files.flatMap(file => Array.from(fs.readFileSync(file, "utf8").matchAll(/^\s*id:\s*(\w+)\s*$/gm))
+            .filter(m => ITEM_PROPERTIES.includes(m[1]))
+            .map(m => `${path.relative(ROOT, file)}: id ${m[1]}`));
+        assert.deepEqual(clashes, []);
+    });
 });

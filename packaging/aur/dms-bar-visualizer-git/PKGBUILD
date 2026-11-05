@@ -37,6 +37,13 @@ package() {
   install -Dm644 audio/AudioPipeline.qml "$share/audio/AudioPipeline.qml"
   install -Dm644 docs/kick.mjs "$share/docs/kick.mjs"
   install -Dm644 docs/config.mjs "$share/docs/config.mjs"
+  # The Ribbons' shape, which shell.qml imports.
+  install -Dm644 docs/bar-ribbons.mjs "$share/docs/bar-ribbons.mjs"
+  # The Lyric Words: asked of DMS, timed and drawn by lyrics/, from the shared modules in docs/.
+  install -Dm644 lyrics/BarLyrics.qml "$share/lyrics/BarLyrics.qml"
+  install -Dm644 lyrics/LyricWordsLayer.qml "$share/lyrics/LyricWordsLayer.qml"
+  install -Dm644 docs/lyric-words.mjs "$share/docs/lyric-words.mjs"
+  install -Dm644 docs/bar-words.mjs "$share/docs/bar-words.mjs"
   install -Dm644 shaders/viz.frag "$share/shaders/viz.frag"
   install -Dm644 shaders/viz.frag.qsb "$share/shaders/viz.frag.qsb"
 

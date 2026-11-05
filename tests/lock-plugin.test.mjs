@@ -139,7 +139,7 @@ describe("lock ring plugin", () => {
         assert.match(audio, /path: Config\.configPath\(Quickshell\.env\("XDG_CONFIG_HOME"\), Quickshell\.env\("HOME"\)\)/);
         assert.match(audio, /watchChanges: true/);
         assert.match(audio, /root\.settings = Config\.parseConfig\(text\(\)\)/);
-        assert.match(audio, /onLoadFailed: root\.settings = Config\.DEFAULTS/);
+        assert.match(audio, /onLoadFailed: \{?\s*root\.settings = Config\.DEFAULTS/);
         assert.match(audio, /handWaves: settings\.lockRing\.handWaves/);
         assert.match(audio, /ringSize: settings\.lockRing\.ringSize/);
         assert.doesNotMatch(audio, /pluginSettings|PluginService/, "nothing comes from DMS's plugin settings");
