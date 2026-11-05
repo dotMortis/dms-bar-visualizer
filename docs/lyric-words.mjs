@@ -48,7 +48,7 @@ export const POP = { base: 0.4, kick: 0.6, window: 0.15 };
 // The pace (seconds per word) a line's words are spread at when it has no end at all.
 export const WORD_PACE = 0.4;
 
-// The Ribbons a word can land on: three strands, on the bar (docs/bar-ribbons.mjs) as on the Lock
+// The Ribbons a word can land on: three of them, on the bar (docs/bar-ribbons.mjs) as on the Lock
 // Ring (lock-ring/ring.mjs).
 export const RIBBONS = 3;
 
@@ -63,8 +63,8 @@ export const TRIES = 12;
 //   "ribbons"           { on: "ribbon", ribbon, x }      x: 0 (the bar's left edge) .. 1 (its right)
 //   "ribbons-or-hands"  { on: "ribbon", ribbon, angle }  angle: clockwise degrees from 12 o'clock
 //                       { on: "hand", hand, along }      along: 0 (the Hand's inner end) .. 1 (tip)
-// ribbon is the strand, 0 .. RIBBONS - 1; hand one of HAND_NAMES. On the ring a word lands on a
-// Ribbon or a Hand as likely.
+// ribbon is which Ribbon, 0 .. RIBBONS - 1; hand one of HAND_NAMES. On the Lock Ring a word lands
+// on a Ribbon or a Hand as likely.
 function randomSpot(placement, random) {
     if (placement !== "ribbons-or-hands")
         return { on: "ribbon", ribbon: Math.floor(random() * RIBBONS), x: random() };
@@ -73,8 +73,8 @@ function randomSpot(placement, random) {
     return { on: "hand", hand: HAND_NAMES[Math.floor(random() * HAND_NAMES.length)], along: random() };
 }
 
-// How far apart two spots are, 0 (on top of each other) .. 1. The strands of the Ribbons wave
-// across each other, so only the way along them counts: across the bar, or around the ring. A Hand
+// How far apart two spots are, 0 (on top of each other) .. 1. The Ribbons wave across each
+// other, so only the way along them counts: across the bar, or around the ring. A Hand
 // turns, so its words are only apart from each other along it, and from words elsewhere (the
 // Ribbons, outside the dial, and the other Hands, which only meet it now and then) far apart.
 function apart(a, b) {

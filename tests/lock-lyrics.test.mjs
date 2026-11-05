@@ -124,7 +124,7 @@ describe("a word's colour", () => {
             assert.match(c, /^#[0-9a-f]{6}$/);
     });
 
-    test("on a Ribbon, its strand's at that spot: it changes around the ring and between strands", () => {
+    test("on a Ribbon, that Ribbon's at that spot: it changes around the ring and between Ribbons", () => {
         const s = scene({ values: loud });
         const at = (ribbon, angle) => wordPlacement({ on: "ribbon", ribbon, angle }, five, s).color;
         assert.match(at(0, 0), /^#[0-9a-f]{6}$/);
