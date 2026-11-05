@@ -340,3 +340,212 @@ describe("pop-in", () => {
         assert.deepEqual(lyrics.words(WALL + 100).map(w => [w.text, w.popIn]), [["one", 1], ["two", 1]]);
     });
 });
+
+// A line of `count` words, one a second from song time `t`, held until a second after its last.
+function lineOf(count, t = 10) {
+    const texts = Array.from({ length: count }, (_, i) => "w" + i);
+    return { t, e: t + count + 1, x: texts.join(" "), w: texts.map((x, i) => piece(t + i, t + i + 0.5, i + 1 < count ? x + " " : x)) };
+}
+
+// A Lyric Words module like playing()'s, placing words in `placement` mode with `seed`.
+function placing(synced, { placement, seed } = {}) {
+    const lyrics = createLyricWords({ placement, seed });
+    lyrics.setTrack("track-1", 300);
+    lyrics.setLyrics({ state: "ready", synced });
+    lyrics.read({ position: 0, wall: WALL, rate: 1, playing: true });
+    return lyrics;
+}
+
+// The spots of the words visible at song time `t`.
+const spotsAt = (lyrics, t) => lyrics.words(wallAt(t)).map(w => w.spot);
+
+describe("placement on the Bar Visualizer: Ribbons only", () => {
+    test("every word lands on one of the three Ribbons, somewhere across the bar", () => {
+        for (let seed = 1; seed <= 20; seed++) {
+            const spots = spotsAt(placing([lineOf(12)], { placement: "ribbons", seed }), 22.5);
+            assert.equal(spots.length, 12);
+            for (const spot of spots) {
+                assert.equal(spot.on, "ribbon", JSON.stringify(spot));
+                assert.ok([0, 1, 2].includes(spot.ribbon), JSON.stringify(spot));
+                assert.ok(spot.x >= 0 && spot.x <= 1, JSON.stringify(spot));
+            }
+        }
+    });
+
+    test("is the default", () => {
+        const spots = spotsAt(placing([lineOf(5)]), 15);
+        assert.ok(spots.every(s => s.on === "ribbon" && s.x >= 0 && s.x <= 1), JSON.stringify(spots));
+    });
+
+    test("a new word lands away from the words already shown", () => {
+        // Twelve random spots across the bar all within 0.2 of the first word: about 1 in 60000.
+        for (let seed = 1; seed <= 100; seed++) {
+            const [first, second] = spotsAt(placing([lineOf(2)], { seed }), 11);
+            assert.ok(Math.abs(first.x - second.x) >= 0.2, `seed ${seed}: ${first.x} ${second.x}`);
+        }
+    });
+
+    test("there is no limit: with no free space left, words overlap", () => {
+        const spots = spotsAt(placing([lineOf(60)]), 69.5);
+        assert.equal(spots.length, 60);
+        assert.ok(spots.every(s => s.on === "ribbon" && s.x >= 0 && s.x <= 1));
+    });
+
+    test("a word keeps its spot while it is shown", () => {
+        const lyrics = placing([lineOf(4)], { seed: 7 });
+        const early = spotsAt(lyrics, 11.5);
+        const later = spotsAt(lyrics, 14.5);
+        assert.deepEqual(later.slice(0, 2), early);
+    });
+});
+
+describe("placement on the Lock Ring: Ribbons or Hands", () => {
+    const spots = [];
+    for (let seed = 1; seed <= 20; seed++)
+        spots.push(...spotsAt(placing([lineOf(8)], { placement: "ribbons-or-hands", seed }), 18));
+
+    test("words land on Ribbons, around the ring", () => {
+        const ribbons = spots.filter(s => s.on === "ribbon");
+        assert.ok(ribbons.length > 0);
+        for (const spot of ribbons) {
+            assert.ok([0, 1, 2].includes(spot.ribbon), JSON.stringify(spot));
+            assert.ok(spot.angle >= 0 && spot.angle < 360, JSON.stringify(spot));
+        }
+    });
+
+    test("and on every Hand, along it", () => {
+        const hands = spots.filter(s => s.on === "hand");
+        assert.deepEqual([...new Set(hands.map(s => s.hand))].sort(), ["hour", "minute", "second"]);
+        for (const spot of hands)
+            assert.ok(spot.along >= 0 && spot.along <= 1, JSON.stringify(spot));
+    });
+
+    test("and nowhere else", () => {
+        assert.ok(spots.every(s => s.on === "ribbon" || s.on === "hand"), JSON.stringify(spots));
+    });
+
+    test("a new word lands away from the words already shown", () => {
+        for (let seed = 1; seed <= 100; seed++) {
+            const [first, second] = spotsAt(placing([lineOf(2)], { placement: "ribbons-or-hands", seed }), 11);
+            const sameRibbon = first.on === "ribbon" && second.on === "ribbon";
+            const sameHand = first.on === "hand" && second.on === "hand" && first.hand === second.hand;
+            if (sameRibbon) {
+                const d = Math.abs(first.angle - second.angle) % 360;
+                assert.ok(Math.min(d, 360 - d) >= 36, `seed ${seed}: ${first.angle} ${second.angle}`);
+            }
+            if (sameHand)
+                assert.ok(Math.abs(first.along - second.along) >= 0.2, `seed ${seed}: ${first.along} ${second.along}`);
+        }
+    });
+});
+
+describe("placement after the words clear", () => {
+    test("the words that are gone don't keep new ones away", () => {
+        // Two one-word lines, the second long after the first has gone: across seeds, the second
+        // word sometimes lands right where the first was.
+        const close = [];
+        for (let seed = 1; seed <= 100; seed++) {
+            const lyrics = placing([{ t: 10, e: 11, x: "gone" }, { t: 20, e: 21, x: "new" }], { seed });
+            const [gone] = spotsAt(lyrics, 10.5);
+            assert.deepEqual(spotsAt(lyrics, 15), []);
+            const [fresh] = spotsAt(lyrics, 20.5);
+            close.push(Math.abs(gone.x - fresh.x) < 0.1);
+        }
+        assert.ok(close.some(Boolean));
+    });
+
+    test("a seek places the words it brings back afresh", () => {
+        let moved = 0;
+        for (let seed = 1; seed <= 20; seed++) {
+            const lyrics = placing([{ t: 10, e: 14, x: "here" }], { seed });
+            const [before] = spotsAt(lyrics, 10.5);
+            lyrics.read({ position: 10.5, wall: wallAt(30), rate: 1, playing: true });
+            const [after] = lyrics.words(wallAt(30)).map(w => w.spot);
+            if (after.x !== before.x)
+                moved++;
+        }
+        assert.ok(moved > 0);
+    });
+
+    test("a new track's words don't take the old track's spots", () => {
+        let moved = 0;
+        for (let seed = 1; seed <= 20; seed++) {
+            const lyrics = placing([{ t: 10, e: 14, x: "old" }], { seed });
+            const [before] = spotsAt(lyrics, 10.5);
+            lyrics.setTrack("track-2", 300);
+            lyrics.setLyrics({ state: "ready", synced: [{ t: 10, e: 14, x: "new" }] });
+            const [after] = spotsAt(lyrics, 10.6);
+            if (after.x !== before.x)
+                moved++;
+        }
+        assert.ok(moved > 0);
+    });
+});
+
+describe("the pop", () => {
+    // Two words, at song times 10 and 11.
+    const two = () => playing([lineOf(2)]);
+    const popOf = (lyrics, text, t) => lyrics.words(wallAt(t)).find(w => w.text === text).pop;
+
+    test("every word pops", () => {
+        const lyrics = two();
+        assert.ok(popOf(lyrics, "w0", 10) > 0);
+    });
+
+    test("a word arriving with a Kick pops harder than one without", () => {
+        const lyrics = two();
+        lyrics.kick(1, wallAt(10));
+        assert.ok(popOf(lyrics, "w0", 10.05) > popOf(lyrics, "w1", 11.05));
+    });
+
+    test("so does one whose Kick is detected just after it lands", () => {
+        const lyrics = two();
+        lyrics.words(wallAt(10));
+        lyrics.kick(1, wallAt(10.05));
+        assert.ok(popOf(lyrics, "w0", 10.1) > popOf(lyrics, "w1", 11.1));
+    });
+
+    test("a word keeps its pop while it is shown", () => {
+        const lyrics = playing([lineOf(8)]);
+        lyrics.kick(1, wallAt(10));
+        const early = popOf(lyrics, "w0", 10.05);
+        assert.equal(popOf(lyrics, "w0", 17.5), early);
+    });
+
+    test("a harder Kick pops harder", () => {
+        const soft = two(), hard = two();
+        soft.kick(0.5, wallAt(10));
+        hard.kick(1, wallAt(10));
+        assert.ok(popOf(hard, "w0", 10.05) > popOf(soft, "w0", 10.05));
+    });
+
+    test("a Kick well before or after a word doesn't make it pop harder", () => {
+        const plain = popOf(two(), "w0", 10.05);
+        const before = two();
+        before.kick(1, wallAt(9.5));
+        assert.equal(popOf(before, "w0", 10.05), plain);
+        const after = two();
+        after.kick(1, wallAt(10.6));
+        assert.equal(popOf(after, "w0", 10.7), plain);
+    });
+
+    test("a Kick before a seek doesn't count after it", () => {
+        const lyrics = two();
+        lyrics.kick(1, wallAt(10));
+        lyrics.read({ position: 0, wall: wallAt(10.01), rate: 1, playing: true });
+        const plain = popOf(two(), "w0", 10.05);
+        assert.equal(lyrics.words(wallAt(10.01) + 10050).find(w => w.text === "w0").pop, plain);
+    });
+});
+
+describe("placement is seeded", () => {
+    const run = seed => spotsAt(placing([lineOf(6)], { placement: "ribbons-or-hands", seed }), 16);
+
+    test("the same seed gives the same placement", () => {
+        assert.deepEqual(run(42), run(42));
+    });
+
+    test("another seed gives another", () => {
+        assert.notDeepEqual(run(42), run(43));
+    });
+});
