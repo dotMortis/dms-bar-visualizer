@@ -21,6 +21,7 @@ describe("config.json", () => {
             lockRing: {
                 handWaves: 1.0, ringSize: 0.4, intensityPercent: 100, kickLowHzPercent: 100,
                 kickHighHzPercent: 100, kickThresholdPercent: 100, kickCooldownPercent: 100,
+                lyrics: true,
             },
         });
     });
@@ -55,6 +56,11 @@ describe("config.json", () => {
             assert.deepEqual(parseConfig(`{"speed": 1.2${section}}`).lockRing, DEFAULTS.lockRing, section);
     });
 
+    test("lockRing.lyrics switches the Lock Ring's Lyric Words; not a boolean, it's on", () => {
+        assert.equal(parseConfig('{"lockRing": {"lyrics": false}}').lockRing.lyrics, false);
+        assert.equal(parseConfig('{"lockRing": {"lyrics": 0}}').lockRing.lyrics, true);
+    });
+
     test("a fresh copy each time, so a change can't leak into the defaults", () => {
         parseConfig("{}").lockRing.ringSize = 0.7;
         assert.equal(DEFAULTS.lockRing.ringSize, 0.4);
@@ -78,7 +84,7 @@ describe("config.json", () => {
     test("every number in it has a slider in the demo, inside its range", () => {
         const sliders = new Map([...slidersFor("bar"), ...slidersFor("ring")].map(s => [s.key, s]));
         const keys = [...Object.keys(DEFAULTS).filter(k => typeof DEFAULTS[k] === "number"),
-            ...Object.keys(DEFAULTS.lockRing).map(k => `lockRing.${k}`)];
+            ...Object.keys(DEFAULTS.lockRing).filter(k => typeof DEFAULTS.lockRing[k] === "number").map(k => `lockRing.${k}`)];
         for (const key of keys) {
             const s = sliders.get(key), value = valueAt(DEFAULTS, key);
             assert.ok(s && s.min <= value && value <= s.max, key);

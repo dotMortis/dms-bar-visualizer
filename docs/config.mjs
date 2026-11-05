@@ -31,6 +31,7 @@ export const DEFAULTS = {
         kickHighHzPercent: 100,
         kickThresholdPercent: 100,
         kickCooldownPercent: 100,
+        lyrics: true,     // Lyric Words on the Lock Ring, from DMS's lyrics service (DMS v2.0+)
     },
 };
 
