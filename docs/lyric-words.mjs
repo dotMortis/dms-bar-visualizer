@@ -246,7 +246,8 @@ function spread(line, end) {
 //                          seconds (0: unknown). A new identity drops the lyrics and clears the words.
 //   setLyrics(lyrics)      DMS's lyrics for that track: its lyrics.get reply's result ({ found,
 //                          synced, plain, instrumental }), or { state, synced } with the lyrics
-//                          controller's state and lines; null for none.
+//                          controller's state and lines; null for none. Lyrics giving the same
+//                          Lyric Lines as before keep the words shown; others clear them.
 //   read(reading)          a playback position reading: { position (seconds), wall (ms, as
 //                          Date.now()), rate (1 = normal), playing (false = paused) }.
 // and ask it
@@ -299,10 +300,13 @@ export function createLyricWords(options) {
                 clearing = true;
         },
 
+        // DMS refetches in the background: the same Lyric Lines again keep the words and their spots.
         setLyrics(next) {
+            const before = JSON.stringify(lines);
             lyrics = next;
             rebuild();
-            clearing = true;
+            if (JSON.stringify(lines) !== before)
+                clearing = true;
         },
 
         read(reading) {

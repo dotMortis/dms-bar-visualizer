@@ -474,6 +474,18 @@ describe("placement after the words clear", () => {
         assert.ok(close.some(Boolean));
     });
 
+    test("the same lyrics set again keep the words and their spots", () => {
+        const synced = [lineOf(4)];
+        for (let seed = 1; seed <= 20; seed++) {
+            const lyrics = placing(synced, { seed });
+            const before = lyrics.words(wallAt(12.5));
+            // DMS's background refresh: equal lyrics, a fresh object.
+            lyrics.setLyrics({ state: "ready", synced: JSON.parse(JSON.stringify(synced)) });
+            const after = lyrics.words(wallAt(12.5));
+            assert.deepEqual(after.map(w => [w.key, w.spot, w.popIn]), before.map(w => [w.key, w.spot, w.popIn]), `seed ${seed}`);
+        }
+    });
+
     test("a seek places the words it brings back afresh", () => {
         let moved = 0;
         for (let seed = 1; seed <= 20; seed++) {

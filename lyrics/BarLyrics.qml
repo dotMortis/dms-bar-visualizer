@@ -38,7 +38,7 @@ Scope {
     // followed; any provider DMS doesn't know is skipped by it.
     readonly property var providers: ["betterlyrics", "unison", "lyricsplus", "kugou", "lrclib", "youtubemusic"]
 
-    readonly property var lyricWords: LyricWords.createLyricWords({
+    readonly property var tracker: LyricWords.createLyricWords({
         placement: "ribbons",
         seed: Date.now() % 2147483647
     })
@@ -59,13 +59,13 @@ Scope {
 
     function kick(power) {
         if (enabled)
-            lyricWords.kick(power, Date.now());
+            tracker.kick(power, Date.now());
     }
 
     function read() {
         if (!player)
             return;
-        lyricWords.read({
+        tracker.read({
             position: player.positionSupported ? player.position : 0,
             wall: Date.now(),
             rate: player.rate,
@@ -76,7 +76,7 @@ Scope {
     function trackChanged() {
         serial++;
         pending = {};
-        lyricWords.setTrack(trackKey, trackLength);
+        tracker.setTrack(trackKey, trackLength);
         read();
         if (enabled)
             requestDelay.restart();
@@ -114,7 +114,7 @@ Scope {
                 lookup(true);
                 return;
             }
-            lyricWords.setLyrics(found ? result : null);
+            tracker.setLyrics(found ? result : null);
         });
         lookup(false);
     }
@@ -142,14 +142,14 @@ Scope {
         try {
             callback(message);
         } catch (e) {
-            lyricWords.setLyrics(null);
+            tracker.setLyrics(null);
         }
     }
 
     // The words shown, into the model: one entry per word while it keeps its text and its spot.
     // A seek or new lyrics can bring a word's key back elsewhere, so the spot is in the entry's id.
     function syncWords() {
-        const shown = enabled ? lyricWords.words(Date.now()) : [];
+        const shown = enabled ? tracker.words(Date.now()) : [];
         const byId = {};
         for (const word of shown)
             byId[[word.key, word.text, word.spot.ribbon, word.spot.x].join("|")] = word;
@@ -170,7 +170,7 @@ Scope {
     }
 
     onTrackKeyChanged: trackChanged()
-    onTrackLengthChanged: lyricWords.setTrack(trackKey, trackLength)
+    onTrackLengthChanged: tracker.setTrack(trackKey, trackLength)
     onEnabledChanged: {
         serial++;
         pending = {};
@@ -179,7 +179,7 @@ Scope {
                 finder.running = true;
             request();
         } else {
-            lyricWords.setLyrics(null);
+            tracker.setLyrics(null);
             syncWords();
         }
     }
