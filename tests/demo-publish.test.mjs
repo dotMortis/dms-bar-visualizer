@@ -34,10 +34,11 @@ function pageFiles() {
 }
 
 describe("demo publishing", () => {
-    test("the page loads the Lock Ring's modules and shader", () => {
+    test("the page loads the Lock Ring's modules and shader, and its Lyric Words", () => {
         const files = pageFiles();
         for (const f of ["kick.mjs", "config.mjs", "lock-ring/ring.mjs", "lock-ring/kicks.mjs", "lock-ring/hands.mjs",
-                         "lock-ring/clock.mjs", "lock-ring/ring.frag"])
+                         "lock-ring/clock.mjs", "lock-ring/ring.frag", "lyric-words.mjs", "lock-ring/lyrics.mjs",
+                         "demo-lyrics.mjs"])
             assert.ok(files.includes(f), `the page loads ${f} (got ${files.join(", ")})`);
     });
 
