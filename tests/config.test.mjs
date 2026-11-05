@@ -18,6 +18,7 @@ describe("config.json", () => {
             barThickness: 40, spacing: 4, radius: 12, followMaximize: true,
             intensity: 1.0, speed: 1.0, kickThreshold: 0.4, kickDecay: 6.0,
             kickLowHz: 20, kickHighHz: 90, kickCooldown: 0.1, bassStretch: 1.4,
+            lyrics: true,
             lockRing: {
                 handWaves: 1.0, ringSize: 0.4, intensityPercent: 100, kickLowHzPercent: 100,
                 kickHighHzPercent: 100, kickThresholdPercent: 100, kickCooldownPercent: 100,
@@ -39,6 +40,12 @@ describe("config.json", () => {
 
     test("a value of the wrong type, or not finite, gets the default", () => {
         assert.deepEqual(parseConfig('{"kickLowHz": "35", "speed": null, "kickDecay": true, "followMaximize": 0}'), DEFAULTS);
+    });
+
+    // The bar's Lyric Words switch, on by default; it doesn't follow DMS's own Lyrics setting.
+    test("the bar's lyrics switch is read like any other key", () => {
+        assert.equal(parseConfig('{"lyrics": false}').lyrics, false);
+        assert.equal(parseConfig('{"lyrics": "off"}').lyrics, true);
     });
 
     test("keys without a default are dropped", () => {

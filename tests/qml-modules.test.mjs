@@ -25,12 +25,12 @@ function qmlFiles(dir) {
 }
 
 // Shared modules the visualizers are about to import: held to Qt's engine before their QML lands.
-const UPCOMING = ["docs/lyric-words.mjs"];
+const UPCOMING = [];
 
 // Every .mjs a QML file imports, resolved on the path as written (as QML does, not via symlinks).
 function importedModules() {
     const modules = new Set(UPCOMING.map((rel) => path.join(ROOT, rel)));
-    for (const file of [path.join(ROOT, "shell.qml"), ...qmlFiles(path.join(ROOT, "audio")), ...qmlFiles(path.join(ROOT, "lock-ring"))]) {
+    for (const file of [path.join(ROOT, "shell.qml"), ...qmlFiles(path.join(ROOT, "audio")), ...qmlFiles(path.join(ROOT, "lyrics")), ...qmlFiles(path.join(ROOT, "lock-ring"))]) {
         for (const [, rel] of fs.readFileSync(file, "utf8").matchAll(/^import\s+"([^"]+\.m?js)"/gm))
             modules.add(path.resolve(path.dirname(file), rel));
     }
@@ -73,6 +73,8 @@ describe("modules the QML imports", { skip: !QML && "Qt's qml runner isn't insta
         const rel = importedModules().map((m) => path.relative(ROOT, m));
         assert.ok(rel.includes("lock-ring/kicks.mjs"), rel.join(", "));
         assert.ok(rel.includes("docs/config.mjs"), rel.join(", "));
+        assert.ok(rel.includes("docs/lyric-words.mjs"), rel.join(", "));
+        assert.ok(rel.includes("docs/bar-words.mjs"), rel.join(", "));
     });
 
     for (const module of importedModules()) {
