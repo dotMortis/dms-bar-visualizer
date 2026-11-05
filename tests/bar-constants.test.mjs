@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, test } from "node:test";
 
-import { LEVEL, RIBBON, SHAKE, SHOCK } from "../docs/bar-ribbons.mjs";
+import { HUE, LEVEL, PALETTE, RIBBON, SHAKE, SHOCK } from "../docs/bar-ribbons.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const read = file => fs.readFileSync(path.join(ROOT, file), "utf8");
@@ -26,11 +26,19 @@ function shaderConstants(source) {
     return values;
 }
 
+// A shader's `const vec3 NAME = vec3(r, g, b);` lines.
+function shaderColors(source) {
+    const values = {};
+    for (const [, name, rgb] of source.matchAll(/^const vec3 (\w+)\s*= vec3\(([^)]*)\);/gm))
+        values[name] = rgb.split(",").map(Number);
+    return values;
+}
+
 // RIBBON.freqStep is RIBBON_FREQ_STEP in the shader.
 const constName = (group, key) => `${group}_${key.replace(/[A-Z]/g, c => `_${c}`).toUpperCase()}`;
 
 const SHADERS = { "shaders/viz.frag": read("shaders/viz.frag"), "docs/index.html": demoFrag() };
-const GROUPS = { RIBBON, LEVEL, SHOCK, SHAKE };
+const GROUPS = { RIBBON, LEVEL, SHOCK, SHAKE, HUE };
 
 for (const [file, source] of Object.entries(SHADERS)) {
     describe(`${file}'s Ribbon constants match docs/bar-ribbons.mjs`, () => {
@@ -45,13 +53,19 @@ for (const [file, source] of Object.entries(SHADERS)) {
             });
         }
 
+        test("PALETTE", () => {
+            const colors = shaderColors(source);
+            for (const [key, rgb] of Object.entries(PALETTE))
+                assert.deepEqual(colors[key.toUpperCase()], rgb, `${file}'s ${key.toUpperCase()}`);
+        });
+
         // The numbers are only mirrored if the shader uses the constants, not its own copies.
         test("draws the Ribbons from the constants", () => {
             const code = source.replace(/\/\/.*$/gm, "").replace(/^const float .*$/gm, "");
             for (const [group, values] of Object.entries(GROUPS))
                 for (const key of Object.keys(values))
                     assert.match(code, new RegExp(`\\b${constName(group, key)}\\b`), `${file} uses ${constName(group, key)}`);
-            for (const literal of ["2.6", "2.1", "2.3", "0.42", "4.5", "2.2", "0.003", "97.0", "83.0"])
+            for (const literal of ["2.6", "2.1", "2.3", "0.42", "4.5", "2.2", "0.003", "97.0", "83.0", "0.33"])
                 assert.ok(!new RegExp(`(?<![\\d.])${literal.replace(".", "\\.")}(?![\\d])`).test(code), `${file} spells out ${literal}`);
         });
     });

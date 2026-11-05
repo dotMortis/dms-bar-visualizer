@@ -28,7 +28,8 @@ layout(std140, binding = 0) uniform buf {
 const float TAU = 6.28318530718;
 const int KICKS = 8;  // matches kickSlots in audio/AudioPipeline.qml
 
-// The Ribbons' shape, mirrored from docs/bar-ribbons.mjs (tests/bar-constants.test.mjs checks them).
+// The Ribbons' shape and color, mirrored from docs/bar-ribbons.mjs (tests/bar-constants.test.mjs
+// checks them; Lyric Words ride the Ribbons in their color).
 const float RIBBON_FREQ = 2.6;
 const float RIBBON_FREQ_STEP = 1.4;
 const float RIBBON_SPEED_STEP = 0.5;
@@ -37,6 +38,13 @@ const float RIBBON_RIPPLE = 0.3;
 const float RIBBON_RIPPLE_FREQ = 2.3;
 const float RIBBON_RIPPLE_PHASE = 1.7;
 const float RIBBON_REACH = 0.42;
+const float RIBBON_HUE_STEP = 0.33;
+const float RIBBON_HUE_SPREAD = 0.6;
+const float RIBBON_HUE_LEVEL = 0.2;
+const float RIBBON_DEEP = 0.9;
+const float HUE_SPEED = 0.05;
+const float HUE_ALONG = 0.004;
+const float HUE_DEEPEN = 1.5;
 const float LEVEL_GAIN = 1.3;
 const float LEVEL_KICK = 0.7;
 const float LEVEL_SURGE = 0.6;
@@ -75,6 +83,7 @@ float spectrum(float s) {
 }
 
 // Catppuccin Mocha, lavender-led: cycles lavender → mauve → lavender → pink → lavender → blue.
+// docs/bar-ribbons.mjs PALETTE mirrors these.
 const vec3 LAVENDER = vec3(0.706, 0.745, 0.996); // #b4befe
 const vec3 MAUVE    = vec3(0.796, 0.651, 0.969); // #cba6f7
 const vec3 PINK     = vec3(0.961, 0.761, 0.906); // #f5c2e7
@@ -91,7 +100,7 @@ vec3 palette(float h) {
 // h picks the palette position, s deepens the pastel (higher = richer, less white), v scales.
 // Deepening matters because additive glow pushes pastels to white.
 vec3 pal(float h, float s, float v) {
-    return v * pow(palette(h), vec3(1.0 + 1.5 * s));
+    return v * pow(palette(h), vec3(1.0 + HUE_DEEPEN * s));
 }
 
 float hash(vec2 p) {
@@ -135,7 +144,7 @@ void main() {
     float n = sin(p.x * 0.31 + t * 0.9 + sin(p.y * 4.0 + t * 1.3) * 1.5)
             + sin(p.x * 0.11 - t * 0.6 + ubuf.bass * 2.0)
             + sin((p.x * 0.07 + p.y * 2.0) + t * 0.4);
-    float hueBase = t * 0.05 + p.x * 0.004;
+    float hueBase = t * HUE_SPEED + p.x * HUE_ALONG;
     vec3 col = pal(hueBase + n * 0.08, 0.85, (0.12 + 0.08 * (n * 0.5 + 0.5)) * k2);
 
     // --- Neon spectrum ribbons ---------------------------------------------
@@ -151,7 +160,7 @@ void main() {
         float y = 0.5 + RIBBON_REACH * amp * wave;
         float d = abs(p.y - y);
         float glow = glowW / (d * d * 18.0 + glowW) * (0.6 + 1.8 * amp);
-        vec3 c = pal(hueBase + fk * 0.33 + s * 0.6 + amp * 0.2, 0.9, 1.0);
+        vec3 c = pal(hueBase + fk * RIBBON_HUE_STEP + s * RIBBON_HUE_SPREAD + amp * RIBBON_HUE_LEVEL, RIBBON_DEEP, 1.0);
         col += c * glow * 0.55;
     }
 
