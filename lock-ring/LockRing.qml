@@ -223,15 +223,20 @@ DesktopPluginComponent {
         // in oversized with a flash (harder with a Kick), dissolves with its line, and splits and
         // flares as a Shockwave's front crosses it, as the Digital Time does (lyrics.mjs wordLook()).
         Repeater {
-            model: LockAudio.lyricWords.length
+            // One delegate per word, kept from its pop-in to its dissolve (LockAudio.lyricWordModel).
+            model: LockAudio.lyricWordModel
 
             Item {
                 id: word
-                required property int index
-                readonly property var entry: LockAudio.lyricWords[index] ?? null
-                readonly property var chars: Array.from(entry?.text ?? "")
+                required property string wordId
+                required property string text
+                readonly property var entry: LockAudio.lyricWords[wordId] ?? null
+                readonly property var chars: Array.from(text)
+                // A word keeps its size (lead or background vocal), so its box and spacing do too.
                 readonly property real em: Math.max(8, root.size * Lyrics.WORD_FONT * (entry?.size ?? 1))
-                readonly property var advances: chars.map(c => metrics.advanceWidth(c))
+                // Measured in the letters' font: read through metrics.font, so it's measured again
+                // once the font is set (a method call alone wouldn't tie it to the font).
+                readonly property var advances: metrics.font.pixelSize > 0 ? chars.map(c => metrics.advanceWidth(c)) : []
                 readonly property real span: advances.reduce((sum, a) => sum + a, 0)
                 readonly property var place: entry ? Lyrics.wordPlacement(entry.spot, advances, root.lyricScene) : null
                 readonly property real crossing: place ? Kicks.shockwaveCrossing(place.radius, LockAudio.kickAges, LockAudio.kickPowers, LockAudio.kickSeeds, place.theta) : 0
@@ -319,7 +324,9 @@ DesktopPluginComponent {
                     anchors.fill: parent
                     colorization: word.look.white
                     colorizationColor: "white"
-                    blurEnabled: word.look.blur > 0
+                    // Always on, blurring by 0 until it dissolves: switching it rebuilds the effect,
+                    // a visible hitch just as the word starts to dissolve.
+                    blurEnabled: true
                     blur: word.look.blur
                     shadowEnabled: true
                     shadowColor: Qt.tint(word.glow, Qt.alpha(Clock.TIME_HIT.glow.color, word.look.hit.glow.opacity * 0.6))

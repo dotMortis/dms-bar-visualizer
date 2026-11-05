@@ -64,6 +64,10 @@ const LEAD = { size: 1, brightness: 1 };
 export const HAND_NAMES = ["hour", "minute", "second"];
 // How many random spots a new word tries; it takes the one furthest from the words shown.
 export const TRIES = 12;
+// On the Lock Ring, the share of words that land on a Hand; the rest land on a Ribbon. A word
+// picks one of the two first, and only then spreads out from the words shown there, so the share
+// holds however crowded either one gets.
+export const HAND_SHARE = 0.35;
 
 // A random spot for a word, in `placement` mode:
 //   "ribbons"           { on: "ribbon", ribbon, x }      x: 0 (the bar's left edge) .. 1 (its right),
@@ -72,12 +76,12 @@ export const TRIES = 12;
 //                       in a space)
 //   "ribbons-or-hands"  { on: "ribbon", ribbon, angle }  angle: clockwise degrees from 12 o'clock
 //                       { on: "hand", hand, along }      along: 0 (the Hand's inner end) .. 1 (tip)
-// ribbon is which Ribbon, 0 .. RIBBONS - 1; hand one of HAND_NAMES. On the Lock Ring a word lands
-// on a Ribbon or a Hand as likely.
-function randomSpot(placement, random) {
+// ribbon is which Ribbon, 0 .. RIBBONS - 1; hand one of HAND_NAMES. On the Lock Ring, `onHand`
+// says which of the two it lands on.
+function randomSpot(placement, random, onHand) {
     if (placement !== "ribbons-or-hands")
         return { on: "ribbon", ribbon: Math.floor(random() * RIBBONS), x: random() };
-    if (random() < 0.5)
+    if (!onHand)
         return { on: "ribbon", ribbon: Math.floor(random() * RIBBONS), angle: random() * 360 };
     return { on: "hand", hand: HAND_NAMES[Math.floor(random() * HAND_NAMES.length)], along: random() };
 }
@@ -98,11 +102,14 @@ function apart(a, b) {
     return 1;
 }
 
-// A spot for a new word: of TRIES random ones, the one furthest from the spots `taken`.
+// A spot for a new word: of TRIES random ones, the one furthest from the spots `taken`. On the
+// Lock Ring it first picks a Hand (HAND_SHARE of the time) or a Ribbon, and tries only there: a
+// Hand counts as far from every Ribbon, so trying both would favour the Hands.
 function place(placement, random, taken) {
+    const onHand = placement === "ribbons-or-hands" && random() < HAND_SHARE;
     let best = null, bestGap = -1;
     for (let i = 0; i < TRIES; i++) {
-        const spot = randomSpot(placement, random);
+        const spot = randomSpot(placement, random, onHand);
         let gap = Infinity;
         for (const other of taken)
             gap = Math.min(gap, apart(spot, other));

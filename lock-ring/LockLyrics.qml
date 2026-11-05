@@ -14,8 +14,12 @@ import "docs/lyric-words.mjs" as LyricWords
 Scope {
     id: root
 
-    // The Lyric Words visible this frame (lyric-words.mjs words()).
-    property var words: []
+    // The Lyric Words visible this frame (lyric-words.mjs words()), by their id (wordId()).
+    property var current: ({})
+    // The same words as a model, one entry (wordId, text) per word for as long as it keeps its
+    // text and its spot: LockRing.qml draws one delegate per entry, so a word keeps its drawing
+    // from popping in to dissolving while others come and go around it.
+    readonly property alias wordModel: wordModel
 
     // A Kick the shared pipeline found just now, with its power: a word landing with it pops harder.
     function kick(power) {
@@ -50,7 +54,39 @@ Scope {
         });
     }
 
+    // A word's id in the model: its key, text and spot. A seek or new lyrics can bring a key back
+    // with another word or elsewhere, and that word gets a fresh drawing.
+    function wordId(word) {
+        return [word.key, word.text, JSON.stringify(word.spot)].join("|");
+    }
+
+    // This frame's words, into `current` and the model.
+    function syncWords() {
+        const shown = tracker.words(Date.now());
+        const byId = {};
+        for (const word of shown)
+            byId[wordId(word)] = word;
+        const have = {};
+        for (let i = wordModel.count - 1; i >= 0; i--) {
+            const id = wordModel.get(i).wordId;
+            if (byId[id])
+                have[id] = true;
+            else
+                wordModel.remove(i);
+        }
+        for (const id in byId) {
+            if (!have[id])
+                wordModel.append({ wordId: id, text: byId[id].text });
+        }
+        if (shown.length > 0 || Object.keys(current).length > 0)
+            current = byId;
+    }
+
     LyricsSubscription {}
+
+    ListModel {
+        id: wordModel
+    }
 
     Connections {
         target: root.controller
@@ -73,10 +109,6 @@ Scope {
 
     FrameAnimation {
         running: true
-        onTriggered: {
-            const next = root.tracker.words(Date.now());
-            if (next.length > 0 || root.words.length > 0)
-                root.words = next;
-        }
+        onTriggered: root.syncWords()
     }
 }

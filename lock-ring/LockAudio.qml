@@ -72,8 +72,12 @@ Singleton {
     property var handPhases: ({ hour: 0, minute: 0, second: 0 })
     // The Lyric Words visible right now (docs/lyric-words.mjs words()), the same on every ring:
     // none while lockRing.lyrics is off, on a DMS without its lyrics service, or without synced
-    // lyrics for the Active Player's song. Each says where it landed; LockRing.qml draws them.
-    readonly property var lyricWords: lyrics.item?.words ?? []
+    // lyrics for the Active Player's song. Each says where it landed; LockRing.qml draws them. By
+    // their id (LockLyrics.qml wordId()).
+    readonly property var lyricWords: lyrics.item?.current ?? ({})
+    // The same words as a model (LockLyrics.qml wordModel): one entry (wordId, text) per word
+    // shown, kept while it is, so each keeps its drawing. Its wordId looks it up in lyricWords.
+    readonly property var lyricWordModel: lyrics.item?.wordModel ?? null
 
     // How many rings hold the capture.
     property int holders: 0

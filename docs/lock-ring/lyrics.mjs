@@ -14,7 +14,7 @@ import { ribbonSurge } from "./kicks.mjs";
 import { ribbonLevel, ribbonRadius, spectrumAt } from "./ring.mjs";
 
 // A lead vocal's font size, as a share of the ring's side (as the Digital Time's TIME_FONT is).
-export const WORD_FONT = 0.042;
+export const WORD_FONT = 0.024;
 
 // Catppuccin Mocha, ring.frag's LAVENDER, MAUVE, PINK and BLUE.
 export const COLORS = { lavender: "#b4befe", mauve: "#cba6f7", pink: "#f5c2e7", blue: "#89b4fa" };

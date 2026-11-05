@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { LINGER, createLyricWords } from "../docs/lyric-words.mjs";
+import { HAND_SHARE, LINGER, createLyricWords } from "../docs/lyric-words.mjs";
 
 // Wall-clock times are in milliseconds, as Date.now() gives them.
 const WALL = 1_000_000;
@@ -490,6 +490,17 @@ describe("placement on the Lock Ring: Ribbons or Hands", () => {
 
     test("and nowhere else", () => {
         assert.ok(spots.every(s => s.on === "ribbon" || s.on === "hand"), JSON.stringify(spots));
+    });
+
+    test("about HAND_SHARE of the words land on a Hand, however many share the line", () => {
+        assert.equal(HAND_SHARE, 0.35);
+        for (const count of [1, 3, 10]) {
+            const all = [];
+            for (let seed = 1; seed <= 300; seed++)
+                all.push(...spotsAt(placing([lineOf(count)], { placement: "ribbons-or-hands", seed }), 10 + count));
+            const share = all.filter(s => s.on === "hand").length / all.length;
+            assert.ok(Math.abs(share - HAND_SHARE) < 0.05, `${count} words a line: ${share} on a Hand`);
+        }
     });
 
     test("a new word lands away from the words already shown", () => {
