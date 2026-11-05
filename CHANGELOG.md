@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- The Lock Ring shows Lyric Words: the words of the playing song's line, from DMS's lyrics
+  service (DMS v2.0+), each landing on a Ribbon or a Hand as it is sung, glowing in the color
+  there, popping in harder on a Kick, splitting like the Digital Time as a Shockwave crosses it,
+  and dissolving with the line. `lockRing.lyrics` in `config.json` (default `true`) turns it off.
+
 ## [0.9.0] - 2026-11-04
 
 ### Added

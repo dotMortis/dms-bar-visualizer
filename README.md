@@ -42,6 +42,8 @@ Soft neon **Ribbons** wave outward from the **Dial**, which swells with the musi
 
 On every Kick, a ragged, flickering **Shockwave** tears out from the center, carrying **Beads** of light. It's calm on a soft Kick and torn wide on a hard one. As its front passes, the Ribbons surge, the 12 **Hour Points** flash and the **Digital Time** splits into lavender, mauve and blue copies. The **Hands** swing with the bass, mids and treble and flash on the Kick itself, but always show the true time. The Lock Ring has no Haze.
 
+**Lyric Words:** while a song with lyrics timed to it plays, its words appear around the Lock Ring as they are sung, each at a random spot on a Ribbon (bent along its curve, riding its wave) or on a Hand (lying along it, turning with it). They glow in the color there, pop in with a flash, harder on a Kick, and split and flare like the Digital Time when a Shockwave crosses them. The words of a line pile up and dissolve together at its end; pause freezes them, a seek or a new track clears them. Songs without timed lyrics look as before. The lyrics are DMS's own, so this needs DMS v2.0 or later; turn it off with `lockRing.lyrics`. While it's on, DMS sends the playing track's title, artist and album to its lyrics providers on the lock screen, even with DMS's own Lyrics setting off.
+
 ## How it works
 
 - **Follows the Active Player.** Both visualizers listen to the MPRIS player DankBar shows (same selection rules) and capture whichever output *that* player plays to. Spotify on Bluetooth while the default output is HDMI just works. With no player, they fall back to the newest playing stream, then the default output.
@@ -176,6 +178,7 @@ Both visualizers read one file, `~/.config/bar-visualizer/config.json` ([why one
 | `lockRing.kickHighHzPercent` | `100` | Lock Ring | The top of the Lock Ring's kick range, in percent of `kickHighHz` |
 | `lockRing.kickThresholdPercent` | `100` | Lock Ring | The Lock Ring's `kickThreshold`, in percent of it. Lower = more Kicks |
 | `lockRing.kickCooldownPercent` | `100` | Lock Ring | The Lock Ring's `kickCooldown`, in percent of it. With `kickCooldown` at `0` it stays `0` |
+| `lockRing.lyrics` | `true` | Lock Ring | Show the playing song's [Lyric Words](#lock-ring) on the Lock Ring (DMS v2.0+). Sends the track's title, artist and album to DMS's lyrics providers. Applies at once |
 
 The bar's `lyrics` asks DMS for the playing track's lyrics over its socket ([why](docs/adr/0006-bar-visualizer-asks-dms-for-lyrics.md)). DMS then sends the track's title, artist and album to its lyrics providers, even with lyrics turned off in DMS's own settings: the switch here alone decides. If DankBar's Music widget shows lyrics too, the bar shows the same line twice; turn one of them off.
 
