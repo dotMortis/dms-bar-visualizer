@@ -150,10 +150,7 @@ Singleton {
     // Every Kick, with its power, so a word landing with it pops harder.
     Connections {
         target: root.pipeline
-        function onKickPowersChanged() {
-            const p = root.pipeline;
-            lyrics.item?.kick(p.kickPowers[p.kickCount % p.kickSlots]);
-        }
+        function onKicked(power) { lyrics.item?.kick(power); }
     }
 
     LazyLoader {
