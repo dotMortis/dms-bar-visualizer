@@ -19,6 +19,7 @@ How the pieces fit together, and how to change them. For installing and using th
 | `docs/kick.mjs` | The one Kick detector |
 | `docs/config.mjs` | The defaults of every `config.json` key |
 | `docs/bar-ribbons.mjs` | The Bar Visualizer's Ribbon shape: each Ribbon's height at any x across the bar |
+| `docs/lyric-words.mjs` | The one Lyric Words module: which words of the Lyric Line show when |
 | `docs/lock-ring/` | The Lock Ring's shader (`ring.frag`) and its modules (`ring.mjs`, `kicks.mjs`, `hands.mjs`, `clock.mjs`) |
 | `packaging/aur/` | The two Arch packages' PKGBUILDs |
 | `assets/` | The README's animated SVGs and their generator |

@@ -24,9 +24,12 @@ function qmlFiles(dir) {
     });
 }
 
+// Shared modules the visualizers are about to import: held to Qt's engine before their QML lands.
+const UPCOMING = ["docs/lyric-words.mjs"];
+
 // Every .mjs a QML file imports, resolved on the path as written (as QML does, not via symlinks).
 function importedModules() {
-    const modules = new Set();
+    const modules = new Set(UPCOMING.map((rel) => path.join(ROOT, rel)));
     for (const file of [path.join(ROOT, "shell.qml"), ...qmlFiles(path.join(ROOT, "audio")), ...qmlFiles(path.join(ROOT, "lock-ring"))]) {
         for (const [, rel] of fs.readFileSync(file, "utf8").matchAll(/^import\s+"([^"]+\.m?js)"/gm))
             modules.add(path.resolve(path.dirname(file), rel));
