@@ -18,7 +18,9 @@ How the pieces fit together, and how to change them. For installing and using th
 | `docs/` | The live demo (GitHub Pages), plus the plain-JS modules both visualizers and the demo import |
 | `docs/kick.mjs` | The one Kick detector |
 | `docs/config.mjs` | The defaults of every `config.json` key |
-| `docs/bar-ribbons.mjs` | The Bar Visualizer's Ribbon shape: each Ribbon's height at any x across the bar |
+| `docs/bar-ribbons.mjs` | The Bar Visualizer's Ribbons: each one's height and color at any x across the bar, and the Shockwaves crossing it |
+| `docs/bar-words.mjs` | The Bar Visualizer's Lyric Words: each letter on its Ribbon, and their pop, flare and dissolve |
+| `lyrics/` | The Bar Visualizer's Lyric Words in QML: asks DMS's socket for lyrics (`BarLyrics.qml`), draws them (`LyricWordsLayer.qml`) |
 | `docs/lyric-words.mjs` | The one Lyric Words module: which words of the Lyric Line show when |
 | `docs/lock-ring/` | The Lock Ring's shader (`ring.frag`) and its modules (`ring.mjs`, `kicks.mjs`, `hands.mjs`, `clock.mjs`) |
 | `packaging/aur/` | The two Arch packages' PKGBUILDs |
@@ -65,7 +67,7 @@ Then restart it: `systemctl --user restart bar-visualizer`. Qt caches the compil
 
 Then `dms restart`.
 
-The Lock Ring's shader mirrors functions and constants from the Lock Ring's modules. `tests/lock-constants.test.mjs` checks the constants match, so change both sides together. Likewise the Bar Visualizer's shader, and the demo's port of it, mirror the Ribbon shape in `docs/bar-ribbons.mjs`, checked by `tests/bar-constants.test.mjs`.
+The Lock Ring's shader mirrors functions and constants from the Lock Ring's modules. `tests/lock-constants.test.mjs` checks the constants match, so change both sides together. Likewise the Bar Visualizer's shader, and the demo's port of it, mirror the Ribbon shape and color in `docs/bar-ribbons.mjs`, checked by `tests/bar-constants.test.mjs`.
 
 Colors are Catppuccin Mocha: the `palette()` cycle and the `LAVENDER` / `MAUVE` / `PINK` / `BLUE` constants in each shader.
 

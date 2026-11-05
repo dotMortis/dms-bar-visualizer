@@ -8,8 +8,10 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
 import "audio"
+import "lyrics"
 import "docs/config.mjs" as Config
-// The Ribbons' shape outside the shader (shaders/viz.frag mirrors it), for what rides them.
+// The Ribbons' shape outside the shader (shaders/viz.frag mirrors it), for what rides them: the
+// Lyric Words (lyrics/LyricWordsLayer.qml).
 import "docs/bar-ribbons.mjs" as BarRibbons
 
 ShellRoot {
@@ -59,6 +61,7 @@ ShellRoot {
     readonly property bool followMaximize: config.followMaximize
     readonly property real intensity: config.intensity
     readonly property real bassStretch: config.bassStretch
+    readonly property bool lyrics: config.lyrics
     // ----------------------------------------------------------------------
 
     function quad(arr, i) {
@@ -70,6 +73,23 @@ ShellRoot {
         id: audio
         settings: root.config
         confPath: `${Quickshell.env("XDG_RUNTIME_DIR")}/bar-visualizer-cava.conf`
+    }
+
+    // The Lyric Words: the Active Player's lyrics, asked of DMS over its socket (ADR 0006), and the
+    // Lyric Line timed from its position. Shared by every screen; each draws them on its bar.
+    BarLyrics {
+        id: barLyrics
+        enabled: root.lyrics
+        player: audio.activePlayer
+    }
+
+    // Each Kick, with its power, for the words it lands with. The powers change once per Kick,
+    // after its count, so the newest is in the count's slot.
+    Connections {
+        target: audio
+        function onKickPowersChanged() {
+            barLyrics.kick(audio.kickPowers[audio.kickCount % audio.kickSlots]);
+        }
     }
 
     Variants {
@@ -108,6 +128,7 @@ ShellRoot {
             WlrLayershell.namespace: "bar-visualizer"
 
             ShaderEffect {
+                id: viz
                 anchors.top: parent.top
                 anchors.left: parent.left
                 anchors.right: parent.right
@@ -143,6 +164,26 @@ ShellRoot {
                 property vector4d b5: root.quad(audio.values, 20)
                 property vector4d b6: root.quad(audio.values, 24)
                 property vector4d b7: root.quad(audio.values, 28)
+            }
+
+            // The Lyric Words, over the shader and the same size. They ride its Ribbons, so they
+            // take the same inputs (docs/bar-ribbons.mjs).
+            LyricWordsLayer {
+                anchors.fill: viz
+                visible: root.lyrics
+                lyrics: barLyrics
+                inputs: ({
+                    width: viz.width,
+                    height: viz.height,
+                    values: audio.values,
+                    time: viz.time,
+                    kick: audio.kick,
+                    treble: audio.treble,
+                    flow: audio.flow,
+                    bassStretch: root.bassStretch,
+                    kickAges: audio.kickAges,
+                    kickPowers: audio.kickPowers
+                })
             }
         }
     }
