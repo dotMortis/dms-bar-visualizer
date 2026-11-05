@@ -37,6 +37,8 @@ package() {
   install -Dm644 audio/AudioPipeline.qml "$share/audio/AudioPipeline.qml"
   install -Dm644 docs/kick.mjs "$share/docs/kick.mjs"
   install -Dm644 docs/config.mjs "$share/docs/config.mjs"
+  # The Ribbons' shape, which shell.qml imports.
+  install -Dm644 docs/bar-ribbons.mjs "$share/docs/bar-ribbons.mjs"
   install -Dm644 shaders/viz.frag "$share/shaders/viz.frag"
   install -Dm644 shaders/viz.frag.qsb "$share/shaders/viz.frag.qsb"
 

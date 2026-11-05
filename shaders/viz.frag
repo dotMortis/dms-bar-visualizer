@@ -28,6 +28,26 @@ layout(std140, binding = 0) uniform buf {
 const float TAU = 6.28318530718;
 const int KICKS = 8;  // matches kickSlots in audio/AudioPipeline.qml
 
+// The Ribbons' shape, mirrored from docs/bar-ribbons.mjs (tests/bar-constants.test.mjs checks them).
+const float RIBBON_FREQ = 2.6;
+const float RIBBON_FREQ_STEP = 1.4;
+const float RIBBON_SPEED_STEP = 0.5;
+const float RIBBON_OFFSET = 2.1;
+const float RIBBON_RIPPLE = 0.3;
+const float RIBBON_RIPPLE_FREQ = 2.3;
+const float RIBBON_RIPPLE_PHASE = 1.7;
+const float RIBBON_REACH = 0.42;
+const float LEVEL_GAIN = 1.3;
+const float LEVEL_KICK = 0.7;
+const float LEVEL_SURGE = 0.6;
+const float SHOCK_GROW = 4.5;
+const float SHOCK_FADE = 2.2;
+const float SHOCK_WIDTH = 0.003;
+const float SHAKE_X = 0.35;
+const float SHAKE_Y = 0.12;
+const float SHAKE_FREQ_X = 97.0;
+const float SHAKE_FREQ_Y = 83.0;
+
 float band(int i) {
     int v = i / 4;
     int c = i - v * 4;
@@ -44,7 +64,7 @@ float kickSeed(int i) { return i < 4 ? ubuf.kickSeed0[i] : ubuf.kickSeed1[i - 4]
 // The front eases out from the centre (fast burst, slowing at the edges).
 vec2 shock(int i, float s) {
     float age = kickAge(i);
-    return vec2(s - (1.0 - exp(-age * 4.5)), kickPower(i) * exp(-age * 2.2));
+    return vec2(s - (1.0 - exp(-age * SHOCK_GROW)), kickPower(i) * exp(-age * SHOCK_FADE));
 }
 
 // Spectrum at s in [0,1] (0 = bass), linearly interpolated across 32 bands.
@@ -97,7 +117,7 @@ void main() {
     vec2 px = qt_TexCoord0 * ubuf.res;
     float h = ubuf.res.y;
     float k2 = ubuf.kick * ubuf.kick;
-    vec2 shake = vec2(sin(ubuf.time * 97.0), cos(ubuf.time * 83.0)) * vec2(0.35, 0.12) * k2;
+    vec2 shake = vec2(sin(ubuf.time * SHAKE_FREQ_X), cos(ubuf.time * SHAKE_FREQ_Y)) * vec2(SHAKE_X, SHAKE_Y) * k2;
     vec2 p = vec2(px.x / h, qt_TexCoord0.y) + shake;  // x in bar-heights, y in [0,1]
     float cx = ubuf.res.x / h * 0.5;
     float s = abs(p.x - cx) / cx;                     // 0 at centre, 1 at edges
@@ -107,9 +127,9 @@ void main() {
     float surge = 0.0;
     for (int j = 0; j < KICKS; j++) {
         vec2 sw = shock(j, s);
-        surge += sw.y * exp(-sw.x * sw.x / 0.003);
+        surge += sw.y * exp(-sw.x * sw.x / SHOCK_WIDTH);
     }
-    float amp = min(1.0, 1.3 * spectrum(pow(s, ubuf.bassStretch)) * (1.0 + 0.7 * ubuf.kick) + 0.6 * surge);
+    float amp = min(1.0, LEVEL_GAIN * spectrum(pow(s, ubuf.bassStretch)) * (1.0 + LEVEL_KICK * ubuf.kick) + LEVEL_SURGE * surge);
 
     // --- Plasma haze: transparent at rest, flashes in on kicks --------------
     float n = sin(p.x * 0.31 + t * 0.9 + sin(p.y * 4.0 + t * 1.3) * 1.5)
@@ -125,10 +145,10 @@ void main() {
     float dx = abs(p.x - cx);
     for (int k = 0; k < 3; k++) {
         float fk = float(k);
-        float freq = 2.6 + fk * 1.4;
-        float phase = ubuf.flow * (1.0 + fk * 0.5) + fk * 2.1;
-        float wave = sin(dx * freq - phase) + 0.3 * sin(dx * freq * 2.3 - phase * 1.7) * ubuf.treble;
-        float y = 0.5 + 0.42 * amp * wave;
+        float freq = RIBBON_FREQ + fk * RIBBON_FREQ_STEP;
+        float phase = ubuf.flow * (1.0 + fk * RIBBON_SPEED_STEP) + fk * RIBBON_OFFSET;
+        float wave = sin(dx * freq - phase) + RIBBON_RIPPLE * sin(dx * freq * RIBBON_RIPPLE_FREQ - phase * RIBBON_RIPPLE_PHASE) * ubuf.treble;
+        float y = 0.5 + RIBBON_REACH * amp * wave;
         float d = abs(p.y - y);
         float glow = glowW / (d * d * 18.0 + glowW) * (0.6 + 1.8 * amp);
         vec3 c = pal(hueBase + fk * 0.33 + s * 0.6 + amp * 0.2, 0.9, 1.0);
