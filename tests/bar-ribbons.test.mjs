@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { ribbonColor, ribbonHeight, shockwaveCrossing } from "../docs/bar-ribbons.mjs";
+import { CROSSING, ribbonColor, ribbonHeight, shockwaveCrossing } from "../docs/bar-ribbons.mjs";
 
 const near = (actual, expected, msg) => assert.ok(Math.abs(actual - expected) < 1e-6, `${msg ?? ""} ${actual} != ${expected}`);
 
@@ -104,11 +104,20 @@ describe("a Shockwave crossing the bar", () => {
     });
 
     test("crosses farther out later, fainter, on both sides alike", () => {
-        // The front is 0.9 of the way out after ln(10) / 4.5 s, faded to e^(-2.2 * that).
+        // The front is 0.9 of the way out after ln(10) / 4.5 s; its strength there is faded to
+        // e^(-CROSSING.fade * that).
         const late = { ...quiet, kickAges: [Math.log(10) / 4.5], kickPowers: [1] };
-        near(shockwaveCrossing(760, late), 0.324423);
-        near(shockwaveCrossing(40, late), 0.324423);
-        near(shockwaveCrossing(400, late), 0, "long past the center:");
+        const strength = Math.exp(-CROSSING.fade * Math.log(10) / 4.5);
+        near(shockwaveCrossing(760, late), strength);
+        near(shockwaveCrossing(40, late), strength);
+        assert.ok(shockwaveCrossing(760, late) > 0.5, "still a clear hit near the edges");
+    });
+
+    test("lingers on a spot after its front has passed, then lets go", () => {
+        const after = age => shockwaveCrossing(400, { ...quiet, kickAges: [age], kickPowers: [1] });
+        assert.ok(after(0.1) > 0.6, `a tenth of a second on: ${after(0.1)}`);
+        assert.ok(after(0.2) < after(0.1) && after(0.2) > 0.3, `fading: ${after(0.2)}`);
+        assert.ok(after(3) < 1e-4, `long past the center: ${after(3)}`);
     });
 
     test("takes the brightest of overlapping Shockwaves; an empty slot does nothing", () => {
