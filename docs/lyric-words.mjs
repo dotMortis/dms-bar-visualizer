@@ -20,7 +20,8 @@
 //   - A line without an end time ends at its last word's end, else at the next Lyric Line's
 //     start, else at the track's end.
 //   - Only one Lyric Line at a time: a line ends at the next one's start at the latest. All its
-//     words then dissolve together, over DISSOLVE seconds; between lines nothing is shown.
+//     words then dissolve together, over DISSOLVE seconds, or less when the next Lyric Line's
+//     first word comes sooner; between lines nothing is shown.
 //   - The position is extrapolated from the last reading, its wall-clock time and the playback
 //     rate; paused, it stands still, and so do the words. A reading more than SEEK_TOLERANCE away
 //     from the extrapolated position is a seek: it clears the words, as a track change does. The
@@ -33,7 +34,8 @@
 
 // Seconds a word takes to pop in, from its start.
 export const POP_IN = 0.25;
-// Seconds the words of a Lyric Line take to dissolve, from its end.
+// Seconds the words of a Lyric Line take to dissolve, from its end (less when the next line's
+// first word comes sooner).
 export const DISSOLVE = 0.6;
 // How far (seconds) a reading may stray from the extrapolated position before it counts as a seek.
 // MPRIS positions jitter by a few tens of milliseconds; a seek moves much farther.
@@ -175,8 +177,8 @@ function joinPieces(pieces) {
     return words;
 }
 
-// The Lyric Lines of `lyrics`, in order: [{ t, end, words: [{ text, t, background }] }], for a
-// track `length` seconds long (0 or less: unknown).
+// The Lyric Lines of `lyrics`, in order: [{ t, end, gone, words: [{ text, t, background }] }], for
+// a track `length` seconds long (0 or less: unknown). At `gone` its dissolve is over.
 function lyricLines(lyrics, length) {
     const groups = new Map();
     for (const line of plainLines(lyrics)) {
@@ -189,7 +191,7 @@ function lyricLines(lyrics, length) {
     }
     const ordered = Array.from(groups.values()).sort((a, b) => a.t - b.t);
     const trackEnd = isTime(length) && length > 0 ? length : Infinity;
-    return ordered.map((group, i) => {
+    const lines = ordered.map((group, i) => {
         const next = i + 1 < ordered.length ? ordered[i + 1].t : Infinity;
         let end = -Infinity;
         const words = [];
@@ -205,6 +207,14 @@ function lyricLines(lyrics, length) {
         words.sort((a, b) => a.t - b.t);
         return { t: group.t, end: Math.min(end, next), words };
     });
+    // A line dissolves from its end for DISSOLVE seconds, or until the next Lyric Line's first word
+    // if that comes sooner: only one Lyric Line is ever shown.
+    lines.forEach((line, i) => {
+        const following = lines[i + 1];
+        const nextWord = !following ? Infinity : following.words.length > 0 ? following.words[0].t : following.t;
+        line.gone = Math.min(line.end + DISSOLVE, Math.max(line.end, nextWord));
+    });
+    return lines;
 }
 
 // When a line ends: its own end time, else its last word's end, else the next Lyric Line's start,
@@ -335,12 +345,12 @@ export function createLyricWords(options) {
             const kept = new Map();
             const shown = [], fresh = [];
             lines.forEach((line, l) => {
-                if (now < line.t || now >= line.end + DISSOLVE)
+                if (now < line.t || now >= line.gone)
                     return;
                 // A line that ended before the last clear stays cleared.
                 if (line.end < cleared && now >= line.end)
                     return;
-                const dissolve = now >= line.end ? clamp01((now - line.end) / DISSOLVE) : 0;
+                const dissolve = now >= line.end ? clamp01((now - line.end) / (line.gone - line.end)) : 0;
                 line.words.forEach((word, w) => {
                     if (word.t > now)
                         return;
