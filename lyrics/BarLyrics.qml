@@ -17,7 +17,8 @@
 //       player: audio.activePlayer
 //   }
 //   kick(power)    feed it each Kick, with its power
-//   words          a ListModel of the words shown: wordId, text, ribbon, spotX (0..1 across the bar)
+//   words          a ListModel of the words shown: wordId, text, ribbon, spotX (0..1 across the bar,
+//                  for the word's whole row), rowText (the row's text), rowBefore (its text before the word)
 //   current        wordId -> the word's state this frame (docs/lyric-words.mjs words())
 import QtQuick
 import Quickshell
@@ -164,7 +165,7 @@ Scope {
         for (const id in byId) {
             const word = byId[id];
             if (!have[id])
-                wordModel.append({ wordId: id, text: word.text, ribbon: word.spot.ribbon, spotX: word.spot.x });
+                wordModel.append({ wordId: id, text: word.text, ribbon: word.spot.ribbon, spotX: word.spot.x, rowText: word.spot.row, rowBefore: word.spot.before });
         }
         current = byId;
     }

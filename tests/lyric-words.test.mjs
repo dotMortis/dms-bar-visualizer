@@ -4,14 +4,15 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { createLyricWords } from "../docs/lyric-words.mjs";
+import { LINGER, createLyricWords } from "../docs/lyric-words.mjs";
 
 // Wall-clock times are in milliseconds, as Date.now() gives them.
 const WALL = 1_000_000;
 
-// A Lyric Words module playing `synced` lines (DMS's format) from song time `from`, at rate 1.
-function playing(synced, { from = 0, length = 300 } = {}) {
-    const lyrics = createLyricWords();
+// A Lyric Words module playing `synced` lines (DMS's format) from song time `from`, at rate 1,
+// placing words in `placement` mode (the bar's by default).
+function playing(synced, { from = 0, length = 300, placement } = {}) {
+    const lyrics = createLyricWords({ placement });
     lyrics.setTrack("track-1", length);
     lyrics.setLyrics({ state: "ready", synced });
     lyrics.read({ position: from, wall: WALL, rate: 1, playing: true });
@@ -78,18 +79,22 @@ describe("a line without word timing", () => {
     });
 });
 
+// The Lock Ring's placement in playing(): there a line's words start dissolving right at its end
+// and are gone by the next one's, so the tests of when a line ends watch them there.
+const RING = { placement: "ribbons-or-hands" };
+
 describe("a line without an end time", () => {
     test("ends at its last word's end", () => {
         const lyrics = playing([
             { t: 10, x: "a b", w: [piece(10, 10.5, "a "), piece(11, 12, "b")] },
             { t: 30, e: 32, x: "next" },
-        ]);
+        ], RING);
         assert.deepEqual(dissolvingAt(lyrics, 11.99), []);
         assert.deepEqual(dissolvingAt(lyrics, 12.1), ["a", "b"]);
     });
 
     test("else at the next line's start", () => {
-        const lyrics = playing([{ t: 10, x: "a b" }, { t: 14, e: 16, x: "next" }]);
+        const lyrics = playing([{ t: 10, x: "a b" }, { t: 14, e: 16, x: "next" }], RING);
         assert.deepEqual(textsAt(lyrics, 11.99), ["a"]);
         assert.deepEqual(textsAt(lyrics, 12), ["a", "b"]);
         assert.deepEqual(textsAt(lyrics, 13.99), ["a", "b"]);
@@ -98,7 +103,7 @@ describe("a line without an end time", () => {
     });
 
     test("else at the track's end", () => {
-        const lyrics = playing([{ t: 10, x: "a b" }], { length: 20 });
+        const lyrics = playing([{ t: 10, x: "a b" }], { length: 20, ...RING });
         assert.deepEqual(textsAt(lyrics, 14.99), ["a"]);
         assert.deepEqual(textsAt(lyrics, 15), ["a", "b"]);
         assert.deepEqual(dissolvingAt(lyrics, 19.99), []);
@@ -106,14 +111,14 @@ describe("a line without an end time", () => {
     });
 });
 
-describe("the end of a Lyric Line", () => {
+describe("the end of a Lyric Line on the Lock Ring", () => {
     const verse = [
         { t: 10, e: 13, x: "first line here", w: [piece(10, 10.5, "first "), piece(11, 11.5, "line "), piece(12, 12.5, "here")] },
         { t: 20, e: 22, x: "second line" },
     ];
 
     test("all its words dissolve together, and are gone soon after", () => {
-        const lyrics = playing(verse);
+        const lyrics = playing(verse, RING);
         const before = lyrics.words(wallAt(12.9));
         assert.deepEqual(before.map(w => w.dissolve), [0, 0, 0]);
         const during = lyrics.words(wallAt(13.2));
@@ -125,7 +130,7 @@ describe("the end of a Lyric Line", () => {
     });
 
     test("nothing shows between lines", () => {
-        const lyrics = playing(verse);
+        const lyrics = playing(verse, RING);
         for (const t of [14, 16, 19.99])
             assert.deepEqual(textsAt(lyrics, t), [], `at ${t}`);
         assert.deepEqual(textsAt(lyrics, 20), ["second"]);
@@ -136,7 +141,7 @@ describe("the end of a Lyric Line", () => {
             { t: 10, e: 16, x: "long line" },
             { t: 12, e: 14, x: "cut in" },
             { t: 14, e: 15, x: "back to back" },
-        ]);
+        ], RING);
         for (let t = 9; t <= 17; t += 0.05) {
             const lines = new Set(lyrics.words(wallAt(t)).map(w => w.key.split(":")[0]));
             assert.ok(lines.size <= 1, `at ${t.toFixed(2)}: lines ${[...lines]}`);
@@ -148,7 +153,7 @@ describe("the end of a Lyric Line", () => {
 
     test("a line whose next one comes soon dissolves in the time left before it", () => {
         // The first line ends at 13 and the next starts at 13.3: a 0.3 s dissolve, not the full one.
-        const lyrics = playing([{ t: 10, e: 13, x: "first" }, { t: 13.3, e: 15, x: "second" }]);
+        const lyrics = playing([{ t: 10, e: 13, x: "first" }, { t: 13.3, e: 15, x: "second" }], RING);
         assert.equal(lyrics.words(wallAt(12.99))[0].dissolve, 0);
         const half = lyrics.words(wallAt(13.15));
         assert.deepEqual(half.map(w => w.text), ["first"]);
@@ -156,6 +161,28 @@ describe("the end of a Lyric Line", () => {
         assert.ok(lyrics.words(wallAt(13.29))[0].dissolve > 0.9);
         assert.deepEqual(textsAt(lyrics, 13.3), ["second"]);
     });
+});
+
+describe("the end of a Lyric Line on the bar", () => {
+    // "first" ends at 13; "second" starts at 13.3.
+    const close = [{ t: 10, e: 13, x: "first" }, { t: 13.3, e: 15, x: "second" }];
+
+    test("its rows stay whole LINGER.hold seconds, while the next line's words come", () => {
+        assert.ok(LINGER.hold > 0.3, String(LINGER.hold));
+        const lyrics = playing(close);
+        const during = lyrics.words(wallAt(13 + LINGER.hold - 0.01));
+        assert.deepEqual(during.map(w => [w.text, w.dissolve]), [["first", 0], ["second", 0]]);
+    });
+
+    test("then dissolve slowly, over LINGER.dissolve seconds, and are gone", () => {
+        assert.ok(LINGER.dissolve > 1, String(LINGER.dissolve));
+        const lyrics = playing(close);
+        const fade = 13 + LINGER.hold;
+        const half = lyrics.words(wallAt(fade + LINGER.dissolve / 2)).find(w => w.text === "first");
+        assert.ok(Math.abs(half.dissolve - 0.5) < 1e-6, `dissolve ${half.dissolve}`);
+        assert.deepEqual(textsAt(lyrics, fade + LINGER.dissolve + 0.01), ["second"]);
+    });
+
 });
 
 describe("one Lyric Line, every part of it", () => {
@@ -176,7 +203,7 @@ describe("one Lyric Line, every part of it", () => {
     });
 
     test("lines starting together without a group are one Lyric Line", () => {
-        const lyrics = playing([{ t: 10, e: 14, x: "lead" }, { t: 10, e: 12, x: "ooh", background: true }, { t: 11, e: 14, x: "later" }]);
+        const lyrics = playing([{ t: 10, e: 14, x: "lead" }, { t: 10, e: 12, x: "ooh", background: true }, { t: 11, e: 14, x: "later" }], RING);
         assert.deepEqual(textsAt(lyrics, 10.5), ["lead", "ooh"]);
         // A line starting later is the next Lyric Line, and takes over.
         assert.deepEqual(textsAt(lyrics, 11.5), ["later"]);
@@ -397,10 +424,31 @@ describe("placement on the Bar Visualizer: Ribbons only", () => {
         assert.ok(spots.every(s => s.on === "ribbon" && s.x >= 0 && s.x <= 1), JSON.stringify(spots));
     });
 
-    test("a new word lands away from the words already shown", () => {
-        // Twelve random spots across the bar all within 0.2 of the first word: about 1 in 60000.
+    test("a row's later words follow its first: on its Ribbon, at its spot, after the words before them", () => {
+        for (let seed = 1; seed <= 20; seed++) {
+            const spots = spotsAt(placing([lineOf(4)], { seed }), 13.5);
+            const [first] = spots;
+            assert.deepEqual(spots.map(s => [s.ribbon, s.x, s.row]), Array(4).fill([first.ribbon, first.x, "w0 w1 w2 w3"]), `seed ${seed}`);
+            assert.deepEqual(spots.map(s => s.before), ["", "w0 ", "w0 w1 ", "w0 w1 w2 "]);
+        }
+    });
+
+    test("each line of a Lyric Line is its own row", () => {
+        const lyrics = placing([
+            { t: 10, e: 14, x: "lead line", group: 1 },
+            { t: 10.5, e: 14, x: "ooh", background: true, group: 1 },
+        ]);
+        const spots = lyrics.words(wallAt(13)).map(w => [w.text, w.spot.row, w.spot.before]);
+        assert.deepEqual(spots.sort(), [["line", "lead line", "lead "], ["lead", "lead line", ""], ["ooh", "ooh", ""]].sort());
+    });
+
+    test("a new row lands away from the rows already shown", () => {
+        // Twelve random spots across the bar all within 0.2 of the first row: about 1 in 60000.
         for (let seed = 1; seed <= 100; seed++) {
-            const [first, second] = spotsAt(placing([lineOf(2)], { seed }), 11);
+            const [first, second] = spotsAt(placing([
+                { t: 10, e: 14, x: "lead", group: 1 },
+                { t: 10.5, e: 14, x: "ooh", background: true, group: 1 },
+            ], { seed }), 11);
             assert.ok(Math.abs(first.x - second.x) >= 0.2, `seed ${seed}: ${first.x} ${second.x}`);
         }
     });

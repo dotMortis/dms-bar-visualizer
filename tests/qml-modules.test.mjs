@@ -80,3 +80,19 @@ describe("modules the QML imports", { skip: !QML && "Qt's qml runner isn't insta
         });
     }
 });
+
+// Inside a component, an Item's own properties hide ids of the same name: an id `layer` reads as
+// the Item's `layer` (QQuickItemLayer) in every delegate below it, and the lookups fail at runtime.
+const ITEM_PROPERTIES = ["layer", "parent", "data", "children", "resources", "state", "states", "transitions",
+    "anchors", "enabled", "visible", "opacity", "width", "height", "x", "y", "z", "scale", "rotation",
+    "clip", "focus", "transform", "antialiasing", "smooth", "baselineOffset", "implicitWidth", "implicitHeight"];
+
+describe("QML ids", () => {
+    test("none is named like an Item's own property", () => {
+        const files = [path.join(ROOT, "shell.qml"), ...["audio", "lyrics", "lock-ring"].flatMap(d => qmlFiles(path.join(ROOT, d)))];
+        const clashes = files.flatMap(file => Array.from(fs.readFileSync(file, "utf8").matchAll(/^\s*id:\s*(\w+)\s*$/gm))
+            .filter(m => ITEM_PROPERTIES.includes(m[1]))
+            .map(m => `${path.relative(ROOT, file)}: id ${m[1]}`));
+        assert.deepEqual(clashes, []);
+    });
+});

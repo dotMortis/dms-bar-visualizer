@@ -19,17 +19,20 @@
 //     line without word timing.
 //   - A line without an end time ends at its last word's end, else at the next Lyric Line's
 //     start, else at the track's end.
-//   - Only one Lyric Line at a time: a line ends at the next one's start at the latest. All its
-//     words then dissolve together, over DISSOLVE seconds, or less when the next Lyric Line's
-//     first word comes sooner; between lines nothing is shown.
+//   - A line ends at the next one's start at the latest. All its words then dissolve together.
+//     On the Lock Ring only one Lyric Line shows at a time: they dissolve over DISSOLVE seconds,
+//     or less when the next Lyric Line's first word comes sooner. On the bar, where each row has
+//     its own place, they linger (LINGER) while the next line's words come. Between lines nothing
+//     else is shown.
 //   - The position is extrapolated from the last reading, its wall-clock time and the playback
 //     rate; paused, it stands still, and so do the words. A reading more than SEEK_TOLERANCE away
 //     from the extrapolated position is a seek: it clears the words, as a track change does. The
 //     Lyric Line's words already sung by then come back at once, without a pop-in.
 //   - Each word lands at a random spot, seeded: on a Ribbon (the bar), or on a Ribbon or a Hand
 //     (the Lock Ring). Of several random spots it takes the one furthest from the words shown, so
-//     words overlap only when no space is left; there is no limit on their number. Turning a spot
-//     into pixels is each visualizer's job.
+//     words overlap only when no space is left; there is no limit on their number. On the bar the
+//     words of each of DMS's lines are one row: only the row's first word lands at a random spot,
+//     the rest follow it to the right. Turning a spot into pixels is each visualizer's job.
 //   - Each word pops in, harder when a Kick lands with it.
 
 // Seconds a word takes to pop in, from its start.
@@ -37,6 +40,9 @@ export const POP_IN = 0.25;
 // Seconds the words of a Lyric Line take to dissolve, from its end (less when the next line's
 // first word comes sooner).
 export const DISSOLVE = 0.6;
+// On the bar, where each row has its own place, a Lyric Line's words linger: they stay whole `hold`
+// seconds past its end, then dissolve over `dissolve` seconds, while the next line's words come.
+export const LINGER = { hold: 1, dissolve: 1.5 };
 // How far (seconds) a reading may stray from the extrapolated position before it counts as a seek.
 // MPRIS positions jitter by a few tens of milliseconds; a seek moves much farther.
 export const SEEK_TOLERANCE = 1;
@@ -60,7 +66,10 @@ export const HAND_NAMES = ["hour", "minute", "second"];
 export const TRIES = 12;
 
 // A random spot for a word, in `placement` mode:
-//   "ribbons"           { on: "ribbon", ribbon, x }      x: 0 (the bar's left edge) .. 1 (its right)
+//   "ribbons"           { on: "ribbon", ribbon, x }      x: 0 (the bar's left edge) .. 1 (its right),
+//                       for the word's whole row; words() adds the row's text `row` and the
+//                       text before the word in it, `before` ("" for its first word, else ending
+//                       in a space)
 //   "ribbons-or-hands"  { on: "ribbon", ribbon, angle }  angle: clockwise degrees from 12 o'clock
 //                       { on: "hand", hand, along }      along: 0 (the Hand's inner end) .. 1 (tip)
 // ribbon is which Ribbon, 0 .. RIBBONS - 1; hand one of HAND_NAMES. On the Lock Ring a word lands
@@ -177,9 +186,12 @@ function joinPieces(pieces) {
     return words;
 }
 
-// The Lyric Lines of `lyrics`, in order: [{ t, end, gone, words: [{ text, t, background }] }], for
-// a track `length` seconds long (0 or less: unknown). At `gone` its dissolve is over.
-function lyricLines(lyrics, length) {
+// The Lyric Lines of `lyrics`, in order: [{ t, end, gone, words: [{ text, t, background, row,
+// rowText, before }] }], for a track `length` seconds long (0 or less: unknown). At `gone` its
+// dissolve is over; it starts at `fade`. With `linger` (the bar) its words linger (LINGER), else
+// they are gone by the next Lyric Line's first word. Each of DMS's lines in it is a row: `row` which one, `rowText` its words, `before`
+// its words before this one, each with a space after it.
+function lyricLines(lyrics, length, linger) {
     const groups = new Map();
     for (const line of plainLines(lyrics)) {
         const key = Number.isInteger(line.group) && line.group > 0 ? "group:" + line.group : "time:" + line.t;
@@ -201,15 +213,28 @@ function lyricLines(lyrics, length) {
             end = Math.max(end, partEnd);
             const background = part.background === true;
             const partWords = pieces ? joinPieces(pieces) : spread(part, partEnd);
-            for (const word of partWords)
-                words.push({ text: word.text, t: word.t, background });
+            // The part is one row on the bar: its words in order, each after the ones before it.
+            const texts = partWords.map(word => word.text);
+            const row = texts.join(" ");
+            const rowIndex = group.parts.indexOf(part);
+            partWords.forEach((word, i) => words.push({
+                text: word.text, t: word.t, background,
+                row: rowIndex, rowText: row, before: texts.slice(0, i).map(x => x + " ").join(""),
+            }));
         }
         words.sort((a, b) => a.t - b.t);
         return { t: group.t, end: Math.min(end, next), words };
     });
-    // A line dissolves from its end for DISSOLVE seconds, or until the next Lyric Line's first word
-    // if that comes sooner: only one Lyric Line is ever shown.
+    // On the bar a line lingers past its end, then dissolves. Elsewhere it dissolves from its end for
+    // DISSOLVE seconds, or until the next Lyric Line's first word if that comes sooner: only one
+    // Lyric Line is ever shown.
     lines.forEach((line, i) => {
+        if (linger) {
+            line.fade = line.end + LINGER.hold;
+            line.gone = line.fade + LINGER.dissolve;
+            return;
+        }
+        line.fade = line.end;
         const following = lines[i + 1];
         const nextWord = !following ? Infinity : following.words.length > 0 ? following.words[0].t : following.t;
         line.gone = Math.min(line.end + DISSOLVE, Math.max(line.end, nextWord));
@@ -259,7 +284,9 @@ function spread(line, end) {
 //     size        its size factor (1 = a lead vocal's)
 //     brightness  its brightness factor (1 = a lead vocal's)
 //     spot        where it landed (randomSpot()), kept while it is shown: the furthest from the
-//                 words shown of TRIES random spots, so words overlap only when no space is left
+//                 words shown of TRIES random spots, so words overlap only when no space is left.
+//                 On the bar, a row's later words take its first word's spot, with `row` and
+//                 `before` telling where in the row they sit
 //     popIn       how far its pop-in has got, 0..1 (1 at once for words restored after a seek)
 //     pop         how hard it pops in, POP.base .. 1: harder with a Kick landing with it
 //     dissolve    how far the line's dissolve has got, 0 (whole) .. 1 (gone)
@@ -271,7 +298,7 @@ export function createLyricWords(options) {
     const placement = options && options.placement === "ribbons-or-hands" ? "ribbons-or-hands" : "ribbons";
     const random = seeded(options && isTime(options.seed) ? options.seed : 1);
     let track = null, length = 0, lyrics = null, lines = [];
-    let shownWords = new Map(); // key -> { spot, kick }: where each word shown landed, its Kick's power
+    let shownWords = new Map(); // key -> { spot, kick, row }: where each word shown landed, its Kick's power, its row
     let kicks = [];             // the recent Kicks: [{ t (song time), power }]
     let anchor = null;      // the last reading: { position, wall, rate, playing }
     let cleared = 0;        // the song time of the last clear; words sung before it don't pop in
@@ -285,7 +312,7 @@ export function createLyricWords(options) {
         return anchor.position + (wall - anchor.wall) * anchor.rate / 1000;
     };
     const rebuild = () => {
-        lines = lyricLines(lyrics, length);
+        lines = lyricLines(lyrics, length, placement === "ribbons");
     };
 
     return {
@@ -354,7 +381,7 @@ export function createLyricWords(options) {
                 // A line that ended before the last clear stays cleared.
                 if (line.end < cleared && now >= line.end)
                     return;
-                const dissolve = now >= line.end ? clamp01((now - line.end) / (line.gone - line.end)) : 0;
+                const dissolve = now >= line.fade ? clamp01((now - line.fade) / (line.gone - line.fade)) : 0;
                 line.words.forEach((word, w) => {
                     if (word.t > now)
                         return;
@@ -374,16 +401,24 @@ export function createLyricWords(options) {
                         dissolve,
                     };
                     shown.push(entry);
+                    const row = l + ":" + word.row;
                     if (held)
-                        kept.set(key, { spot: held.spot, kick });
+                        kept.set(key, { spot: held.spot, kick, row });
                     else
-                        fresh.push({ entry, kick });
+                        fresh.push({ entry, kick, row, word });
                 });
             });
-            // A new word lands away from all the others shown.
-            for (const { entry, kick } of fresh) {
-                entry.spot = place(placement, random, Array.from(kept.values()).map(k => k.spot));
-                kept.set(entry.key, { spot: entry.spot, kick });
+            // A new word lands away from all the others shown; on the bar, a new row does, and its
+            // later words follow its first.
+            const rows = placement === "ribbons";
+            for (const { entry, kick, row, word } of fresh) {
+                const others = Array.from(kept.values());
+                const lead = rows ? others.find(k => k.row === row) : undefined;
+                const spot = lead ? lead.spot : place(placement, random, others.map(k => k.spot));
+                entry.spot = rows
+                    ? { on: spot.on, ribbon: spot.ribbon, x: spot.x, row: word.rowText, before: word.before }
+                    : spot;
+                kept.set(entry.key, { spot: entry.spot, kick, row });
             }
             shownWords = kept;
             return shown;
