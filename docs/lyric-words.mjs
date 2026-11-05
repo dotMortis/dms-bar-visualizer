@@ -25,6 +25,11 @@
 //     rate; paused, it stands still, and so do the words. A reading more than SEEK_TOLERANCE away
 //     from the extrapolated position is a seek: it clears the words, as a track change does. The
 //     Lyric Line's words already sung by then come back at once, without a pop-in.
+//   - Each word lands at a random spot, seeded: on a Ribbon (the bar), or on a Ribbon or a Hand
+//     (the Lock Ring). Of several random spots it takes the one furthest from the words shown, so
+//     words overlap only when no space is left; there is no limit on their number. Turning a spot
+//     into pixels is each visualizer's job.
+//   - Each word pops in, harder when a Kick lands with it.
 
 // Seconds a word takes to pop in, from its start.
 export const POP_IN = 0.25;
@@ -35,10 +40,80 @@ export const DISSOLVE = 0.6;
 export const SEEK_TOLERANCE = 1;
 // Background vocals: their size and brightness, as a share of the lead's.
 export const BACKGROUND = { size: 0.7, brightness: 0.55 };
+// A word's pop: `base` for every word, `kick` more times the power (0.5..1, docs/kick.mjs) of a
+// Kick landing with it, within `window` seconds of its start either way.
+export const POP = { base: 0.4, kick: 0.6, window: 0.15 };
 // The pace (seconds per word) a line's words are spread at when it has no end at all.
 export const WORD_PACE = 0.4;
 
+// The Ribbons a word can land on: three strands, on the bar (docs/bar-ribbons.mjs) as on the Lock
+// Ring (lock-ring/ring.mjs).
+export const RIBBONS = 3;
+
 const LEAD = { size: 1, brightness: 1 };
+
+// The Lock Ring's Hands a word can land on (lock-ring/hands.mjs HANDS).
+export const HAND_NAMES = ["hour", "minute", "second"];
+// How many random spots a new word tries; it takes the one furthest from the words shown.
+export const TRIES = 12;
+
+// A random spot for a word, in `placement` mode:
+//   "ribbons"           { on: "ribbon", ribbon, x }      x: 0 (the bar's left edge) .. 1 (its right)
+//   "ribbons-or-hands"  { on: "ribbon", ribbon, angle }  angle: clockwise degrees from 12 o'clock
+//                       { on: "hand", hand, along }      along: 0 (the Hand's inner end) .. 1 (tip)
+// ribbon is the strand, 0 .. RIBBONS - 1; hand one of HAND_NAMES. On the ring a word lands on a
+// Ribbon or a Hand as likely.
+function randomSpot(placement, random) {
+    if (placement !== "ribbons-or-hands")
+        return { on: "ribbon", ribbon: Math.floor(random() * RIBBONS), x: random() };
+    if (random() < 0.5)
+        return { on: "ribbon", ribbon: Math.floor(random() * RIBBONS), angle: random() * 360 };
+    return { on: "hand", hand: HAND_NAMES[Math.floor(random() * HAND_NAMES.length)], along: random() };
+}
+
+// How far apart two spots are, 0 (on top of each other) .. 1. The strands of the Ribbons wave
+// across each other, so only the way along them counts: across the bar, or around the ring. A Hand
+// turns, so its words are only apart from each other along it, and from words elsewhere (the
+// Ribbons, outside the dial, and the other Hands, which only meet it now and then) far apart.
+function apart(a, b) {
+    if (a.on === "ribbon" && b.on === "ribbon") {
+        if (a.x !== undefined)
+            return Math.abs(a.x - b.x);
+        const d = Math.abs(a.angle - b.angle) % 360;
+        return Math.min(d, 360 - d) / 180;
+    }
+    if (a.on === "hand" && b.on === "hand" && a.hand === b.hand)
+        return Math.abs(a.along - b.along);
+    return 1;
+}
+
+// A spot for a new word: of TRIES random ones, the one furthest from the spots `taken`.
+function place(placement, random, taken) {
+    let best = null, bestGap = -1;
+    for (let i = 0; i < TRIES; i++) {
+        const spot = randomSpot(placement, random);
+        let gap = Infinity;
+        for (const other of taken)
+            gap = Math.min(gap, apart(spot, other));
+        if (gap > bestGap) {
+            best = spot;
+            bestGap = gap;
+        }
+    }
+    return best;
+}
+
+// A seeded random number generator, 0 <= x < 1 (mulberry32).
+function seeded(seed) {
+    let a = seed >>> 0;
+    return () => {
+        a = (a + 0x6d2b79f5) >>> 0;
+        let t = a;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
 const isTime = t => typeof t === "number" && isFinite(t);
 const clamp01 = x => Math.min(1, Math.max(0, x));
 
@@ -167,15 +242,26 @@ function spread(line, end) {
 // and ask it
 //   position(wall)         the song time (seconds) at wall-clock time `wall` (ms)
 //   words(wall)            the Lyric Words visible at `wall`, in the order they were sung:
-//                          [{ key, text, background, size, brightness, popIn, dissolve }]
+//                          [{ key, text, background, size, brightness, spot, popIn, pop, dissolve }]
 //     key         stable while the word is shown: "<line>:<word>"
 //     background  whether it is a background vocal
 //     size        its size factor (1 = a lead vocal's)
 //     brightness  its brightness factor (1 = a lead vocal's)
+//     spot        where it landed (randomSpot()), kept while it is shown: the furthest from the
+//                 words shown of TRIES random spots, so words overlap only when no space is left
 //     popIn       how far its pop-in has got, 0..1 (1 at once for words restored after a seek)
+//     pop         how hard it pops in, POP.base .. 1: harder with a Kick landing with it
 //     dissolve    how far the line's dissolve has got, 0 (whole) .. 1 (gone)
-export function createLyricWords() {
+// Also feed it
+//   kick(power, wall)      a Kick the Kick detector found at `wall` (ms), with its power (0.5..1)
+// `options` picks where words land and seeds it, for repeatable placement:
+//   { placement: "ribbons" (the bar, the default) or "ribbons-or-hands" (the Lock Ring), seed }
+export function createLyricWords(options) {
+    const placement = options && options.placement === "ribbons-or-hands" ? "ribbons-or-hands" : "ribbons";
+    const random = seeded(options && isTime(options.seed) ? options.seed : 1);
     let track = null, length = 0, lyrics = null, lines = [];
+    let shownWords = new Map(); // key -> { spot, kick }: where each word shown landed, its Kick's power
+    let kicks = [];             // the recent Kicks: [{ t (song time), power }]
     let anchor = null;      // the last reading: { position, wall, rate, playing }
     let cleared = 0;        // the song time of the last clear; words sung before it don't pop in
     let clearing = false;   // a clear (new track or lyrics) waiting for its song time: the next words() takes it
@@ -222,7 +308,14 @@ export function createLyricWords() {
             if (seek) {
                 cleared = at;
                 clearing = false;
+                shownWords = new Map();
+                kicks = [];
             }
+        },
+
+        kick(power, wall) {
+            if (isTime(power) && power > 0)
+                kicks.push({ t: position(wall), power: Math.min(1, power) });
         },
 
         position,
@@ -232,8 +325,15 @@ export function createLyricWords() {
             if (clearing) {
                 cleared = now;
                 clearing = false;
+                shownWords = new Map();
+                kicks = [];
             }
-            const shown = [];
+            kicks = kicks.filter(k => k.t >= now - 1 && k.t <= now + POP.window);
+            const kickAt = t => kicks.reduce((p, k) => Math.abs(k.t - t) <= POP.window ? Math.max(p, k.power) : p, 0);
+            // Each word keeps its spot and its Kick while it is shown; words gone, by the line's end
+            // or a clear, give up theirs, since keys come back.
+            const kept = new Map();
+            const shown = [], fresh = [];
             lines.forEach((line, l) => {
                 if (now < line.t || now >= line.end + DISSOLVE)
                     return;
@@ -244,18 +344,34 @@ export function createLyricWords() {
                 line.words.forEach((word, w) => {
                     if (word.t > now)
                         return;
+                    const key = l + ":" + w;
+                    const held = shownWords.get(key);
+                    const kick = Math.max(held ? held.kick : 0, kickAt(word.t));
                     const look = word.background ? BACKGROUND : LEAD;
-                    shown.push({
-                        key: l + ":" + w,
+                    const entry = {
+                        key,
                         text: word.text,
                         background: word.background,
                         size: look.size,
                         brightness: look.brightness,
+                        spot: held ? held.spot : null,
                         popIn: word.t < cleared ? 1 : clamp01((now - word.t) / POP_IN),
+                        pop: POP.base + POP.kick * kick,
                         dissolve,
-                    });
+                    };
+                    shown.push(entry);
+                    if (held)
+                        kept.set(key, { spot: held.spot, kick });
+                    else
+                        fresh.push({ entry, kick });
                 });
             });
+            // A new word lands away from all the others shown.
+            for (const { entry, kick } of fresh) {
+                entry.spot = place(placement, random, Array.from(kept.values()).map(k => k.spot));
+                kept.set(entry.key, { spot: entry.spot, kick });
+            }
+            shownWords = kept;
             return shown;
         },
     };
