@@ -22,10 +22,10 @@ const FPS = 12;
 // Each GIF: its SVG, its loop (s), its width (px; the SVG's own size scaled down), and the
 // changes to the SVG that make it loop in that time.
 const GIFS = [
-    { svg: "hero.svg", loop: 6, width: 840, fit: holdSlow },
-    { svg: "bar-anatomy.svg", loop: 6, width: 960, fit: holdSlow },
-    { svg: "ring-anatomy.svg", loop: 6, width: 720, fit: holdSlow },
-    { svg: "layers.svg", loop: 7, width: 640, fit: svg => svg.replaceAll('dur="2.4s"', 'dur="2.3333s"') },
+    { svg: "hero.svg", loop: 6, width: 640, fit: holdSlow },
+    { svg: "bar-anatomy.svg", loop: 6, width: 720, fit: holdSlow },
+    { svg: "ring-anatomy.svg", loop: 6, width: 560, fit: holdSlow },
+    { svg: "layers.svg", loop: 7, width: 560, fit: svg => svg.replaceAll('dur="2.4s"', 'dur="2.3333s"') },
 ];
 
 // The hue cycle (24 s) and the wallpaper's drift (18 s, 22 s) slowed a hundredfold: still, over a loop.
