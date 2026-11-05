@@ -14,7 +14,7 @@ import "../docs/bar-ribbons.mjs" as BarRibbons
 import "../docs/bar-words.mjs" as BarWords
 
 Item {
-    id: bar
+    id: layer
 
     required property var lyrics
     required property var inputs
@@ -24,12 +24,12 @@ Item {
 
     FontMetrics {
         id: metrics
-        font.pixelSize: bar.em
+        font.pixelSize: layer.em
         font.weight: Font.DemiBold
     }
 
     Repeater {
-        model: bar.lyrics.words
+        model: layer.lyrics.words
 
         Item {
             id: word
@@ -39,34 +39,34 @@ Item {
             required property int ribbon
             required property real spotX
 
-            readonly property var entry: bar.lyrics.current[wordId] ?? null
+            readonly property var entry: layer.lyrics.current[wordId] ?? null
             readonly property var letters: Array.from(text)
             readonly property var advances: letters.map(c => metrics.advanceWidth(c))
             readonly property real span: advances.reduce((a, b) => a + b, 0)
-            readonly property var glyphs: entry ? BarWords.layWord({ ribbon, x: spotX }, advances, Object.assign({ clearance: metrics.height * 0.32 }, bar.inputs)) : []
+            readonly property var glyphs: entry ? BarWords.layWord({ ribbon, x: spotX }, advances, Object.assign({ clearance: metrics.height * 0.32 }, layer.inputs)) : []
             readonly property real middle: glyphs.length > 0 ? (glyphs[0].x + glyphs[glyphs.length - 1].x) / 2 : 0
-            readonly property real middleY: glyphs.length > 0 ? glyphs.reduce((a, g) => a + g.y, 0) / glyphs.length : bar.height / 2
-            readonly property var look: entry ? BarWords.wordLook(entry, BarRibbons.shockwaveCrossing(middle, bar.inputs)) : null
-            readonly property var rgb: entry ? BarRibbons.ribbonColor(middle, ribbon, bar.inputs) : [1, 1, 1]
+            readonly property real middleY: glyphs.length > 0 ? glyphs.reduce((a, g) => a + g.y, 0) / glyphs.length : layer.height / 2
+            readonly property var look: entry ? BarWords.wordLook(entry, BarRibbons.shockwaveCrossing(middle, layer.inputs)) : null
+            readonly property var rgb: entry ? BarRibbons.ribbonColor(middle, ribbon, layer.inputs) : [1, 1, 1]
             readonly property color hue: Qt.rgba(rgb[0], rgb[1], rgb[2], 1)
             // The bright core: the Ribbon's color, most of the way to white, all the way in a flash.
             readonly property real whiten: look ? 0.55 + 0.45 * look.white : 0.55
             readonly property color core: Qt.rgba(rgb[0] + (1 - rgb[0]) * whiten, rgb[1] + (1 - rgb[1]) * whiten, rgb[2] + (1 - rgb[2]) * whiten, 1)
             // The split goes outward, away from the bar's center.
-            readonly property real outward: middle < bar.width / 2 ? -1 : 1
+            readonly property real outward: middle < layer.width / 2 ? -1 : 1
 
             visible: look !== null && look.opacity > 0
             opacity: look ? Math.min(1, look.opacity) : 0
-            width: bar.width
-            height: bar.height
+            width: layer.width
+            height: layer.height
 
             // The letters, drawn only through the effects below. Wide enough for the glow.
             Item {
                 id: letterBox
                 visible: false
-                x: Math.max(0, word.middle - word.span / 2 - bar.em)
-                width: Math.min(bar.width - x, word.span + 2 * bar.em)
-                height: bar.height
+                x: Math.max(0, word.middle - word.span / 2 - layer.em)
+                width: Math.min(layer.width - x, word.span + 2 * layer.em)
+                height: layer.height
 
                 Repeater {
                     model: word.letters.length
@@ -92,7 +92,7 @@ Item {
                     required property int index
                     readonly property var copy: word.look ? word.look.copies[index] : null
                     source: letterBox
-                    x: letterBox.x + (copy ? copy.offset * bar.em * word.outward : 0)
+                    x: letterBox.x + (copy ? copy.offset * layer.em * word.outward : 0)
                     width: letterBox.width
                     height: letterBox.height
                     visible: copy !== null && copy.opacity > 0.01
@@ -101,7 +101,7 @@ Item {
                     colorizationColor: copy ? copy.color : "white"
                     blurEnabled: true
                     blur: 0.4
-                    blurMax: Math.max(1, Math.round(0.08 * bar.em))
+                    blurMax: Math.max(1, Math.round(0.08 * layer.em))
                     transform: Scale {
                         origin.x: word.middle - letterBox.x
                         origin.y: word.middleY
@@ -122,7 +122,7 @@ Item {
                 shadowHorizontalOffset: 0
                 shadowVerticalOffset: 0
                 shadowBlur: 1
-                blurMax: Math.max(1, Math.round(0.45 * bar.em))
+                blurMax: Math.max(1, Math.round(0.45 * layer.em))
                 shadowScale: 1 + 0.06 * Math.max(0, (word.look ? word.look.glow : 0) - 0.5)
                 shadowOpacity: Math.min(1, word.look ? word.look.glow : 0)
                 blurEnabled: word.look !== null && word.look.blur > 0
