@@ -6,7 +6,7 @@
 // object spread).
 //
 // The Ribbons' shape and the Hands' are ring.frag's, through ring.mjs, kicks.mjs and hands.mjs; the
-// few numbers ring.frag spells out inline (how loud a strand waves, its hue, a hand's wave phase
+// few numbers ring.frag spells out inline (how loud a Ribbon waves, its hue, a Hand's wave phase
 // and colour) are mirrored here, and tests/lock-constants.test.mjs keeps them on ring.frag's.
 import { timeHit } from "./clock.mjs";
 import { HANDS, waveOffset } from "./hands.mjs";
@@ -18,16 +18,16 @@ export const WORD_FONT = 0.042;
 
 // Catppuccin Mocha, ring.frag's LAVENDER, MAUVE, PINK and BLUE.
 export const COLORS = { lavender: "#b4befe", mauve: "#cba6f7", pink: "#f5c2e7", blue: "#89b4fa" };
-// ring.frag's palette() cycle, and its pal()'s saturation for the strands and the hands.
+// ring.frag's palette() cycle, and its pal()'s saturation for the Ribbons and the Hands.
 export const PALETTE = ["lavender", "mauve", "lavender", "pink", "lavender", "blue", "lavender"];
 export const SATURATION = 0.9;
-// ring.frag's strands: how loud they wave with the music (music = gain * ribbonSpectrum(s) *
+// ring.frag's Ribbons: how loud they wave with the music (music = gain * ribbonSpectrum(s) *
 // (1 + kick * ubuf.kick)), and their hue (hueBase = time * t + s * spectrum; pal(hueBase +
-// strand * k + along * s + level * level)).
+// ribbon * k + along * s + level * level)).
 export const RIBBON_MUSIC = { gain: 1.3, kick: 0.7 };
-export const RIBBON_HUE = { time: 0.05, spectrum: 0.15, strand: 0.33, along: 0.6, level: 0.2 };
+export const RIBBON_HUE = { time: 0.05, spectrum: 0.15, ribbon: 0.33, along: 0.6, level: 0.2 };
 // Each hand's colour in ring.frag (hour, minute, second), and how far its wave's phase is offset
-// by its index (phase = wave + index * HAND_PHASE, for its main strand).
+// by its index (phase = wave + index * HAND_PHASE, for its main wave).
 export const HAND_COLORS = { hour: "lavender", minute: "mauve", second: "pink" };
 export const HAND_PHASE = 1.3;
 
@@ -65,10 +65,10 @@ const bright = c => {
     return hex(c.map(v => v / top));
 };
 
-// Strand `k`'s radius (dial radii) at `theta` (radians clockwise from 12 o'clock), as ring.frag
-// draws it: the music's level there, surged by the Shockwaves where the strand sits before the
+// Ribbon `k`'s radius (dial radii) at `theta` (radians clockwise from 12 o'clock), as ring.frag
+// draws it: the music's level there, surged by the Shockwaves where the Ribbon sits before the
 // surge. With the level and the spectrum position, for its colour.
-function strandAt(theta, k, scene) {
+function ribbonAt(theta, k, scene) {
     const angle = theta * 180 / Math.PI;
     const s = spectrumAt(angle, scene.bassStretch);
     const music = RIBBON_MUSIC.gain * ribbonLevel(scene.values, s) * (1 + RIBBON_MUSIC.kick * scene.kick);
@@ -139,16 +139,16 @@ export function wordPlacement(spot, advances, scene) {
     } else {
         const k = spot.ribbon;
         const theta0 = (((spot.angle % 360) + 360) % 360) * Math.PI / 180;
-        const at = strandAt(theta0, k, scene);
+        const at = ribbonAt(theta0, k, scene);
         const point = theta => {
-            const r = strandAt(theta, k, scene).radius * D;
+            const r = ribbonAt(theta, k, scene).radius * D;
             return { x: r * Math.sin(theta), y: -r * Math.cos(theta) };
         };
         // Clockwise over the top, counterclockwise along the bottom, so it reads left to right.
         const read = Math.cos(theta0) >= 0 ? 1 : -1;
         laid = layOut(advances, theta0, at.radius * D, read, point);
         const hue = RIBBON_HUE.time * scene.time + RIBBON_HUE.spectrum * at.s
-            + RIBBON_HUE.strand * k + RIBBON_HUE.along * at.s + RIBBON_HUE.level * at.level;
+            + RIBBON_HUE.ribbon * k + RIBBON_HUE.along * at.s + RIBBON_HUE.level * at.level;
         color = bright(pal(hue));
     }
     const mid = laid.glyphs.length ? laid.glyphs[Math.floor(laid.glyphs.length / 2)] : { x: 0, y: 0 };

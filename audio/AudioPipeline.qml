@@ -51,6 +51,8 @@ Scope {
     property var kickSeeds: new Array(kickSlots).fill(0)   // a fresh particle spray per kick
     readonly property var kickAges: kickTimes.map(t => time - t)
     property int kickCount: 0
+    // Each Kick as it lands, with its power (0.5..1), once the slots above hold it.
+    signal kicked(real power)
 
     // Capture the monitor of the sink the Active Player plays to, falling back to the newest
     // playing stream. "auto" = default sink.
@@ -126,6 +128,7 @@ Scope {
         kickTimes = times;
         kickPowers = powers;
         kickSeeds = seeds;
+        kicked(hit.power);
     }
 
     FrameAnimation {

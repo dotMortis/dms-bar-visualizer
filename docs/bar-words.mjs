@@ -1,8 +1,8 @@
 // Lyric Words on the Bar Visualizer, apart from drawing: where each letter of a word sits as it
 // rides its Ribbon, and how the word looks as it pops in, takes a Shockwave and dissolves. Plain JS
-// for tests/bar-words.test.mjs; shell.qml draws the words from it. Which words show, where they
-// land and how far their pop-in and dissolve have got is docs/lyric-words.mjs's; the Ribbons'
-// shape, color and Shockwaves are docs/bar-ribbons.mjs's.
+// for tests/bar-words.test.mjs; lyrics/LyricWordsLayer.qml draws the words from it. Which words
+// show, where they land and how far their pop-in and dissolve have got is docs/lyric-words.mjs's;
+// the Ribbons' shape, color and Shockwaves are docs/bar-ribbons.mjs's.
 import { ribbonHeight } from "./bar-ribbons.mjs";
 
 // The look of a word:

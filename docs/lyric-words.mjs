@@ -20,7 +20,8 @@
 //   - A line without an end time ends at its last word's end, else at the next Lyric Line's
 //     start, else at the track's end.
 //   - Only one Lyric Line at a time: a line ends at the next one's start at the latest. All its
-//     words then dissolve together, over DISSOLVE seconds; between lines nothing is shown.
+//     words then dissolve together, over DISSOLVE seconds, or less when the next Lyric Line's
+//     first word comes sooner; between lines nothing is shown.
 //   - The position is extrapolated from the last reading, its wall-clock time and the playback
 //     rate; paused, it stands still, and so do the words. A reading more than SEEK_TOLERANCE away
 //     from the extrapolated position is a seek: it clears the words, as a track change does. The
@@ -33,7 +34,8 @@
 
 // Seconds a word takes to pop in, from its start.
 export const POP_IN = 0.25;
-// Seconds the words of a Lyric Line take to dissolve, from its end.
+// Seconds the words of a Lyric Line take to dissolve, from its end (less when the next line's
+// first word comes sooner).
 export const DISSOLVE = 0.6;
 // How far (seconds) a reading may stray from the extrapolated position before it counts as a seek.
 // MPRIS positions jitter by a few tens of milliseconds; a seek moves much farther.
@@ -46,7 +48,7 @@ export const POP = { base: 0.4, kick: 0.6, window: 0.15 };
 // The pace (seconds per word) a line's words are spread at when it has no end at all.
 export const WORD_PACE = 0.4;
 
-// The Ribbons a word can land on: three strands, on the bar (docs/bar-ribbons.mjs) as on the Lock
+// The Ribbons a word can land on: three of them, on the bar (docs/bar-ribbons.mjs) as on the Lock
 // Ring (lock-ring/ring.mjs).
 export const RIBBONS = 3;
 
@@ -61,8 +63,8 @@ export const TRIES = 12;
 //   "ribbons"           { on: "ribbon", ribbon, x }      x: 0 (the bar's left edge) .. 1 (its right)
 //   "ribbons-or-hands"  { on: "ribbon", ribbon, angle }  angle: clockwise degrees from 12 o'clock
 //                       { on: "hand", hand, along }      along: 0 (the Hand's inner end) .. 1 (tip)
-// ribbon is the strand, 0 .. RIBBONS - 1; hand one of HAND_NAMES. On the ring a word lands on a
-// Ribbon or a Hand as likely.
+// ribbon is which Ribbon, 0 .. RIBBONS - 1; hand one of HAND_NAMES. On the Lock Ring a word lands
+// on a Ribbon or a Hand as likely.
 function randomSpot(placement, random) {
     if (placement !== "ribbons-or-hands")
         return { on: "ribbon", ribbon: Math.floor(random() * RIBBONS), x: random() };
@@ -71,8 +73,8 @@ function randomSpot(placement, random) {
     return { on: "hand", hand: HAND_NAMES[Math.floor(random() * HAND_NAMES.length)], along: random() };
 }
 
-// How far apart two spots are, 0 (on top of each other) .. 1. The strands of the Ribbons wave
-// across each other, so only the way along them counts: across the bar, or around the ring. A Hand
+// How far apart two spots are, 0 (on top of each other) .. 1. The Ribbons wave across each
+// other, so only the way along them counts: across the bar, or around the ring. A Hand
 // turns, so its words are only apart from each other along it, and from words elsewhere (the
 // Ribbons, outside the dial, and the other Hands, which only meet it now and then) far apart.
 function apart(a, b) {
@@ -175,8 +177,8 @@ function joinPieces(pieces) {
     return words;
 }
 
-// The Lyric Lines of `lyrics`, in order: [{ t, end, words: [{ text, t, background }] }], for a
-// track `length` seconds long (0 or less: unknown).
+// The Lyric Lines of `lyrics`, in order: [{ t, end, gone, words: [{ text, t, background }] }], for
+// a track `length` seconds long (0 or less: unknown). At `gone` its dissolve is over.
 function lyricLines(lyrics, length) {
     const groups = new Map();
     for (const line of plainLines(lyrics)) {
@@ -189,7 +191,7 @@ function lyricLines(lyrics, length) {
     }
     const ordered = Array.from(groups.values()).sort((a, b) => a.t - b.t);
     const trackEnd = isTime(length) && length > 0 ? length : Infinity;
-    return ordered.map((group, i) => {
+    const lines = ordered.map((group, i) => {
         const next = i + 1 < ordered.length ? ordered[i + 1].t : Infinity;
         let end = -Infinity;
         const words = [];
@@ -205,6 +207,14 @@ function lyricLines(lyrics, length) {
         words.sort((a, b) => a.t - b.t);
         return { t: group.t, end: Math.min(end, next), words };
     });
+    // A line dissolves from its end for DISSOLVE seconds, or until the next Lyric Line's first word
+    // if that comes sooner: only one Lyric Line is ever shown.
+    lines.forEach((line, i) => {
+        const following = lines[i + 1];
+        const nextWord = !following ? Infinity : following.words.length > 0 ? following.words[0].t : following.t;
+        line.gone = Math.min(line.end + DISSOLVE, Math.max(line.end, nextWord));
+    });
+    return lines;
 }
 
 // When a line ends: its own end time, else its last word's end, else the next Lyric Line's start,
@@ -236,7 +246,8 @@ function spread(line, end) {
 //                          seconds (0: unknown). A new identity drops the lyrics and clears the words.
 //   setLyrics(lyrics)      DMS's lyrics for that track: its lyrics.get reply's result ({ found,
 //                          synced, plain, instrumental }), or { state, synced } with the lyrics
-//                          controller's state and lines; null for none.
+//                          controller's state and lines; null for none. Lyrics giving the same
+//                          Lyric Lines as before keep the words shown; others clear them.
 //   read(reading)          a playback position reading: { position (seconds), wall (ms, as
 //                          Date.now()), rate (1 = normal), playing (false = paused) }.
 // and ask it
@@ -289,10 +300,13 @@ export function createLyricWords(options) {
                 clearing = true;
         },
 
+        // DMS refetches in the background: the same Lyric Lines again keep the words and their spots.
         setLyrics(next) {
+            const before = JSON.stringify(lines);
             lyrics = next;
             rebuild();
-            clearing = true;
+            if (JSON.stringify(lines) !== before)
+                clearing = true;
         },
 
         read(reading) {
@@ -335,12 +349,12 @@ export function createLyricWords(options) {
             const kept = new Map();
             const shown = [], fresh = [];
             lines.forEach((line, l) => {
-                if (now < line.t || now >= line.end + DISSOLVE)
+                if (now < line.t || now >= line.gone)
                     return;
                 // A line that ended before the last clear stays cleared.
                 if (line.end < cleared && now >= line.end)
                     return;
-                const dissolve = now >= line.end ? clamp01((now - line.end) / DISSOLVE) : 0;
+                const dissolve = now >= line.end ? clamp01((now - line.end) / (line.gone - line.end)) : 0;
                 line.words.forEach((word, w) => {
                     if (word.t > now)
                         return;

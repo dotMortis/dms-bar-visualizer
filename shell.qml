@@ -83,13 +83,10 @@ ShellRoot {
         player: audio.activePlayer
     }
 
-    // Each Kick, with its power, for the words it lands with. The powers change once per Kick,
-    // after its count, so the newest is in the count's slot.
+    // Each Kick, with its power, for the words it lands with.
     Connections {
         target: audio
-        function onKickPowersChanged() {
-            barLyrics.kick(audio.kickPowers[audio.kickCount % audio.kickSlots]);
-        }
+        function onKicked(power) { barLyrics.kick(power); }
     }
 
     Variants {

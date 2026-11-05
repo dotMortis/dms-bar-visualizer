@@ -5,7 +5,7 @@
 // docs/index.html imports it.
 import { createLyricWords } from "./lyric-words.mjs";
 
-// The demo's song, timed to the procedural loop's 120 bpm (a beat every 0.5 s), as DMS's synced
+// The demo's song, timed to the procedural loop's 120 bpm (a count every 0.5 s), as DMS's synced
 // lines ({ t, e, x, w?, background?, group? }, seconds from the start):
 //   - a line with word timing, "rivers" sung in two syllables
 //   - a line with line timing only, its words spread evenly, with a background vocal under it
@@ -41,9 +41,9 @@ export const DEMO_LOOP = 24;
 // `options`: { start, placement ("ribbons" for the bar, "ribbons-or-hands" for the Lock Ring),
 // seed }. Each loop starts as a seek to the top, which clears the words.
 export function createDemoLyrics({ start = 0, placement = "ribbons", seed = 1 } = {}) {
-    const lyricWords = createLyricWords({ placement, seed });
-    lyricWords.setTrack("demo", DEMO_LOOP);
-    lyricWords.setLyrics({ found: true, synced: DEMO_LINES });
+    const tracker = createLyricWords({ placement, seed });
+    tracker.setTrack("demo", DEMO_LOOP);
+    tracker.setLyrics({ found: true, synced: DEMO_LINES });
     let loop = null;
     // A reading at each loop's start: the song plays on at rate 1 in between.
     const sync = wall => {
@@ -52,16 +52,16 @@ export function createDemoLyrics({ start = 0, placement = "ribbons", seed = 1 } 
         if (n === loop)
             return;
         loop = n;
-        lyricWords.read({ position: elapsed - n * DEMO_LOOP, wall, rate: 1, playing: true });
+        tracker.read({ position: elapsed - n * DEMO_LOOP, wall, rate: 1, playing: true });
     };
     return {
         kick(power, wall) {
             sync(wall);
-            lyricWords.kick(power, wall);
+            tracker.kick(power, wall);
         },
         words(wall) {
             sync(wall);
-            return lyricWords.words(wall);
+            return tracker.words(wall);
         },
     };
 }

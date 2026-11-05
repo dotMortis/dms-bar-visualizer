@@ -185,10 +185,10 @@ describe("the Lyric Words ride and glow like ring.frag's strands and hands (lyri
         assert.ok(code.includes(`pow(color, vec3(1.0 + 1.5 * ${SATURATION}))`));
     });
 
-    test("a strand's level and hue (RIBBON_MUSIC, RIBBON_HUE)", () => {
+    test("a Ribbon's level and hue (RIBBON_MUSIC, RIBBON_HUE)", () => {
         assert.ok(main.includes(`float music = ${RIBBON_MUSIC.gain} * ribbonSpectrum(s) * (1.0 + ${RIBBON_MUSIC.kick} * ubuf.kick);`));
         assert.ok(main.includes(`float hueBase = t * ${RIBBON_HUE.time} + s * ${RIBBON_HUE.spectrum};`));
-        assert.ok(main.includes(`pal(hueBase + fk * ${RIBBON_HUE.strand} + s * ${RIBBON_HUE.along} + level * ${RIBBON_HUE.level}, `));
+        assert.ok(main.includes(`pal(hueBase + fk * ${RIBBON_HUE.ribbon} + s * ${RIBBON_HUE.along} + level * ${RIBBON_HUE.level}, `));
     });
 
     test("each hand's colour (HAND_COLORS) and its main strand's phase (HAND_PHASE)", () => {

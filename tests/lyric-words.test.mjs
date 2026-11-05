@@ -92,8 +92,9 @@ describe("a line without an end time", () => {
         const lyrics = playing([{ t: 10, x: "a b" }, { t: 14, e: 16, x: "next" }]);
         assert.deepEqual(textsAt(lyrics, 11.99), ["a"]);
         assert.deepEqual(textsAt(lyrics, 12), ["a", "b"]);
+        assert.deepEqual(textsAt(lyrics, 13.99), ["a", "b"]);
         assert.deepEqual(dissolvingAt(lyrics, 13.99), []);
-        assert.deepEqual(dissolvingAt(lyrics, 14.1), ["a", "b"]);
+        assert.deepEqual(textsAt(lyrics, 14), ["next"]);
     });
 
     test("else at the track's end", () => {
@@ -130,11 +131,30 @@ describe("the end of a Lyric Line", () => {
         assert.deepEqual(textsAt(lyrics, 20), ["second"]);
     });
 
-    test("a line runs over into the next one only while it dissolves", () => {
-        const lyrics = playing([{ t: 10, e: 16, x: "long line" }, { t: 12, e: 14, x: "cut in" }]);
-        assert.deepEqual(dissolvingAt(lyrics, 11.9), []);
-        assert.deepEqual(dissolvingAt(lyrics, 12.1), ["long"]);
-        assert.deepEqual(textsAt(lyrics, 13.5), ["cut", "in"]);
+    test("no two lines are ever visible together", () => {
+        const lyrics = playing([
+            { t: 10, e: 16, x: "long line" },
+            { t: 12, e: 14, x: "cut in" },
+            { t: 14, e: 15, x: "back to back" },
+        ]);
+        for (let t = 9; t <= 17; t += 0.05) {
+            const lines = new Set(lyrics.words(wallAt(t)).map(w => w.key.split(":")[0]));
+            assert.ok(lines.size <= 1, `at ${t.toFixed(2)}: lines ${[...lines]}`);
+        }
+        assert.deepEqual(textsAt(lyrics, 11.99), ["long"]);
+        assert.deepEqual(textsAt(lyrics, 12), ["cut"]);
+        assert.deepEqual(textsAt(lyrics, 14), ["back"]);
+    });
+
+    test("a line whose next one comes soon dissolves in the time left before it", () => {
+        // The first line ends at 13 and the next starts at 13.3: a 0.3 s dissolve, not the full one.
+        const lyrics = playing([{ t: 10, e: 13, x: "first" }, { t: 13.3, e: 15, x: "second" }]);
+        assert.equal(lyrics.words(wallAt(12.99))[0].dissolve, 0);
+        const half = lyrics.words(wallAt(13.15));
+        assert.deepEqual(half.map(w => w.text), ["first"]);
+        assert.ok(Math.abs(half[0].dissolve - 0.5) < 1e-6, `dissolve ${half[0].dissolve}`);
+        assert.ok(lyrics.words(wallAt(13.29))[0].dissolve > 0.9);
+        assert.deepEqual(textsAt(lyrics, 13.3), ["second"]);
     });
 });
 
@@ -158,8 +178,8 @@ describe("one Lyric Line, every part of it", () => {
     test("lines starting together without a group are one Lyric Line", () => {
         const lyrics = playing([{ t: 10, e: 14, x: "lead" }, { t: 10, e: 12, x: "ooh", background: true }, { t: 11, e: 14, x: "later" }]);
         assert.deepEqual(textsAt(lyrics, 10.5), ["lead", "ooh"]);
-        assert.deepEqual(textsAt(lyrics, 11.5).sort(), ["later", "lead", "ooh"]);
-        assert.deepEqual(dissolvingAt(lyrics, 11.5).sort(), ["lead", "ooh"]);
+        // A line starting later is the next Lyric Line, and takes over.
+        assert.deepEqual(textsAt(lyrics, 11.5), ["later"]);
     });
 
     test("the lyrics controller's grouped lines read as DMS's synced lines", () => {
@@ -452,6 +472,18 @@ describe("placement after the words clear", () => {
             close.push(Math.abs(gone.x - fresh.x) < 0.1);
         }
         assert.ok(close.some(Boolean));
+    });
+
+    test("the same lyrics set again keep the words and their spots", () => {
+        const synced = [lineOf(4)];
+        for (let seed = 1; seed <= 20; seed++) {
+            const lyrics = placing(synced, { seed });
+            const before = lyrics.words(wallAt(12.5));
+            // DMS's background refresh: equal lyrics, a fresh object.
+            lyrics.setLyrics({ state: "ready", synced: JSON.parse(JSON.stringify(synced)) });
+            const after = lyrics.words(wallAt(12.5));
+            assert.deepEqual(after.map(w => [w.key, w.spot, w.popIn]), before.map(w => [w.key, w.spot, w.popIn]), `seed ${seed}`);
+        }
     });
 
     test("a seek places the words it brings back afresh", () => {

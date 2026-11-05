@@ -1,14 +1,16 @@
 // The Bar Visualizer's Ribbons, apart from drawing: where each of the three Ribbons sits at any x
 // across the bar, its color there, and how brightly a Shockwave crosses it. Plain JS for
-// tests/bar-ribbons.test.mjs, and for what rides the Ribbons (Lyric Words, in shell.qml). shaders/viz.frag and the demo's port of it in docs/index.html draw them and
-// mirror these numbers (tests/bar-constants.test.mjs checks they match), so change both together.
+// tests/bar-ribbons.test.mjs, and for what rides the Ribbons (Lyric Words, drawn in
+// lyrics/LyricWordsLayer.qml). shaders/viz.frag and the demo's port of it in docs/index.html draw
+// them and mirror these numbers (tests/bar-constants.test.mjs checks they match), so change both
+// together.
 
 // The Ribbons' wave, in bar-heights along the bar (x) and shares of its thickness across it (y):
-// strand k waves at freq + k * freqStep a bar-height, its phase the flow times 1 + k * speedStep,
+// Ribbon k waves at freq + k * freqStep a bar-height, its phase the flow times 1 + k * speedStep,
 // offset by k * offset. The treble rides on it as a ripple (rippleFreq times as fine, its phase
 // ripplePhase times as fast) of `ripple` its height. At full level a crest reaches `reach` from the
 // bar's middle line. viz.frag's RIBBON_* constants.
-// Its color is the palette at the bar's hue (HUE), hueStep on per strand, hueSpread more at the
+// Its color is the palette at the bar's hue (HUE), hueStep on per Ribbon, hueSpread more at the
 // edges than at the center and hueLevel more at full level, deepened by `deep` (0..1, pal()'s s).
 export const RIBBON = {
     freq: 2.6, freqStep: 1.4, speedStep: 0.5, offset: 2.1, ripple: 0.3, rippleFreq: 2.3, ripplePhase: 1.7, reach: 0.42,
@@ -73,7 +75,7 @@ function levelAt(s, { values, kick = 0, bassStretch = 1, kickAges = [], kickPowe
     return Math.min(1, LEVEL.gain * spectrum(values, s ** bassStretch) * (1 + LEVEL.kick * kick) + LEVEL.surge * surge);
 }
 
-// The height of Ribbon `strand` (0..2) at `x` pixels from the bar's left edge, as a share of the
+// The height of Ribbon `ribbon` (0..2) at `x` pixels from the bar's left edge, as a share of the
 // bar's thickness from its top edge (the shader's qt_TexCoord0.y), from what viz.frag gets:
 //   width, height          the bar in pixels (viz.frag's res)
 //   values                 the 32 bands, bass first, 0..1
@@ -81,12 +83,12 @@ function levelAt(s, { values, kick = 0, bassStretch = 1, kickAges = [], kickPowe
 //   kickAges, kickPowers   the Kicks' slots (a power of 0 is an empty slot)
 // The intensity only brightens the Ribbons, so it isn't needed here. The Ribbons wave outward from
 // the bar's center and mirror there, and can leave the bar on a loud crest (above 1 or below 0).
-export function ribbonHeight(x, strand, inputs) {
+export function ribbonHeight(x, ribbon, inputs) {
     const { dx, s, shakeY } = spotOf(x, inputs);
     const { treble = 0, flow = 0 } = inputs;
     const level = levelAt(s, inputs);
-    const freq = RIBBON.freq + strand * RIBBON.freqStep;
-    const phase = flow * (1 + strand * RIBBON.speedStep) + strand * RIBBON.offset;
+    const freq = RIBBON.freq + ribbon * RIBBON.freqStep;
+    const phase = flow * (1 + ribbon * RIBBON.speedStep) + ribbon * RIBBON.offset;
     const wave = Math.sin(dx * freq - phase) + RIBBON.ripple * Math.sin(dx * freq * RIBBON.rippleFreq - phase * RIBBON.ripplePhase) * treble;
     return 0.5 + RIBBON.reach * level * wave - shakeY;
 }
@@ -103,12 +105,12 @@ function palette(h) {
     return CYCLE[i].map((c, k) => c + (CYCLE[i + 1][k] - c) * m);
 }
 
-// The color of Ribbon `strand` at `x`, as [r, g, b] 0..1, from the same inputs as ribbonHeight():
+// The color of Ribbon `ribbon` at `x`, as [r, g, b] 0..1, from the same inputs as ribbonHeight():
 // the color viz.frag gives its glow there, before the intensity and the glow's brightness.
-export function ribbonColor(x, strand, inputs) {
+export function ribbonColor(x, ribbon, inputs) {
     const { px, s } = spotOf(x, inputs);
     const hue = (inputs.time || 0) * HUE.speed + px * HUE.along
-        + strand * RIBBON.hueStep + s * RIBBON.hueSpread + levelAt(s, inputs) * RIBBON.hueLevel;
+        + ribbon * RIBBON.hueStep + s * RIBBON.hueSpread + levelAt(s, inputs) * RIBBON.hueLevel;
     const power = 1 + HUE.deepen * RIBBON.deep;
     return palette(hue).map(c => c ** power);
 }
