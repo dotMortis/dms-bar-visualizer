@@ -186,6 +186,10 @@ import { DIAL_RATIO, createRingMotion } from "./lock-ring/ring.mjs";
 import { handFlash, shockwaveCrossing } from "./lock-ring/kicks.mjs";
 import { createHandMotion } from "./lock-ring/hands.mjs";
 import { TIME_FONT, TIME_HIT, TIME_RADIUS, TIME_TOP, formatTime, timeHit } from "./lock-ring/clock.mjs";
+import { handPoses } from "./lock-ring/hands.mjs";
+import { WORD_FONT, WORD_LOOK, wordLook, wordPlacement } from "./lock-ring/lyrics.mjs";
+// The demo's own timed lines, looping on the demo's clock through the shared Lyric Words module.
+import { createDemoLyrics } from "./demo-lyrics.mjs";
 const RING_FRAG = fetch("./lock-ring/ring.frag").then(r => {
   if (!r.ok) throw new Error(`ring.frag: HTTP ${r.status}`);
   return r.text();
@@ -415,6 +419,7 @@ function onValues(now) {
   st.kickTimes[slot] = st.time;
   st.kickPowers[slot] = hit.power;
   st.kickSeeds[slot] = st.kickCount;
+  ringLyrics.kick(hit.power, now * 1000);
 }
 
 // ---- Audio sources ----------------------------------------------------------------
@@ -438,6 +443,10 @@ const demo = {
     }
   },
 };
+// The Lock Ring view's Lyric Words: the demo song, sung on the procedural loop's beat, landing on
+// Ribbons or Hands as on the Lock Ring (lock-ring/LockLyrics.qml).
+const ringLyrics = createDemoLyrics({ start: demo.start * 1000, placement: "ribbons-or-hands", seed: Date.now() % 1000003 });
+
 function smooth(a, b, x) { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
 
 let ctx = null, analyser = null, freq = null, sens = 3, edges = null;
@@ -739,7 +748,7 @@ let ringProg = null;
 const ringU = [];   // { name, type, loc }
 const ringMotion = createRingMotion();
 const handMotion = createHandMotion();
-const ring = { swell: 0, presence: 0, flash: 0, timeCrossing: 0, handLevels: { bass: 0, mid: 0, treble: 0 }, handPhases: {} };
+const ring = { swell: 0, presence: 0, flash: 0, timeCrossing: 0, handLevels: { bass: 0, mid: 0, treble: 0 }, handPhases: {}, words: [] };
 
 function shaderOf(g, type, src) {
   const sh = g.createShader(type);
@@ -841,7 +850,83 @@ function drawFace() {
   fctx.fillStyle = `rgb(${mix(180)} ${mix(190)} ${mix(254)} / .85)`;
   fctx.fillText(text, 0, top);
 
+  drawWords(size);
   fctx.restore();
+}
+
+// The Lyric Words LockRing.qml draws over the shader (lyrics.mjs): each on its Ribbon, bent along
+// its curve, or on its Hand, lying along it, in the colour there with a bright core. It pops in
+// oversized with a flash, dissolves with its line, and splits into the Shockwave's colors and
+// flares with a glow as a front crosses it, as the digital time does. Drawn around the dial's
+// center (fctx is translated there).
+const WORD_FAMILY = `Inter, "Segoe UI", Roboto, Ubuntu, system-ui, sans-serif`;
+const rgbOf = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+const mixRgb = (a, b, k) => a.map((v, i) => Math.round(v + (b[i] - v) * k));
+const cssRgb = c => `rgb(${c.join(" ")})`;
+const WHITE = [255, 255, 255];
+function drawWords(size) {
+  if (ring.words.length === 0) return;
+  const kickAges = st.kickTimes.map(t => st.time - t);
+  const scene = {
+    dialRadius: size * DIAL_RATIO, values: st.values, flow: st.flow, time: st.time % 1200, treble: st.treble,
+    swell: ring.swell, kick: st.kick, bassStretch: cfg.bassStretch,
+    kickAges, kickPowers: st.kickPowers, kickSeeds: st.kickSeeds,
+    poses: handPoses(new Date(), ring.handLevels, { flash: ring.flash, strength: cfg.lockRing.handWaves }),
+    phases: ring.handPhases,
+  };
+  fctx.textAlign = "center"; fctx.textBaseline = "middle";
+  for (const word of ring.words) {
+    const em = Math.max(8, size * WORD_FONT * word.size);
+    fctx.font = `600 ${em}px ${WORD_FAMILY}`;
+    const chars = Array.from(word.text);
+    const place = wordPlacement(word.spot, chars.map(c => fctx.measureText(c).width), scene);
+    const look = wordLook(word, shockwaveCrossing(place.radius, kickAges, st.kickPowers, st.kickSeeds, place.theta));
+    if (look.opacity <= 0) continue;
+    const glow = rgbOf(place.color);
+    const out = Math.max(1, Math.hypot(place.x, place.y)), outX = place.x / out, outY = place.y / out;
+    // The letters, each on its spot along the curve, shifted by (dx, dy) from the word's middle.
+    const letters = (dx, dy) => place.glyphs.forEach((g, i) => {
+      fctx.save();
+      fctx.translate(g.x - place.x + dx, g.y - place.y + dy);
+      fctx.rotate(g.rotation * Math.PI / 180);
+      fctx.fillText(chars[i], 0, 0);
+      fctx.restore();
+    });
+    fctx.save();
+    fctx.translate(place.x, place.y);
+    fctx.scale(look.scale, look.scale);
+    // The Shockwave's chromatic split, pushed outward, behind the word.
+    fctx.filter = `blur(${TIME_HIT.soften * em}px)`;
+    for (const copy of look.hit.copies) {
+      if (copy.opacity <= 0) continue;
+      fctx.globalAlpha = look.opacity * copy.opacity;
+      fctx.fillStyle = copy.color;
+      letters(outX * copy.offset * em, outY * copy.offset * em);
+    }
+    const blur = look.blur > 0 ? `blur(${look.blur * WORD_LOOK.glow.radius * em}px)` : "none";
+    // Its glow in its colour (toward the Shockwave's glow as it crosses), spread as MultiEffect's
+    // shadowScale does: the letters are drawn far off to the left and only their shadow is
+    // shifted back.
+    const spread = look.hit.glow.scale + WORD_LOOK.glow.spread, away = 10 * face.width;
+    fctx.filter = blur;
+    fctx.save();
+    fctx.scale(spread, spread);
+    fctx.globalAlpha = look.opacity;
+    fctx.fillStyle = "black";
+    fctx.shadowColor = cssRgb(mixRgb(glow, rgbOf(TIME_HIT.glow.color), look.hit.glow.opacity * 0.6));
+    fctx.shadowBlur = WORD_LOOK.glow.radius * em;
+    fctx.shadowOffsetX = away * look.scale * spread;
+    letters(-away, 0);
+    fctx.restore();
+    // The letters: a bright core in its colour, flaring toward white as it lands and as a front
+    // crosses it, blurring away as it dissolves.
+    fctx.globalAlpha = look.opacity;
+    fctx.fillStyle = cssRgb(mixRgb(mixRgb(glow, WHITE, WORD_LOOK.core), WHITE, look.white));
+    letters(0, 0);
+    fctx.restore();
+  }
+  fctx.filter = "none";
+  fctx.globalAlpha = 1;
 }
 
 // ---- Readouts ------------------------------------------------------------------------
@@ -900,6 +985,7 @@ function frame() {
   const kickAges = st.kickTimes.map(t => st.time - t);
   ring.flash = handFlash(kickAges, st.kickPowers, cfg.kickDecay);
   ring.timeCrossing = shockwaveCrossing(TIME_RADIUS, kickAges, st.kickPowers, st.kickSeeds, Math.PI);  // the time sits at 6 o'clock
+  ring.words = ringLyrics.words(now * 1000);
 
   if (view === "ring") {
     drawRing();
