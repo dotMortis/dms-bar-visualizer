@@ -101,5 +101,11 @@ describe("a Lyric Word's look", () => {
         assert.ok(hit.copies.every(c => c.opacity > 0 && c.offset > 0));
         assert.ok(hit.copies.every((c, i) => c.offset > half.copies[i].offset), "split farther by a stronger crossing");
         assert.ok(hit.white > calm.white && hit.glow > calm.glow, "and flares");
+        assert.ok(hit.scale > half.scale && half.scale > calm.scale, "and swells with the hit");
+    });
+
+    test("a full hit splits its copies well clear of the word", () => {
+        const hit = wordLook(word({}), 1);
+        assert.ok(Math.max(...hit.copies.map(c => c.offset)) >= 0.5, "half a letter or more");
     });
 });

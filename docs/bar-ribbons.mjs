@@ -113,23 +113,34 @@ export function ribbonColor(x, strand, inputs) {
     return palette(hue).map(c => c ** power);
 }
 
-// How far ahead of a Shockwave's front, and how far behind it, a spot still feels it crossing, as
-// shares of the way from the center to an edge (shockwaveCrossing()). Not in viz.frag.
-export const CROSSING = { lead: 0.08, trail: 0.25 };
+// How a spot feels a Shockwave crossing it (shockwaveCrossing()). Not in viz.frag.
+//   lead  how far ahead of the front it starts, as a share of the way from the center to an edge
+//   fade  how fast the hit weakens with the time the front takes to reach the spot (per second),
+//         gentler than SHOCK.fade so words near the edges still take a clear hit
+//   hold  how long the hit lingers once the front has passed (seconds, e-folding): the front
+//         sweeps the bar in a blink, too quick to see on its own
+export const CROSSING = { lead: 0.08, fade: 1.1, hold: 0.22 };
 
-// How brightly a Shockwave's front is crossing `x` right now, 0..1, from ribbonHeight()'s inputs:
-// each Shockwave with its strength (its power, faded at SHOCK.fade), shaped by how close its front
-// is: nothing until it is within CROSSING.lead, full strength as it passes, gone CROSSING.trail
-// beyond. Overlapping Shockwaves take the brightest. What makes Lyric Words flare and split.
+// How hard a Shockwave is hitting `x` right now, 0..1, from ribbonHeight()'s inputs. Each
+// Shockwave hits with its power, weaker the longer its front takes to get there: nothing until
+// the front is within CROSSING.lead, full as it passes, then fading over CROSSING.hold.
+// Overlapping Shockwaves take the hardest. What makes Lyric Words flare and split.
 export function shockwaveCrossing(x, inputs) {
     const { s } = spotOf(x, inputs);
     const { kickAges = [], kickPowers = [] } = inputs;
+    // When the front (1 - e^(-age * grow)) reaches s; never, at or past the edge.
+    const reach = s < 1 ? -Math.log(1 - s) / SHOCK.grow : Infinity;
     let crossing = 0;
     for (let j = 0; j < kickAges.length; j++) {
         const age = kickAges[j], power = kickPowers[j] || 0;
-        const ds = s - (1 - Math.exp(-age * SHOCK.grow));
-        const near = ds >= 0 ? 1 - smoothstep(0, CROSSING.lead, ds) : 1 - smoothstep(0, CROSSING.trail, -ds);
-        crossing = Math.max(crossing, power * Math.exp(-age * SHOCK.fade) * near);
+        let hit;
+        if (age < reach) {
+            const ds = s - (1 - Math.exp(-age * SHOCK.grow));
+            hit = Math.exp(-age * CROSSING.fade) * (1 - smoothstep(0, CROSSING.lead, ds));
+        } else {
+            hit = Math.exp(-reach * CROSSING.fade) * Math.exp(-(age - reach) / CROSSING.hold);
+        }
+        crossing = Math.max(crossing, power * hit);
     }
     return Math.min(1, crossing);
 }

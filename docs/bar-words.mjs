@@ -11,7 +11,8 @@ import { ribbonHeight } from "./bar-ribbons.mjs";
 //   flash        how far toward white it flashes as it pops in, at full pop
 //   glow         its glow in its Ribbon's color: `base` always, `pop` more as it pops in, at
 //                full pop, `hit` more at a full Shockwave crossing
-//   hit          a Shockwave crossing it: `white` how far it flares toward white, `split` its
+//   hit          a Shockwave crossing it: `white` how far it flares toward white, `grow` how
+//                much it swells, `split` its
 //                copies' colors (the Shockwave's own, as viz.frag's front) and how far each is
 //                pushed outward, in its letters' size, at `opacity`. Like the Lock Ring's
 //                Digital Time (docs/lock-ring/clock.mjs TIME_HIT).
@@ -20,8 +21,8 @@ export const LOOK = {
     font: 0.8,
     grow: 0.5,
     flash: 0.9,
-    glow: { base: 0.85, pop: 0.6, hit: 0.6 },
-    hit: { white: 0.6, split: [["#b4befe", 0.32], ["#cba6f7", 0.22], ["#89b4fa", 0.12]], opacity: 0.9 },
+    glow: { base: 0.85, pop: 0.6, hit: 0.9 },
+    hit: { white: 0.9, grow: 0.18, split: [["#b4befe", 0.7], ["#cba6f7", 0.48], ["#89b4fa", 0.26]], opacity: 0.9 },
     dissolveGrow: 0.25,
 };
 
@@ -66,7 +67,7 @@ export function wordLook(word, crossing) {
     const dissolve = Math.min(1, Math.max(0, word.dissolve));
     const opacity = word.brightness * Math.min(1, word.popIn * 4) * (1 - dissolve);
     return {
-        scale: word.size * (1 + LOOK.grow * word.pop * popping * popping) * (1 + LOOK.dissolveGrow * dissolve),
+        scale: word.size * (1 + LOOK.grow * word.pop * popping * popping) * (1 + LOOK.hit.grow * hit) * (1 + LOOK.dissolveGrow * dissolve),
         opacity,
         white: Math.max(LOOK.flash * word.pop * popping, LOOK.hit.white * hit),
         glow: LOOK.glow.base + LOOK.glow.pop * word.pop * popping + LOOK.glow.hit * hit,
