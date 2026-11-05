@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Generates the animated SVGs in assets/: the README's hero (both visualizers on one beat), the
-// labeled Bar Visualizer and Lock Ring animations, and the layer diagram. SVG animation (SMIL),
-// so they move on GitHub without a video. Run: node assets/generate.mjs
+// labeled Bar Visualizer and Lock Ring animations, and the layer diagram. SVG animation (SMIL);
+// the README shows them as GIFs, rendered from these by gifs.mjs. Run: node assets/generate.mjs,
+// then node assets/gifs.mjs
 //
 // The music is synthetic: a 6 s loop at 120 bpm that builds from quiet to a drop and back. The Bar
 // Visualizer is re-created from shaders/viz.frag. The Lock Ring is drawn from the plugin's own

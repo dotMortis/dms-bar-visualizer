@@ -24,6 +24,11 @@ All notable changes to this project are documented here. The format follows
   bar works as before, just without them. With lyrics on, DMS sends the playing track's title,
   artist and album to its lyrics providers, even with DMS's own Lyrics setting off.
 
+### Changed
+
+- The README's animations are GIFs now, rendered from the generated SVGs by `assets/gifs.mjs`:
+  the animated SVGs kept a CPU core busy for as long as the page was open.
+
 ## [0.9.0] - 2026-11-04
 
 ### Added
