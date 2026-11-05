@@ -9,6 +9,8 @@ import Quickshell.Io
 import Quickshell.Wayland
 import "audio"
 import "docs/config.mjs" as Config
+// The Ribbons' shape outside the shader (shaders/viz.frag mirrors it), for what rides them.
+import "docs/bar-ribbons.mjs" as BarRibbons
 
 ShellRoot {
     id: root
