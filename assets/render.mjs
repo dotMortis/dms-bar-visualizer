@@ -1,13 +1,15 @@
 #!/usr/bin/env node
-// Renders the animated SVGs in assets/ (from generate.mjs) to the GIFs the README shows. A browser
-// playing the SVGs' SMIL animations with their glow filters keeps a CPU core busy for as long as
-// the page is open; a GIF costs next to nothing. Run after generate.mjs: node assets/gifs.mjs
+// Renders the animated SVGs in assets/ (from generate.mjs) to the animated WebPs the README shows.
+// A browser playing the SVGs' SMIL animations with their glow filters keeps a CPU core busy for as
+// long as the page is open; a WebP costs next to nothing. Run after generate.mjs:
+// node assets/render.mjs
 //
 // Needs Chromium (or Chrome) and ffmpeg. Each SVG is opened in headless Chromium, its animation
 // paused and stepped to each frame's time through the DevTools protocol, and screenshotted; ffmpeg
-// turns the frames into a GIF with a palette of its own.
+// turns the frames into an animated WebP (full color, lossy: a GIF's 256 colors band the glows and
+// weigh several times as much).
 //
-// A GIF loops one length, so each is one loop of its SVG's main animation (the 6 s beat, the
+// A WebP loops one length, so each is one loop of its SVG's main animation (the 6 s beat, the
 // layer diagram's 7 s): the slow hue cycle and the wallpaper's drift, on loops of their own, hold
 // still, and the layer diagram's wave is retimed to fit its loop three times.
 import { spawn, spawnSync } from "node:child_process";
@@ -18,14 +20,16 @@ import { fileURLToPath } from "node:url";
 
 const OUT = dirname(fileURLToPath(import.meta.url));
 const FPS = 12;
+// The WebPs' lossy quality, 0..100.
+const QUALITY = Number(process.env.QUALITY ?? 75);
 
-// Each GIF: its SVG, its loop (s), its width (px; the SVG's own size scaled down), and the
+// Each WebP: its SVG, its loop (s), its width (px; the SVG's own size scaled down), and the
 // changes to the SVG that make it loop in that time.
-const GIFS = [
-    { svg: "hero.svg", loop: 6, width: 640, fit: holdSlow },
-    { svg: "bar-anatomy.svg", loop: 6, width: 720, fit: holdSlow },
-    { svg: "ring-anatomy.svg", loop: 6, width: 560, fit: holdSlow },
-    { svg: "layers.svg", loop: 7, width: 560, fit: svg => svg.replaceAll('dur="2.4s"', 'dur="2.3333s"') },
+const WEBPS = [
+    { svg: "hero.svg", loop: 6, width: 960, fit: holdSlow },
+    { svg: "bar-anatomy.svg", loop: 6, width: 960, fit: holdSlow },
+    { svg: "ring-anatomy.svg", loop: 6, width: 864, fit: holdSlow },
+    { svg: "layers.svg", loop: 7, width: 720, fit: svg => svg.replaceAll('dur="2.4s"', 'dur="2.3333s"') },
 ];
 
 // The hue cycle (24 s) and the wallpaper's drift (18 s, 22 s) slowed a hundredfold: still, over a loop.
@@ -38,7 +42,7 @@ const browser = BROWSERS.find(b => spawnSync(b, ["--version"], { stdio: "ignore"
 if (!browser)
     throw new Error("needs Chromium or Chrome on the PATH: " + BROWSERS.join(", "));
 
-const work = mkdtempSync(join(tmpdir(), "readme-gifs-"));
+const work = mkdtempSync(join(tmpdir(), "readme-webps-"));
 const port = 9300 + Math.floor(Math.random() * 500);
 const chrome = spawn(browser, [
     "--headless=new", `--remote-debugging-port=${port}`, `--user-data-dir=${join(work, "profile")}`,
@@ -47,8 +51,8 @@ const chrome = spawn(browser, [
 
 try {
     const ws = await connect(port);
-    for (const gif of GIFS)
-        await render(ws, gif);
+    for (const webp of WEBPS)
+        await render(ws, webp);
     ws.close();
 } finally {
     chrome.kill();
@@ -86,7 +90,7 @@ async function connect(port) {
     throw new Error("the browser's DevTools didn't come up");
 }
 
-// One GIF: the SVG, fitted to its loop, shown at its width; one screenshot per frame; ffmpeg.
+// One WebP: the SVG, fitted to its loop, shown at its width; one screenshot per frame; ffmpeg.
 async function render(ws, { svg, loop, width, fit }) {
     const source = readFileSync(join(OUT, svg), "utf8");
     const [, w, h] = source.match(/viewBox="0 0 (\d+) (\d+)"/).map(Number);
@@ -116,15 +120,15 @@ async function render(ws, { svg, loop, width, fit }) {
         writeFileSync(join(frames, `${String(i).padStart(4, "0")}.png`), Buffer.from(shot.data, "base64"));
     }
 
-    const out = join(OUT, svg.replace(".svg", ".gif"));
+    const out = join(OUT, svg.replace(".svg", ".webp"));
     const ffmpeg = spawnSync("ffmpeg", [
         "-y", "-loglevel", "error", "-framerate", String(FPS), "-i", join(frames, "%04d.png"),
-        "-filter_complex", "[0:v]split[a][b];[a]palettegen=max_colors=256:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=3:diff_mode=rectangle",
+        "-c:v", "libwebp_anim", "-lossless", "0", "-quality", String(QUALITY), "-compression_level", "6",
         "-loop", "0", out,
     ], { stdio: "inherit" });
     if (ffmpeg.status !== 0)
         throw new Error(`ffmpeg failed on ${svg}`);
-    console.log(`${svg.replace(".svg", ".gif")}: ${Math.round(statSync(out).size / 1024)} KiB, ${count} frames`);
+    console.log(`${svg.replace(".svg", ".webp")}: ${Math.round(statSync(out).size / 1024)} KiB, ${count} frames`);
 }
 
 async function waitFor(ws, expression) {

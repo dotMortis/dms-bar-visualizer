@@ -24,7 +24,7 @@ How the pieces fit together, and how to change them. For installing and using th
 | `docs/lyric-words.mjs` | The one Lyric Words module: which words of the Lyric Line show when |
 | `docs/lock-ring/` | The Lock Ring's shader (`ring.frag`) and its modules (`ring.mjs`, `kicks.mjs`, `hands.mjs`, `clock.mjs`, `lyrics.mjs`: where its Lyric Words sit and how they look) |
 | `packaging/aur/` | The two Arch packages' PKGBUILDs |
-| `assets/` | The README's animations: the generated SVGs, the GIFs rendered from them, and both scripts |
+| `assets/` | The README's animations: the generated SVGs, the animated WebPs rendered from them, and both scripts |
 | `tests/` | `node --test` suites |
 
 GitHub Pages publishes only `docs/` and doesn't follow symlinks, so every file the demo needs lives there. `lock-ring/` links to them (`lock-ring/shaders/ring.frag`, `lock-ring/*.mjs`, `lock-ring/docs/`, `lock-ring/audio/`). Edit the files under `docs/` and `audio/`, not the links.
@@ -41,7 +41,7 @@ The pipeline writes cava's config to `$XDG_RUNTIME_DIR/bar-visualizer-cava.conf`
 
 ## Layers
 
-<p align="center"><img src="assets/layers.gif" alt="Layer diagram: the transparent DankBar on the top layer, the Bar Visualizer on the bottom layer, the wallpaper below" width="720"></p>
+<p align="center"><img src="assets/layers.webp" alt="Layer diagram: the transparent DankBar on the top layer, the Bar Visualizer on the bottom layer, the wallpaper below" width="720"></p>
 
 The Bar Visualizer is a Wayland layer surface on the `bottom` layer (namespace `bar-visualizer`): click-through (an empty input mask), ignoring exclusive zones, and sized and inset exactly like the DankBar. The DMS bar draws on the `top` layer, so with a transparent bar background the Bar Visualizer shows through. With a maximized window on a monitor's active workspace, it drops its gap and rounding together with the bar, by the same rule DMS uses.
 
@@ -105,24 +105,25 @@ python3 tests/fixtures/record.py all          # re-record all of them (about 4 m
 ## The README's animations
 
 The animations in `assets/` are generated. `assets/generate.mjs` draws them as animated SVGs, and
-`assets/gifs.mjs` renders those to the GIFs the README shows. The SVGs' glow filters keep a
-browser's CPU busy for as long as the page is open; the GIFs don't. Change `assets/generate.mjs`,
-then run both (`gifs.mjs` needs Chromium or Chrome, and ffmpeg):
+`assets/render.mjs` renders those to the animated WebPs the README shows. The SVGs' glow filters
+keep a browser's CPU busy for as long as the page is open; the WebPs don't. Change
+`assets/generate.mjs`, then run both (`render.mjs` needs Chromium or Chrome, and ffmpeg with
+libwebp):
 
 ```sh
 node assets/generate.mjs
-node assets/gifs.mjs
+node assets/render.mjs
 ```
 
-Each GIF is one loop of its SVG's main animation, so the SVGs' slower hue cycle and wallpaper
+Each WebP is one loop of its SVG's main animation, so the SVGs' slower hue cycle and wallpaper
 drift hold still in it.
 
 | File | What it shows |
 | --- | --- |
-| `hero.gif` | Both visualizers on one synthetic 120 bpm loop that builds to a drop |
-| `bar-anatomy.gif` | The Bar Visualizer with its parts labeled |
-| `ring-anatomy.gif` | The Lock Ring with its parts labeled |
-| `layers.gif` | The layer diagram above |
+| `hero.webp` | Both visualizers on one synthetic 120 bpm loop that builds to a drop |
+| `bar-anatomy.webp` | The Bar Visualizer with its parts labeled |
+| `ring-anatomy.webp` | The Lock Ring with its parts labeled |
+| `layers.webp` | The layer diagram above |
 
 They're SVG animations (SMIL), so they move on GitHub without a video. The Bar Visualizer is re-created from `shaders/viz.frag`. The Lock Ring is drawn from the plugin's own modules in `docs/lock-ring/*.mjs`, so its Ribbons, Shockwaves, Hour Points, Hands and Digital Time move as on the lock screen; only the glow is approximated with SVG filters. Keep each file under 1 MB, since GitHub gets slow on big SVGs.
 

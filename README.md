@@ -1,6 +1,6 @@
 <div align="center">
 
-<a href="https://dotmortis.github.io/dms-bar-visualizer/"><img src="assets/hero.gif" alt="Animated preview: the Bar Visualizer's neon Ribbons and Shockwaves crossing the Lock Ring's Dial, both hitting on the same beat" width="100%"></a>
+<a href="https://dotmortis.github.io/dms-bar-visualizer/"><img src="assets/hero.webp" alt="Animated preview: the Bar Visualizer's neon Ribbons and Shockwaves crossing the Lock Ring's Dial, both hitting on the same beat" width="100%"></a>
 
 <br>
 
@@ -28,7 +28,7 @@ Try them in your browser first: the **[live demo](https://dotmortis.github.io/dm
 
 ### Bar Visualizer
 
-<p align="center"><img src="assets/bar-anatomy.gif" alt="The Bar Visualizer with its parts labeled: Ribbons, Aura, Shockwave, Spray, Center Punch, Haze and Treble Sparks" width="100%"></p>
+<p align="center"><img src="assets/bar-anatomy.webp" alt="The Bar Visualizer with its parts labeled: Ribbons, Aura, Shockwave, Spray, Center Punch, Haze and Treble Sparks" width="100%"></p>
 
 Neon **Ribbons** shaped by the spectrum swing around the bar's center line, inside a soft **Aura** that grows with the music. On every **Kick**, a **Shockwave** runs out from the center with a **Center Punch** where it starts and a **Spray** of sparks that streak and bounce. Hard Kicks flash the **Haze** across the bar. **Treble Sparks** twinkle with the treble.
 
@@ -36,7 +36,7 @@ With a song that has timed lyrics, the words of the line being sung appear as **
 
 ### Lock Ring
 
-<p align="center"><img src="assets/ring-anatomy.gif" alt="The Lock Ring with its parts labeled: Ribbons, Aura, Dial, Hour Points, Hands, Digital Time, Shockwave with Beads, Spray and Center Punch" width="80%"></p>
+<p align="center"><img src="assets/ring-anatomy.webp" alt="The Lock Ring with its parts labeled: Ribbons, Aura, Dial, Hour Points, Hands, Digital Time, Shockwave with Beads, Spray and Center Punch" width="80%"></p>
 
 Soft neon **Ribbons** wave outward from the **Dial**, which swells with the music, in round curves. A symmetric **Aura** glows both ways around the Dial. In silence the ribbon keeps breathing as a thin, faint wave.
 
@@ -51,7 +51,7 @@ On every Kick, a ragged, flickering **Shockwave** tears out from the center, car
 - **One capture for all screens.** Every monitor's Bar Visualizer, and every monitor's Lock Ring, runs from one capture, so all screens pulse together. The Lock Ring captures only while the screen is locked.
 - **Layering.** The Bar Visualizer is a click-through surface behind the DankBar. With a transparent bar, it shows through.
 
-  <p align="center"><img src="assets/layers.gif" alt="Layer diagram: the transparent DankBar on the top layer, the Bar Visualizer on the bottom layer, the wallpaper below" width="640"></p>
+  <p align="center"><img src="assets/layers.webp" alt="Layer diagram: the transparent DankBar on the top layer, the Bar Visualizer on the bottom layer, the wallpaper below" width="640"></p>
 
 ## Requirements
 

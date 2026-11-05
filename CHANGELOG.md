@@ -26,8 +26,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
-- The README's animations are GIFs now, rendered from the generated SVGs by `assets/gifs.mjs`:
-  the animated SVGs kept a CPU core busy for as long as the page was open.
+- The README's animations are animated WebPs now, rendered from the generated SVGs by
+  `assets/render.mjs`: the animated SVGs kept a CPU core busy for as long as the page was open.
 
 ## [0.9.0] - 2026-11-04
 
