@@ -43,8 +43,10 @@ DesktopPluginComponent {
     // Catppuccin Mocha, as in shaders/viz.frag.
     readonly property color lavender: "#b4befe"
 
-    // Read fresh every frame, so the second hand sweeps and the clock is right again after suspend.
-    property var now: new Date()
+    // Read fresh on every frame of the rings (LockAudio's one clock, so every monitor's ring shows
+    // the same time), so the second hand sweeps and the clock is right again after suspend. In
+    // Silence the frames come at LockAudio's slow pace (pace.mjs SILENCE_FPS), still on time.
+    property var now: LockAudio.now
     // Each hand's angle (from the time alone) and look (from its band, the kick flash and the
     // handWaves setting). The look's parameters, and each hand's band and shape, are in
     // hands.mjs; ring.frag draws them in its colors.
@@ -93,11 +95,6 @@ DesktopPluginComponent {
     function perHand(key, scale) {
         const p = root.poses;
         return Qt.vector4d(p.hour[key] * scale, p.minute[key] * scale, p.second[key] * scale, 0);
-    }
-
-    FrameAnimation {
-        running: root.visible
-        onTriggered: root.now = new Date()
     }
 
     Item {

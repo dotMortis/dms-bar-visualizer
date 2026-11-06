@@ -31,6 +31,11 @@ Scope {
     // Where cava's config is written. Each visualizer uses its own, so their installers can find
     // and stop their own cava without touching the other's.
     required property string confPath
+    // Whether the frame clock (time, flow and the kick decay) runs. The host's to stop: the Bar
+    // Visualizer does in Silence once `settled`; the Lock Ring while it draws slowly in Silence
+    // (it breathes on its own clock). Stopped, the animation stands still, and it runs on from
+    // there, without a jump, when started again.
+    property bool clockRunning: true
 
     // --- Outputs ----------------------------------------------------------
     // cava's layout, from docs/kick.mjs, which maps kickLowHz/kickHighHz to these bands.
@@ -163,7 +168,7 @@ Scope {
     }
 
     FrameAnimation {
-        running: true
+        running: root.clockRunning
         onTriggered: {
             const speed = root.effective.speed;
             root.time += frameTime * speed;
