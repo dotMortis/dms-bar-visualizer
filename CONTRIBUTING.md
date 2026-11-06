@@ -38,7 +38,7 @@ Both visualizers capture audio with [cava](https://github.com/karlstav/cava), se
 - mono, raw ASCII output, `noise_reduction=8`: light smoothing on purpose, so transients punch
 - the source is the `.monitor` of the sink the Active Player plays to, falling back to the newest playing stream, then the default output
 
-The pipeline writes cava's config to `$XDG_RUNTIME_DIR/bar-visualizer-cava.conf` for the Bar Visualizer, and to `$XDG_RUNTIME_DIR/lock-ring-cava.conf` for the Lock Ring. The command it runs is its `captureCommand`; whatever runs there, `parseBands` in `docs/kick.mjs` turns its lines into bands, and the rest of that module turns the bands into Kicks.
+The pipeline writes cava's config to `$XDG_RUNTIME_DIR/bar-visualizer-cava.conf` for the Bar Visualizer, and to `$XDG_RUNTIME_DIR/lock-ring-cava.conf` for the Lock Ring. The command it runs is its `captureCommand`; whatever runs there, `parseBands` in `docs/kick.mjs` turns its lines into bands, and the rest of that module turns the bands into Kicks. A line one band short (its last band empty, as when cava's output is cut off) is no frame: v0.10.0 read that band as NaN, so this is an intended change, not a regression (`tests/parse-bands.test.mjs`).
 
 ## Layers
 

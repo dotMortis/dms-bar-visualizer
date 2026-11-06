@@ -27,6 +27,13 @@ describe("parsing cava's lines", () => {
         assert.equal(parseBands(""), null);
     });
 
+    test("a line whose last band is empty is no frame, not a NaN band (v0.10.0 read it as NaN)", () => {
+        // BANDS - 1 bands and the ";" after them: as many parts as a full line, the last one empty.
+        const cut = line(new Array(BANDS - 1).fill(500));
+        assert.equal(cut.split(";").length, BANDS);
+        assert.equal(parseBands(cut), null);
+    });
+
     test("anything after the last band is ignored", () => {
         const bands = parseBands(line(new Array(BANDS).fill(250)) + "999;123;");
         assert.equal(bands.length, BANDS);
