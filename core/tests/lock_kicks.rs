@@ -186,7 +186,11 @@ mod shockwave_crossing {
             }
         }
         assert!(peak > 0.4, "peak {peak}");
-        assert!((kick_at(peak_age, 1.0).front - 1.0).abs() < 0.02, "peaks with the front at {}", kick_at(peak_age, 1.0).front);
+        assert!(
+            (kick_at(peak_age, 1.0).front - 1.0).abs() < 0.02,
+            "peaks with the front at {}",
+            kick_at(peak_age, 1.0).front
+        );
     }
 
     fn peak_at(radius: f64, power: f64) -> f64 {
@@ -227,7 +231,8 @@ mod shockwave_crossing {
             }
             (peak, at)
         };
-        assert!(TIME_RADIUS > 0.3 && TIME_RADIUS < 0.8, "the time sits inside the dial, at {TIME_RADIUS}");
+        // The time sits inside the dial.
+        const { assert!(TIME_RADIUS > 0.3 && TIME_RADIUS < 0.8) };
         for power in [0.5, 0.75, 1.0] {
             let (peak, at) = peak_age(TIME_RADIUS, power);
             assert!(peak > 0.0, "a {power} kick reaches the time");
@@ -473,7 +478,10 @@ mod shockwave_shape {
 
     #[test]
     fn without_a_direction_the_shockwave_is_the_round_one() {
-        assert_eq!(shockwave_crossing(0.6, &[0.3], &[1.0], &[9.0], None), shockwave_crossing(0.6, &[0.3], &[1.0], &[], None));
+        assert_eq!(
+            shockwave_crossing(0.6, &[0.3], &[1.0], &[9.0], None),
+            shockwave_crossing(0.6, &[0.3], &[1.0], &[], None)
+        );
         assert_eq!(shockwave_front(0.3, 1.0, 9.0, None), kick_at(0.3, 1.0));
     }
 }

@@ -81,7 +81,7 @@ mod the_living_ribbon {
 
     #[test]
     fn in_silence_it_stays_calm_within_a_few_hundredths_of_the_dial() {
-        assert!(IDLE_REACH <= 0.04);
+        const { assert!(IDLE_REACH <= 0.04) };
         for time in upto(0.0, 60.0, 0.7) {
             for angle in upto(0.0, 360.0, 7.0) {
                 for strand in 0..3 {
@@ -111,7 +111,11 @@ mod the_living_ribbon {
     fn it_is_seamless_where_the_shaders_time_wraps() {
         for angle in [0.0, 45.0, 200.0] {
             for strand in 0..3 {
-                near(ribbon_radius(angle, &quiet(1200.0, strand)), ribbon_radius(angle, &quiet(0.0, strand)), &format!("{angle}"));
+                near(
+                    ribbon_radius(angle, &quiet(1200.0, strand)),
+                    ribbon_radius(angle, &quiet(0.0, strand)),
+                    &format!("{angle}"),
+                );
             }
         }
     }
@@ -225,7 +229,10 @@ mod the_hour_points {
         }
         // The points the front is crossing swing farther; the ones it is far from stay put.
         let swing = |p: &HourPoint| (p.radius - 1.0 - s.swell).abs();
-        assert!(surged.iter().zip(&calm).any(|(p, c)| swing(p) > swing(c) + 0.01), "a point the front crosses swings farther");
+        assert!(
+            surged.iter().zip(&calm).any(|(p, c)| swing(p) > swing(c) + 0.01),
+            "a point the front crosses swings farther"
+        );
         for (p, c) in surged.iter().zip(&calm) {
             if surge(c.radius) < 1e-3 {
                 near(p.radius, c.radius, &format!("{}, which the front is far from", p.angle));
@@ -350,7 +357,7 @@ mod the_ribbon_with_music {
 
     #[test]
     fn its_crest_stays_within_the_widgets_room() {
-        assert!(RIBBON_REACH * (1.0 + RIBBON_RIPPLE) <= 0.25);
+        const { assert!(RIBBON_REACH * (1.0 + RIBBON_RIPPLE) <= 0.25) };
     }
 
     #[test]

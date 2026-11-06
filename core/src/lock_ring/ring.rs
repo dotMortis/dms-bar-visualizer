@@ -52,7 +52,10 @@ pub fn spectrum_level(values: &[f64], s: f64) -> f64 {
     let i = i as isize;
     let (a, b, t2) = (at(i), at(i + 1), t * t);
     let t3 = t2 * t;
-    a * (2.0 * t3 - 3.0 * t2 + 1.0) + slope(i) * (t3 - 2.0 * t2 + t) + b * (3.0 * t2 - 2.0 * t3) + slope(i + 1) * (t3 - t2)
+    a * (2.0 * t3 - 3.0 * t2 + 1.0)
+        + slope(i) * (t3 - 2.0 * t2 + t)
+        + b * (3.0 * t2 - 2.0 * t3)
+        + slope(i + 1) * (t3 - t2)
 }
 
 /// The level the ribbons wave with at s (0 = lowest band .. 1 = highest): spectrum_level()

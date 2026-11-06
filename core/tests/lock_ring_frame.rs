@@ -20,7 +20,15 @@ fn lock_ring(settings: &str) -> Visualizer {
 
 /// One capture frame whose bass, mid and treble are `levels`.
 fn bands([bass, mid, treble]: [f64; 3]) -> [f64; BANDS] {
-    std::array::from_fn(|i| if i < 6 { bass } else if i < 16 { mid } else { treble })
+    std::array::from_fn(|i| {
+        if i < 6 {
+            bass
+        } else if i < 16 {
+            mid
+        } else {
+            treble
+        }
+    })
 }
 
 /// `levels` for `seconds` at 60 fps, a capture frame and a display frame each; the Lock Ring's
@@ -218,9 +226,14 @@ fn the_hands_look_follows_their_motion_the_kick_flash_and_hand_waves() {
         v.advance(1.0 / 60.0);
         let ring = v.lock_ring();
         let poses = hand_poses(10.0 * 3600.0 + 600.0, ring.hand_levels, ring.hand_flash, 1.5);
-        for i in 0..3 {
-            let p = poses[i];
-            let got = [ring.hand_inner[i], ring.hand_lengths[i], ring.hand_amplitudes[i], ring.hand_widths[i], ring.hand_glows[i]];
+        for (i, p) in poses.iter().enumerate() {
+            let got = [
+                ring.hand_inner[i],
+                ring.hand_lengths[i],
+                ring.hand_amplitudes[i],
+                ring.hand_widths[i],
+                ring.hand_glows[i],
+            ];
             assert_eq!(got, [p.inner, p.length, p.amplitude, p.width, p.glow], "frame {n} hand {i}");
         }
         let frame = v.frame();
@@ -246,7 +259,10 @@ fn the_shaders_kick_slots_are_the_live_kicks_and_played_out_ones_are_empty() {
             let (age, power) = (frame.kick_ages[i], frame.kick_powers[i]);
             if power > 0.0 && age < 3.0 {
                 live = true;
-                assert_eq!((ring.kick_ages[i], ring.kick_powers[i], ring.kick_seeds[i]), (age, power, frame.kick_seeds[i]));
+                assert_eq!(
+                    (ring.kick_ages[i], ring.kick_powers[i], ring.kick_seeds[i]),
+                    (age, power, frame.kick_seeds[i])
+                );
             } else {
                 played_out |= power > 0.0;
                 assert_eq!((ring.kick_ages[i], ring.kick_powers[i], ring.kick_seeds[i]), (100.0, 0.0, 0.0));
@@ -264,7 +280,8 @@ fn the_digital_time_flares_and_splits_as_a_shockwave_crosses_it() {
         v.push_bands(&f.values, f.time);
         v.advance(1.0 / 60.0);
         let (frame, ring) = (v.frame(), v.lock_ring());
-        let crossing = shockwave_crossing(TIME_RADIUS, &frame.kick_ages, &frame.kick_powers, &frame.kick_seeds, Some(PI));
+        let crossing =
+            shockwave_crossing(TIME_RADIUS, &frame.kick_ages, &frame.kick_powers, &frame.kick_seeds, Some(PI));
         assert_eq!(ring.time_crossing, crossing);
         assert_eq!(ring.time_hit, time_hit(crossing));
         peak = peak.max(ring.time_hit.white);

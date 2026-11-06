@@ -49,7 +49,11 @@ fn a_clock_stepping_back_fires_the_kicks_of_one_standing_still_for_a_frame() {
         assert_eq!(kicks_on(still, &settings), [60, 90], "at {config}");
         for back in [1.0, 3600.0] {
             let stepped = |n: usize| n as f64 / FPS - if n < step { 0.0 } else { back };
-            assert_eq!(kicks_on(stepped, &settings), kicks_on(still, &settings), "at {config}, stepping back by {back} s");
+            assert_eq!(
+                kicks_on(stepped, &settings),
+                kicks_on(still, &settings),
+                "at {config}, stepping back by {back} s"
+            );
         }
     }
 }

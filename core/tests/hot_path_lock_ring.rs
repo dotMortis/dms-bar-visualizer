@@ -96,13 +96,23 @@ fn assert_sane(ring: LockRingFrame, after: &str) {
         assert!(finite(&xs) && xs.iter().all(|&x| x >= 0.0), "a hand's shape {xs:?} after {after}");
     }
     assert!(ring.hand_glows.iter().chain(&ring.hand_levels).all(|&x| unit(x)), "hand levels after {after}");
-    assert!(ring.hand_phases.iter().all(|p| (0.0..PHASE_WRAP).contains(p)), "phases {:?} after {after}", ring.hand_phases);
+    assert!(
+        ring.hand_phases.iter().all(|p| (0.0..PHASE_WRAP).contains(p)),
+        "phases {:?} after {after}",
+        ring.hand_phases
+    );
     assert!(finite(&ring.kick_ages) && finite(&ring.kick_seeds), "slots after {after}");
     assert!(ring.kick_powers.iter().all(|&p| p == 0.0 || (0.5..=1.0).contains(&p)), "powers after {after}");
-    assert!(finite(&ring.hour_radii) && ring.hour_glows.iter().all(|&g| g.is_finite() && g >= 0.0), "hour points after {after}");
+    assert!(
+        finite(&ring.hour_radii) && ring.hour_glows.iter().all(|&g| g.is_finite() && g >= 0.0),
+        "hour points after {after}"
+    );
     assert!(unit(ring.time_crossing), "time_crossing {} after {after}", ring.time_crossing);
     let hit = ring.time_hit;
-    assert!(finite(&hit.copy_offsets) && unit(hit.copy_opacity) && unit(hit.glow_opacity) && unit(hit.white), "{hit:?}");
+    assert!(
+        finite(&hit.copy_offsets) && unit(hit.copy_opacity) && unit(hit.glow_opacity) && unit(hit.white),
+        "{hit:?}"
+    );
 }
 
 const BAD_SETTINGS: [&str; 8] = [
@@ -199,7 +209,10 @@ mod c_abi {
             visualizer_set_kind(visualizer, 1);
             assert_eq!((*visualizer_frame(visualizer)).intensity, 2.0, "the Lock Ring");
             visualizer_set_local_time(visualizer, 3.0 * 3600.0);
-            assert_eq!((*visualizer_lock_ring(visualizer)).hand_angles, [90.0 * std::f64::consts::PI / 180.0, 0.0, 0.0]);
+            assert_eq!(
+                (*visualizer_lock_ring(visualizer)).hand_angles,
+                [90.0 * std::f64::consts::PI / 180.0, 0.0, 0.0]
+            );
             visualizer_set_kind(visualizer, 0);
             assert_eq!((*visualizer_frame(visualizer)).intensity, 1.0, "the bar again");
             visualizer_destroy(visualizer);

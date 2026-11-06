@@ -37,7 +37,8 @@ fn each_percentage_scales_its_base_setting() {
     // kickHighHz 90 and kickCooldown 0.13.
     let ring = r#"{"lockRing": {"kickThresholdPercent": 55, "kickCooldownPercent": 130,
         "kickLowHzPercent": 150, "intensityPercent": 33}}"#;
-    let scaled = r#"{"intensity": 0.33, "kickThreshold": 0.22, "kickLowHz": 30, "kickHighHz": 90, "kickCooldown": 0.13}"#;
+    let scaled =
+        r#"{"intensity": 0.33, "kickThreshold": 0.22, "kickLowHz": 30, "kickHighHz": 90, "kickCooldown": 0.13}"#;
     for scenario in ["zoo1", "dnb_808", "double_kick"] {
         let (kicks, intensity) = kicks_of(Kind::LockRing, ring, scenario);
         assert_eq!(intensity, 0.33);
@@ -48,7 +49,8 @@ fn each_percentage_scales_its_base_setting() {
     let ring = r#"{"intensity": 1.2, "kickLowHz": 40, "kickHighHz": 100, "kickThreshold": 0.4, "kickCooldown": 0.2,
         "lockRing": {"intensityPercent": 150, "kickLowHzPercent": 50, "kickHighHzPercent": 200,
                      "kickThresholdPercent": 75, "kickCooldownPercent": 60}}"#;
-    let scaled = r#"{"intensity": 1.8, "kickThreshold": 0.3, "kickLowHz": 20, "kickHighHz": 200, "kickCooldown": 0.12}"#;
+    let scaled =
+        r#"{"intensity": 1.8, "kickThreshold": 0.3, "kickLowHz": 20, "kickHighHz": 200, "kickCooldown": 0.12}"#;
     let (kicks, intensity) = kicks_of(Kind::LockRing, ring, "zoo2");
     assert_eq!(intensity, 1.8);
     assert_eq!(kicks, kicks_of(Kind::Bar, scaled, "zoo2").0);
@@ -65,7 +67,10 @@ fn a_negative_percentage_counts_as_0_and_there_is_no_upper_limit() {
 #[test]
 fn a_cooldown_of_0_stays_0_whatever_its_percentage() {
     let ring = r#"{"kickCooldown": 0, "lockRing": {"kickCooldownPercent": 300}}"#;
-    assert_eq!(kicks_of(Kind::LockRing, ring, "double_kick").0, kicks_of(Kind::Bar, r#"{"kickCooldown": 0}"#, "double_kick").0);
+    assert_eq!(
+        kicks_of(Kind::LockRing, ring, "double_kick").0,
+        kicks_of(Kind::Bar, r#"{"kickCooldown": 0}"#, "double_kick").0
+    );
 }
 
 #[test]

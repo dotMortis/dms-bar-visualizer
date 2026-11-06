@@ -176,10 +176,10 @@ impl HandMotion {
     pub fn step(&mut self, bands: [f64; 3], dt: f64, speed: f64) {
         let dt = dt.max(0.0);
         let keep = libm::pow(0.5, dt / LEVEL_HALF_LIFE);
-        for i in 0..3 {
-            let level = clamp01(bands[i]);
-            self.peaks[i] = level.max(self.peaks[i] * keep);
-            self.levels[i] = clamp01(level / self.peaks[i].max(LEVEL_FLOOR));
+        for ((peak, out), band) in self.peaks.iter_mut().zip(&mut self.levels).zip(bands) {
+            let level = clamp01(band);
+            *peak = level.max(*peak * keep);
+            *out = clamp01(level / peak.max(LEVEL_FLOOR));
         }
         for i in 0..3 {
             let pace = PACE_CALM + PACE_DRIVE * self.levels[i];

@@ -208,7 +208,10 @@ mod the_wave_bends_a_hand_around_its_axis {
         for u in (0..=50).map(|i| i as f64 * 0.02) {
             for phase in (0..19).map(|i| i as f64 * 0.37) {
                 for treble in [0.0, 1.0] {
-                    assert!(wave_offset(u, phase, 0.2, treble).abs() <= 0.2 * wave_envelope(u) + 1e-12, "u {u} phase {phase}");
+                    assert!(
+                        wave_offset(u, phase, 0.2, treble).abs() <= 0.2 * wave_envelope(u) + 1e-12,
+                        "u {u} phase {phase}"
+                    );
                 }
             }
         }

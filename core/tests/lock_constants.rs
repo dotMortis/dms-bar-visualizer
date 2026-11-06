@@ -72,7 +72,8 @@ impl Expr<'_> {
                     self.at += 1;
                 }
                 let word = std::str::from_utf8(&self.text[start..self.at]).unwrap();
-                word.parse().unwrap_or_else(|_| *self.known.get(word).unwrap_or_else(|| panic!("{word} isn't defined above")))
+                word.parse()
+                    .unwrap_or_else(|_| *self.known.get(word).unwrap_or_else(|| panic!("{word} isn't defined above")))
             }
         }
     }
@@ -200,6 +201,7 @@ fn nothing_shakes() {
 #[test]
 fn ring_frag_spells_out_no_other_copy_of_the_dial_ratio() {
     let code = code();
-    let copies = code.match_indices("0.34").filter(|(i, _)| !code[i + 4..].starts_with(|c: char| c.is_ascii_digit())).count();
+    let copies =
+        code.match_indices("0.34").filter(|(i, _)| !code[i + 4..].starts_with(|c: char| c.is_ascii_digit())).count();
     assert_eq!(copies, 1, "only in DIAL_RATIO");
 }
