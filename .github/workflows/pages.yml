@@ -1,0 +1,52 @@
+# The live demo: builds the core to WASM into docs/wasm/ (never committed) and deploys docs/ to
+# GitHub Pages. Needs the repository's Pages source set to "GitHub Actions".
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  # To check a build before it reaches main. Deploying from another branch needs that branch
+  # allowed in the github-pages environment's deployment branches.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+      # The wasm-bindgen CLI must be the exact version core/Cargo.toml pins.
+      - id: wasm-bindgen
+        run: echo "version=$(sed -n 's/^wasm-bindgen = "=\(.*\)"$/\1/p' core/Cargo.toml)" >> "$GITHUB_OUTPUT"
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen@${{ steps.wasm-bindgen.outputs.version }}
+      - run: core/build-wasm.sh docs/wasm
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

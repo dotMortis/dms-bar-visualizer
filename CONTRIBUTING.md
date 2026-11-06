@@ -18,8 +18,9 @@ How the pieces fit together, and how to change them. For installing and using th
 | `audio/silence.mjs` | Silence: which case applies (no Active Player, paused, silent output), and whether the capture runs |
 | `lock-ring/` | The Lock Ring plugin (`LockRing.qml`, `LockAudio.qml`, `LockLyrics.qml`, `plugin.json`; `pace.mjs`: how often it draws, every frame or `SILENCE_FPS` in Silence) |
 | `docs/` | The live demo (GitHub Pages), plus the plain-JS modules both visualizers and the demo import |
-| `core/` | The Rust core ([ADR 0007](docs/adr/0007-no-script-in-the-per-frame-hot-path.md)): one `Visualizer` with all per-frame logic, so far the Kicks, bass/mid/treble and the Kick level, behind a C ABI (`core/include/visualizer_core.h`) and a wasm-bindgen API (`core/src/wasm.rs`, built by `core/build-wasm.sh`). It replaces the JS modules below as later steps of spec #41 wire it in |
-| `docs/kick.mjs` | The Kick detector the visualizers and demo still run, until they run `core/` |
+| `core/` | The Rust core ([ADR 0007](docs/adr/0007-no-script-in-the-per-frame-hot-path.md)): one `Visualizer` with all per-frame logic, so far the Kicks, bass/mid/treble and the Kick level, behind a C ABI (`core/include/visualizer_core.h`) and a wasm-bindgen API (`core/src/wasm.rs`, built by `core/build-wasm.sh`; the demo runs it). It replaces the JS modules below as later steps of spec #41 wire it in |
+| `docs/kick.mjs` | The Kick detector the visualizers still run, until they run `core/` |
+| `.github/workflows/pages.yml` | Builds the core to WASM and deploys the demo to GitHub Pages, on every push to `main` (or by hand) |
 | `docs/config.mjs` | The defaults of every `config.json` key |
 | `docs/bar-ribbons.mjs` | The Bar Visualizer's Ribbons: each one's height and color at any x across the bar, and the Shockwaves crossing it |
 | `docs/bar-words.mjs` | The Bar Visualizer's Lyric Words: each letter on its Ribbon, and their pop, flare and dissolve |
@@ -31,7 +32,7 @@ How the pieces fit together, and how to change them. For installing and using th
 | `tests/` | `node --test` suites |
 | `harness/` | The replay harness: measures a visualizer on a recorded input (see Measuring) |
 
-GitHub Pages publishes only `docs/` and doesn't follow symlinks, so every file the demo needs lives there. `lock-ring/` links to them (`lock-ring/shaders/ring.frag`, `lock-ring/*.mjs`, `lock-ring/docs/`, `lock-ring/audio/`). Edit the files under `docs/` and `audio/`, not the links.
+GitHub Pages publishes only `docs/` and doesn't follow symlinks, so every file the demo needs lives there. The one exception is the core's WASM build, `docs/wasm/`: the Pages Action builds it before it publishes, and it's never committed (`.gitignore`). `lock-ring/` links to them (`lock-ring/shaders/ring.frag`, `lock-ring/*.mjs`, `lock-ring/docs/`, `lock-ring/audio/`). Edit the files under `docs/` and `audio/`, not the links.
 
 ## Audio
 
@@ -83,13 +84,16 @@ Colors are Catppuccin Mocha: the `palette()` cycle and the `LAVENDER` / `MAUVE` 
 
 - **Bar view:** it carries its own GLSL ES port of `shaders/viz.frag`. Mirror shader changes there.
 - **Lock Ring view** (`#ring`): nothing to mirror. It fetches the plugin's own `ring.frag` and converts it to GLSL ES as the page loads (`docs/webgl.mjs`), and imports the Lock Ring's modules. Only the Digital Time is drawn twice: in `LockRing.qml` and in the demo's canvas.
-- **Kicks:** not mirrored either. The demo imports `docs/kick.mjs`, as the audio pipeline does.
+- **Kicks:** not mirrored either. The demo runs the core (`core/`) built to WASM: its Kicks, band averages, bass/mid/treble and Kick level. Kick slots, time and flow are still the page's own until the core has them.
 
-Browsers don't load module scripts over `file://`, so to run the demo locally, serve the directory and open http://localhost:8000:
+To run the demo locally, build the core into `docs/wasm/` first (it needs the WASM tools, see the parity check under Tests), and again after changing the core. Browsers don't load module scripts over `file://`, so serve the directory and open http://localhost:8000:
 
 ```sh
+core/build-wasm.sh docs/wasm
 python3 -m http.server -d docs
 ```
+
+The live demo is deployed by `.github/workflows/pages.yml` on every push to `main`: it builds the WASM, then publishes `docs/`. It runs by hand too (Actions → Pages → Run workflow), to check a build before it reaches `main`. This needs the repository's Pages source set to **GitHub Actions** (Settings → Pages → Build and deployment → Source); deploying from a branch other than `main` also needs that branch allowed in the `github-pages` environment (Settings → Environments → github-pages → Deployment branches).
 
 ## Tests
 

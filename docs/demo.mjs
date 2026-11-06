@@ -5,12 +5,17 @@
 // Both views tune one set of values, shaped like config.json (config.mjs), so a tweak carries
 // over when switching, as it does on the desktop: both visualizers read the same file (ADR 0004).
 // "Export config.json" downloads them as they are.
-import { DEFAULTS as CONFIG } from "./config.mjs";
+import { DEFAULTS as CONFIG, lockRingSettings } from "./config.mjs";
 import { handPoses } from "./lock-ring/hands.mjs";
 import { kickSlots } from "./lock-ring/kicks.mjs";
 import { DIAL_RATIO } from "./lock-ring/ring.mjs";
 
 export const VIEWS = ["bar", "ring"];
+
+// cava's layout, which the page's sources stand in for: 32 bands from 30 Hz to 14 kHz, bass first.
+export const BANDS = 32;
+export const LOW_HZ = 30;
+export const HIGH_HZ = 14000;
 
 // A fresh copy of config.json's defaults, for the sliders to change.
 export function defaults() {
@@ -62,6 +67,12 @@ const RING = [
     slider("lockRing.kickThresholdPercent", 0, 300, 5, "The Lock Ring's kick threshold, in % of kickThreshold. Lower = more kicks"),
     slider("lockRing.kickCooldownPercent", 0, 300, 5, "The Lock Ring's kick cooldown, in % of kickCooldown"),
 ];
+
+// The settings `view` runs on, as config.json's text for the core's configure(): the Lock Ring's
+// are the bar's with its percentages applied, as in lock-ring/LockAudio.qml.
+export function coreSettings(values, view) {
+    return JSON.stringify(view === "ring" ? lockRingSettings(values) : values);
+}
 
 // The view a URL hash opens: #ring for the Lock Ring, anything else the Bar Visualizer.
 export function viewFromHash(hash) {

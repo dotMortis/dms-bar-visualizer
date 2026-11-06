@@ -1,4 +1,5 @@
-// Kick detection, shared by the visualizer (audio/AudioPipeline.qml) and the demo (index.html) so they can't drift.
+// Kick detection, shared by both visualizers (audio/AudioPipeline.qml) until they run the core (core/), as the demo
+// (index.html) already does: the core is its port, held to the same Kicks.
 // Plain ECMAScript that QML, browsers and node all load. In docs/, as GitHub Pages serves only that.
 
 // cava's layout, which audio/AudioPipeline.qml configures it with: 32 bands from 30 Hz to 14 kHz, bass first.

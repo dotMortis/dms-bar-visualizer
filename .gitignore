@@ -9,3 +9,5 @@ packaging/aur/*/*.pkg.tar.*
 .10x-dave
 .gitmodules
 .claude
+# The core's WASM build for the demo (core/build-wasm.sh docs/wasm), built by the Pages Action
+/docs/wasm/
