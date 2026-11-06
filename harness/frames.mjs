@@ -1,26 +1,37 @@
 // The harness's frame timing and GPU frame time, from Qt's render-loop log in qs.log
 // (QSG_RENDER_TIMING=1 QSG_RHI_PROFILE=1, `qs --log-times`).
 //
-//   node harness/frames.mjs <qs.log> <start> <end> [--monitors <hyprctl -j monitors>] [--json FILE] [--music]
-//   start and end are the window, in wall-clock s since the epoch; --music: the scenario plays
+//   node harness/frames.mjs <qs.log> <start> <end> --utc-offset <+HHMM> [--monitors <hyprctl -j monitors>]
+//       [--json FILE] [--music]
+//   start and end are the window, in wall-clock s since the epoch; --utc-offset: the run's offset
+//   from UTC (`date +%z`), since qs logs its local time without a zone; --music: the scenario plays
 //   music, so a window without a frame fails (exit 1, drewNothing)
 
 // A render thread's line: its time, its window and what it says.
 const LINE = /^(\d{4})-(\d\d)-(\d\d) (\d\d):(\d\d):(\d\d)\.(\d{3}) .*\[window (\w+)\]\[render thread [^\]]*\] syncAndRender: (.*)/;
 const GPU_TIME = /^last retrieved GPU frame time was ([\d.]+) ms/;
 
-// A longer pause between two frames is the scene at rest (nothing animates, so Qt renders nothing),
-// not a late frame: a quarter second is 15 refreshes at 60 Hz.
-const IDLE_MS = 250;
+// A longer gap between two frames is nothing moving (nothing animates, so Qt renders nothing), not
+// a late frame: a quarter second is 15 refreshes at 60 Hz.
+const GAP_MS = 250;
 
-// The frames each window's render loop rendered in [start, end) (s since the epoch).
-export function frameTiming(log, { start, end, refreshMs }) {
+// `date +%z` (+0530, -0800) as minutes east of UTC.
+export function parseUtcOffset(z) {
+    const m = String(z).match(/^([+-])(\d\d):?(\d\d)$/);
+    if (!m) throw new Error(`not a UTC offset: ${z}`);
+    return (m[1] === "-" ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3]));
+}
+
+// The frames each window's render loop rendered in [start, end) (s since the epoch). qs.log's times
+// are the run's local time, utcOffsetMin minutes east of UTC.
+export function frameTiming(log, { start, end, refreshMs, utcOffsetMin }) {
+    if (!Number.isFinite(utcOffsetMin)) throw new Error("frameTiming needs the run's utcOffsetMin");
     const windows = new Map(), gpuMs = [];
     for (const line of log.split("\n")) {
         const m = line.match(LINE);
         if (!m) continue;
         const [, y, mo, d, h, mi, s, ms, win, what] = m;
-        const t = new Date(+y, mo - 1, +d, +h, +mi, +s, +ms).getTime() / 1000;
+        const t = Date.UTC(+y, mo - 1, +d, +h, +mi, +s, +ms) / 1000 - utcOffsetMin * 60;
         if (t < start || t >= end) continue;
         if (what.startsWith("frame rendered")) {
             if (!windows.has(win)) windows.set(win, []);
@@ -30,14 +41,14 @@ export function frameTiming(log, { start, end, refreshMs }) {
             if (g) gpuMs.push(Number(g[1]));
         }
     }
-    let frames = 0, late = 0, missed = 0, worst = 0, idle = 0, idleS = 0;
+    let frames = 0, late = 0, missed = 0, worst = 0, gaps = 0, gapS = 0;
     for (const times of windows.values()) {
         frames += times.length;
         for (let i = 1; i < times.length; i++) {
             const gap = (times[i] - times[i - 1]) * 1000;
-            if (gap > IDLE_MS) {
-                idle++;
-                idleS += gap / 1000;
+            if (gap > GAP_MS) {
+                gaps++;
+                gapS += gap / 1000;
                 continue;
             }
             worst = Math.max(worst, gap);
@@ -48,13 +59,13 @@ export function frameTiming(log, { start, end, refreshMs }) {
         }
     }
     const fps = windows.size ? frames / windows.size / (end - start) : 0;
-    return { frames, windows: windows.size, fps, late, missed, worstMs: Math.round(worst), idle, idleS, gpu: stats(gpuMs) };
+    return { frames, windows: windows.size, fps, late, missed, worstMs: Math.round(worst), gaps, gapS, gpu: stats(gpuMs) };
 }
 
 // Why a run's frames can't be trusted, or null. With music playing the visualizer moves, so a window
 // without one frame means nothing was drawn: the compositor showed none of it (a locked screen, a
 // display asleep) and the run measured a visualizer that doesn't draw. In Silence no frame can be
-// the visualizer at rest.
+// the visualizer holding still.
 export function drewNothing(timing, { music }) {
     return music && timing.frames === 0
         ? "the visualizer rendered no frame in the window with music playing: nothing of it was on screen (is the screen locked or the display asleep?)"
@@ -86,16 +97,16 @@ if (import.meta.main) {
     const { default: fs } = await import("node:fs");
     const args = process.argv.slice(2);
     const option = name => (args.includes(name) ? args.splice(args.indexOf(name), 2)[1] : null);
-    const monitors = option("--monitors"), json = option("--json");
+    const monitors = option("--monitors"), json = option("--json"), utcOffset = option("--utc-offset");
     const music = args.includes("--music") && args.splice(args.indexOf("--music"), 1).length > 0;
     const [log, start, end] = args;
     const display = monitors ? displayRefresh(JSON.parse(fs.readFileSync(monitors, "utf8"))) : null;
     const hz = display?.hz ?? 60;
     const refreshMs = 1000 / hz;
-    const t = frameTiming(fs.readFileSync(log, "utf8"), { start: Number(start), end: Number(end), refreshMs });
+    const t = frameTiming(fs.readFileSync(log, "utf8"), { start: Number(start), end: Number(end), refreshMs, utcOffsetMin: parseUtcOffset(utcOffset) });
     const on = display ? `on a ${hz} Hz display${display.monitors > 1 ? ` (the slowest of ${display.monitors})` : ""}` : "on a display assumed 60 Hz";
     console.log(`frames   ${t.frames} in ${(end - start).toFixed(2)} s, ${t.fps.toFixed(1)} fps per window (${t.windows}) ${on}: ${t.late} late, ${t.missed} refreshes missed, worst ${t.worstMs} ms apart`);
-    console.log(`         late: over 1.5 refreshes (${(1.5 * refreshMs).toFixed(1)} ms) after the last frame; at rest (pauses over ${IDLE_MS} ms): ${t.idle}, ${t.idleS.toFixed(1)} s`);
+    console.log(`         late: over 1.5 refreshes (${(1.5 * refreshMs).toFixed(1)} ms) after the last frame; gaps (over ${GAP_MS} ms without a frame, nothing moving): ${t.gaps}, ${t.gapS.toFixed(1)} s`);
     const g = t.gpu;
     console.log(g.frames
         ? `gpu      frame time (Qt's timestamp queries) mean ${g.meanMs.toFixed(3)} ms, p95 ${g.p95Ms.toFixed(3)}, max ${g.maxMs.toFixed(3)}, over ${g.frames} frames`
@@ -103,7 +114,7 @@ if (import.meta.main) {
     if (json)
         fs.writeFileSync(json, JSON.stringify({
             refresh_hz: hz, frames: t.frames, frames_windows: t.windows, frames_fps: fixed(t.fps, 2), frames_late: t.late,
-            frames_missed: t.missed, frames_worst_ms: t.worstMs, frames_idle: t.idle, frames_idle_s: fixed(t.idleS, 2),
+            frames_missed: t.missed, frames_worst_ms: t.worstMs, frames_gaps: t.gaps, frames_gaps_s: fixed(t.gapS, 2),
             gpu_frame_ms_mean: fixed(g.meanMs, 4), gpu_frame_ms_p95: fixed(g.p95Ms, 4), gpu_frame_ms_max: fixed(g.maxMs, 4),
         }));
     const failed = drewNothing(t, { music });

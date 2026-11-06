@@ -7,12 +7,14 @@ import { displayRefresh, drewNothing, frameTiming } from "../harness/frames.mjs"
 import { gpuBusy } from "../harness/gpu.mjs";
 import { profileBreakdown, profileParts } from "../harness/profile.mjs";
 
-// qs.log as `qs --log-times` writes it: local wall-clock time to the ms.
-const BASE = new Date(2026, 10, 6, 13, 0, 0).getTime() / 1000;
+// qs.log as `qs --log-times` writes it: the run's local wall-clock time to the ms, without its
+// zone. Here the run's zone is UTC+5:30, whatever the zone these tests run in.
+const OFFSET_MIN = 330;
+const BASE = Date.UTC(2026, 10, 6, 13, 0, 0) / 1000 - OFFSET_MIN * 60;
 const pad = (n, w = 2) => String(n).padStart(w, "0");
-function stamp(s) {
-    const d = new Date(Math.round((BASE + s) * 1000));
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
+function stamp(s, offsetMin = OFFSET_MIN) {
+    const d = new Date(Math.round((BASE + s + offsetMin * 60) * 1000));
+    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}.${pad(d.getUTCMilliseconds(), 3)}`;
 }
 const RENDER = "qt.scenegraph.time.renderloop: [window 0x7f0000000001][render thread 0x7f00000000a0]";
 const frame = (s, render = RENDER) => `${stamp(s)} DEBUG ${render} syncAndRender: frame rendered in 0ms, sync=0, render=0, swap=0`;
@@ -25,7 +27,7 @@ const frames = (from, to, step = 1 / 60, render) => {
     for (let i = 0; from + i * step < to - 1e-9; i++) lines.push(frame(from + i * step, render));
     return lines;
 };
-const window = { start: BASE + 1, end: BASE + 3, refreshMs: 1000 / 60 };
+const window = { start: BASE + 1, end: BASE + 3, refreshMs: 1000 / 60, utcOffsetMin: OFFSET_MIN };
 
 describe("harness frame timing", () => {
     test("a window rendered at every refresh has no late frames", () => {
@@ -49,13 +51,23 @@ describe("harness frame timing", () => {
         assert.equal(t.worstMs, 67);
     });
 
-    test("a pause of more than a quarter second is the scene at rest, not a late frame", () => {
-        // Silence: the visualizer stops animating, so the render loop renders nothing for 1 s.
+    test("a gap of more than a quarter second is nothing moving, not a late frame", () => {
+        // Silence: the visualizer holds still, so the render loop renders nothing for 1 s.
         const log = [...frames(0, 1.5), ...frames(2.5, 4)].join("\n");
         const t = frameTiming(log, window);
-        assert.deepEqual([t.late, t.missed, t.idle], [0, 0, 1]);
-        assert.ok(Math.abs(t.idleS - 1) < 0.02, `idle ${t.idleS} s`);
-        assert.equal(t.worstMs, 17, "the pause isn't the worst interval");
+        assert.deepEqual([t.late, t.missed, t.gaps], [0, 0, 1]);
+        assert.ok(Math.abs(t.gapS - 1) < 0.02, `gaps ${t.gapS} s`);
+        assert.equal(t.worstMs, 17, "the gap isn't the worst interval");
+    });
+
+    test("qs.log's times are read at the run's UTC offset, not the zone the parser runs in", () => {
+        // The same frames, logged by a run at UTC+5:30 and by one at UTC-8: each in its own window.
+        const log = offset => Array.from({ length: 240 }, (_, i) =>
+            `${stamp(i / 60, offset)} DEBUG ${RENDER} syncAndRender: frame rendered in 0ms, sync=0, render=0, swap=0`).join("\n");
+        assert.equal(frameTiming(log(330), { ...window, utcOffsetMin: 330 }).frames, 120);
+        assert.equal(frameTiming(log(-480), { ...window, utcOffsetMin: -480 }).frames, 120);
+        // Read at the wrong offset, the window misses every frame.
+        assert.equal(frameTiming(log(330), { ...window, utcOffsetMin: -480 }).frames, 0);
     });
 
     test("each window's frames are timed on their own", () => {
@@ -86,7 +98,7 @@ describe("harness frame timing", () => {
         assert.equal(drewNothing(frameTiming(frames(0, 4).join("\n"), window), { music: true }), null);
     });
 
-    test("in Silence no frame can be the visualizer at rest, so it doesn't fail", () => {
+    test("in Silence no frame can be the visualizer holding still, so it doesn't fail", () => {
         assert.equal(drewNothing(frameTiming("", window), { music: false }), null);
     });
 

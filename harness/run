@@ -393,14 +393,14 @@ add_json() { local j; j=$(cat "$1"); j=${j#\{}; j=${j%\}}; [[ -z $j ]] || RESULT
 # each frame the render loop renders, per window, QSG_RHI_PROFILE adds the GPU's time for it
 # (timestamp queries). Late is measured against the display's refresh (hyprctl).
 measure_frames_setup() { export QSG_RENDER_TIMING=1 QSG_RHI_PROFILE=1; }
-measure_frames_begin() { FRAMES_T0=$(now); }
+measure_frames_begin() { FRAMES_T0=$(now) FRAMES_UTC_OFFSET=$(date +%z); }   # qs logs local time, no zone
 measure_frames_end() { FRAMES_T1=$(now); }
 measure_frames_report() {
     local monitors=()
     hyprctl -j monitors > "$RUN/monitors.json" 2>/dev/null && monitors=(--monitors "$RUN/monitors.json")
     local music=()
     ((SILENT)) || music=(--music)   # with music the visualizer moves: no frame means nothing was drawn
-    "$NODE" "$HARNESS/frames.mjs" "$OUT/qs.log" "$FRAMES_T0" "$FRAMES_T1" "${monitors[@]}" "${music[@]}" --json "$RUN/frames.json" || exit 1
+    "$NODE" "$HARNESS/frames.mjs" "$OUT/qs.log" "$FRAMES_T0" "$FRAMES_T1" --utc-offset "$FRAMES_UTC_OFFSET" "${monitors[@]}" "${music[@]}" --json "$RUN/frames.json" || exit 1
     add_json "$RUN/frames.json"
 }
 
