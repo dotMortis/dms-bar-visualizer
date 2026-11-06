@@ -20,6 +20,8 @@ Scope {
     // text and its spot: LockRing.qml draws one delegate per entry, so a word keeps its drawing
     // from popping in to dissolving while others come and go around it.
     readonly property alias wordModel: wordModel
+    // Whether the rings draw slowly (LockAudio.slow): the words are stepped by LockAudio then.
+    property bool slow: false
 
     // A Kick the shared pipeline found just now, with its power: a word landing with it pops harder.
     function kick(power) {
@@ -107,8 +109,10 @@ Scope {
             readAnchor();
     }
 
+    // Every frame, unless the rings draw slowly in Silence (LockAudio.slow, set by LockAudio):
+    // then LockAudio steps the words on its slow frame.
     FrameAnimation {
-        running: true
+        running: !root.slow
         onTriggered: root.syncWords()
     }
 }

@@ -13,6 +13,7 @@ import Quickshell.Io
 import qs.Common
 import "audio"
 import "share.mjs" as Share
+import "pace.mjs" as Pace
 import "ring.mjs" as Ring
 import "kicks.mjs" as Kicks
 import "hands.mjs" as Hands
@@ -42,18 +43,30 @@ Singleton {
     readonly property real ringSize: settings.lockRing.ringSize
     readonly property bool running: pipeline !== null
     readonly property int bandCount: Kick.BANDS
-    readonly property var values: pipeline?.values ?? new Array(bandCount).fill(0)
-    readonly property real bass: pipeline?.bass ?? 0
-    readonly property real mid: pipeline?.mid ?? 0
-    readonly property real treble: pipeline?.treble ?? 0
-    readonly property real time: pipeline?.time ?? 0
-    readonly property real flow: pipeline?.flow ?? 0
+    // The time every ring shows on its Hands and Digital Time, read on each of the rings' frames:
+    // one clock, so every monitor's ring moves in step, and the second hand sweeps.
+    property var now: new Date()
+    // The rings' animation clock: real seconds times speed. The ring's own, not the pipeline's,
+    // so the idle wave breathes on in Silence whatever the pipeline's clock does.
+    property real time: 0
+    // Whether the rings draw at Pace.SILENCE_FPS rather than every frame (pace.mjs): in Silence
+    // (the pipeline's case), once the music has played out on the ring. The first sound ends it
+    // at once. While slow, the music below is the music at rest (`resting`), so nothing the
+    // pipeline still does redraws the rings between slow frames.
+    readonly property bool slow: Pace.drawsSlowly(pipeline?.silence ?? "", rested)
+    readonly property var resting: Pace.restingMusic(bandCount, heldFlow)
+    readonly property var values: root.slow ? root.resting.values : (pipeline?.values ?? new Array(bandCount).fill(0))
+    readonly property real bass: root.slow ? root.resting.bass : (pipeline?.bass ?? 0)
+    readonly property real mid: root.slow ? root.resting.mid : (pipeline?.mid ?? 0)
+    readonly property real treble: root.slow ? root.resting.treble : (pipeline?.treble ?? 0)
+    readonly property real flow: root.slow ? root.resting.flow : (pipeline?.flow ?? 0)
     // 0..1, the last kick's impact, fading at kickDecay: the ribbons' kick punch.
-    readonly property real kick: pipeline?.kick ?? 0
-    // Kicks, for the Shockwave and flashing hands: the last kickSlots kicks.
-    readonly property var kickAges: pipeline?.kickAges ?? []
-    readonly property var kickPowers: pipeline?.kickPowers ?? []
-    readonly property var kickSeeds: pipeline?.kickSeeds ?? []
+    readonly property real kick: root.slow ? root.resting.kick : (pipeline?.kick ?? 0)
+    // Kicks, for the Shockwave and flashing hands: the last kickSlots kicks, aged on the
+    // pipeline's clock.
+    readonly property var kickAges: root.slow ? root.resting.kickAges : (pipeline?.kickAges ?? [])
+    readonly property var kickPowers: root.slow ? root.resting.kickPowers : (pipeline?.kickPowers ?? [])
+    readonly property var kickSeeds: root.slow ? root.resting.kickSeeds : (pipeline?.kickSeeds ?? [])
     // The same kicks as the ring shader's slots (lock-ring/kicks.mjs): { ages, powers, seeds }, 8 each.
     readonly property var kickSlots: Kicks.kickSlots(kickAges, kickPowers, kickSeeds)
     // 0..1, how brightly all hands flash: lit by every kick together with its Shockwave and sparks.
@@ -96,6 +109,12 @@ Singleton {
     readonly property var pipeline: loader.item ?? null
     property var motion: Ring.createRingMotion()
     property var handMotion: Hands.createHandMotion()
+    // Whether the music has played out on the ring (Pace.atRest()), as of its last frame.
+    property bool rested: false
+    // The pipeline's wave phase at the last frame drawn with the music: held while slow.
+    property real heldFlow: 0
+    // When the last frame was stepped (Date.now()), so a slow frame steps by the time it took.
+    property real lastFrame: 0
 
     onRunningChanged: {
         if (running)
@@ -105,7 +124,41 @@ Singleton {
         swell = 0;
         presence = 0;
         handLevels = ({ bass: 0, mid: 0, treble: 0 });
+        time = 0;
+        rested = false;
+        heldFlow = 0;
+        lastFrame = 0;
     }
+
+    // One frame of every ring, `dt` seconds after the last: the clocks, the ring's and the hands'
+    // motion, and whether the music has played out on the ring.
+    function frame(dt) {
+        lastFrame = Date.now();
+        now = new Date(lastFrame);
+        time += dt * ringSettings.speed;
+        const levels = { bass: bass, mid: mid, treble: treble };
+        const m = motion.step(levels, dt);
+        swell = m.swell;
+        presence = m.presence;
+        const h = handMotion.step(levels, dt, settings.speed);
+        handLevels = h.levels;
+        handPhases = h.phases;
+        // While slow, LockLyrics.qml's own clock stops: its words step on this frame.
+        if (slow && lyrics.item)
+            lyrics.item.syncWords();
+        rested = Pace.atRest({
+            presence: presence,
+            swell: swell,
+            kick: pipeline?.kick ?? 0,
+            kickAges: pipeline?.kickAges ?? [],
+            kickPowers: pipeline?.kickPowers ?? [],
+            words: lyricWords,
+            silence: pipeline?.silence ?? ""
+        });
+        // Where the wave's phase is held once slow: as it is while the ring is at rest with the
+        // music still shown (the ring goes slow then, or when Silence starts).
+        if (rested && !slow)
+            heldFlow = pipeline?.flow ?? 0;    }
 
     // config.json. Missing means the defaults, broken the last good settings.
     FileView {
@@ -150,6 +203,13 @@ Singleton {
         // Set only then: LazyLoader compiles its source even while inactive.
         source: root.lyricsService ? Qt.resolvedUrl("LockLyrics.qml") : ""
     }
+    // While slow, the Lyric Words step on the rings' slow frame (frame()), not every frame.
+    Binding {
+        target: lyrics.item
+        when: lyrics.item !== null
+        property: "slow"
+        value: root.slow
+    }
 
     // Every Kick, with its power, so a word landing with it pops harder.
     Connections {
@@ -164,20 +224,24 @@ Singleton {
         // Its own cava conf, not the bar's: each installer stops only its own cava.
         AudioPipeline {
             settings: root.ringSettings
+            // Any running frame clock keeps the rings redrawing every frame: the pipeline's
+            // stops while they draw slowly (the music has played out on them by then).
+            clockRunning: !root.slow
             confPath: `${Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"}/lock-ring-cava.conf`
         }
     }
 
+    // Every frame, with something to hear or the music still playing out on the ring.
     FrameAnimation {
-        running: root.running
-        onTriggered: {
-            const levels = { bass: root.bass, mid: root.mid, treble: root.treble };
-            const m = root.motion.step(levels, frameTime);
-            root.swell = m.swell;
-            root.presence = m.presence;
-            const h = root.handMotion.step(levels, frameTime, root.settings.speed);
-            root.handLevels = h.levels;
-            root.handPhases = h.phases;
-        }
+        running: root.running && !root.slow
+        onTriggered: root.frame(frameTime)
+    }
+
+    // In Silence, at rest: SILENCE_FPS frames a second, each stepped by the time since the last.
+    Timer {
+        interval: 1000 / Pace.SILENCE_FPS
+        repeat: true
+        running: root.running && root.slow
+        onTriggered: root.frame(Math.min(1, (Date.now() - root.lastFrame) / 1000))
     }
 }
