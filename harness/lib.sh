@@ -1,5 +1,6 @@
 # shellcheck shell=bash
-# What harness/run, harness/record and harness/row share; sourced, not run.
+# What the harness's commands (harness/run, check-kicks, record, row) share; sourced, not run.
+# What a run of qs needs is in harness/setup.sh.
 
 die() { echo "harness: $*" >&2; exit 2; }
 
