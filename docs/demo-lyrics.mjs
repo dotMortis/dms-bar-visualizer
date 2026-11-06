@@ -35,6 +35,28 @@ export const DEMO_LINES = [
 // The song's length, seconds: it starts again from the top after this.
 export const DEMO_LOOP = 24;
 
+// The demo song as the core takes it (core/src/bar_lyrics.rs, the bar view's Lyric Words): DMS's
+// lyrics.get reply, as JSON text, and every letter of it, once each, for the page to measure.
+export const DEMO_LYRICS = JSON.stringify({ found: true, synced: DEMO_LINES });
+export const DEMO_LETTERS = [...new Set(DEMO_LINES.flatMap(line => Array.from(line.x.replace(/\s/g, ""))))].join("");
+
+// Position readings for the core, the demo song looping from page time `start` (seconds): a
+// function of the page time now (seconds) giving the song's position to read, once a second and
+// at each loop's start (where it seeks back to the top), else null. As lyrics/BarLyrics.qml reads
+// the Active Player's position.
+export function createDemoReadings(start) {
+    let last = -Infinity, loop = null;
+    return now => {
+        const elapsed = Math.max(0, now - start);
+        const n = Math.floor(elapsed / DEMO_LOOP);
+        if (n === loop && now - last < 1)
+            return null;
+        loop = n;
+        last = now;
+        return elapsed - n * DEMO_LOOP;
+    };
+}
+
 // The demo's Lyric Words, the demo song looping from wall-clock time `start` (ms, the page clock):
 //   kick(power, wall)   a Kick the demo's Kick detector found at `wall` (ms)
 //   words(wall)         the Lyric Words visible at `wall` (lyric-words.mjs words())

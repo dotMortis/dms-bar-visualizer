@@ -151,3 +151,48 @@ fn no_glyphs_without_a_bar_or_once_the_words_are_gone() {
     v.advance(10.0);
     assert!(v.glyphs().is_empty(), "the line has dissolved");
 }
+
+/// The demo reads the glyphs out of the WASM's flat Float64Array by docs/demo.mjs's GLYPH offsets:
+/// they must be where Glyph's fields are.
+#[test]
+fn the_demos_glyph_offsets_are_the_cores() {
+    use std::mem::offset_of;
+    use visualizer_core::{GlyphCopy, GLYPH_FIELDS};
+    let demo = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../docs/demo.mjs")).unwrap();
+    let start = demo.find("export const GLYPH = {").expect("demo.mjs's GLYPH");
+    let end = start + demo[start..].find("};").unwrap();
+    let offsets: std::collections::BTreeMap<String, usize> = demo[start + 22..end]
+        .split([',', '{', '}'])
+        .filter_map(|pair| {
+            let (name, value) = pair.split_once(':')?;
+            Some((name.trim().to_owned(), value.trim().parse().ok()?))
+        })
+        .collect();
+    let at = |bytes: usize| bytes / 8;
+    let expected = [
+        ("letter", at(offset_of!(Glyph, letter))),
+        ("word", at(offset_of!(Glyph, word))),
+        ("x", at(offset_of!(Glyph, x))),
+        ("y", at(offset_of!(Glyph, y))),
+        ("angle", at(offset_of!(Glyph, angle))),
+        ("scale", at(offset_of!(Glyph, scale))),
+        ("pivotX", at(offset_of!(Glyph, pivot_x))),
+        ("pivotY", at(offset_of!(Glyph, pivot_y))),
+        ("color", at(offset_of!(Glyph, color))),
+        ("core", at(offset_of!(Glyph, core))),
+        ("opacity", at(offset_of!(Glyph, opacity))),
+        ("glow", at(offset_of!(Glyph, glow))),
+        ("glowSpread", at(offset_of!(Glyph, glow_spread))),
+        ("blur", at(offset_of!(Glyph, blur))),
+        ("white", at(offset_of!(Glyph, white))),
+        ("em", at(offset_of!(Glyph, em))),
+        ("copies", at(offset_of!(Glyph, copies))),
+        ("copyColor", at(offset_of!(GlyphCopy, color))),
+        ("copyDx", at(offset_of!(GlyphCopy, dx))),
+        ("copyOpacity", at(offset_of!(GlyphCopy, opacity))),
+        ("copySize", at(size_of::<GlyphCopy>())),
+        ("stride", GLYPH_FIELDS),
+    ];
+    let expected: std::collections::BTreeMap<String, usize> = expected.iter().map(|(k, v)| (k.to_string(), *v)).collect();
+    assert_eq!(offsets, expected);
+}

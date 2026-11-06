@@ -43,12 +43,19 @@ describe("demo publishing", () => {
         const files = pageFiles();
         for (const f of [`${WASM}/visualizer_core.js`, "config.mjs", "lock-ring/ring.mjs", "lock-ring/kicks.mjs", "lock-ring/hands.mjs",
                          "lock-ring/clock.mjs", "lock-ring/ring.frag", "lyric-words.mjs", "lock-ring/lyrics.mjs",
-                         "demo-lyrics.mjs", "bar-ribbons.mjs", "bar-words.mjs"])
+                         "demo-lyrics.mjs", "demo.mjs"])
             assert.ok(files.includes(f), `the page loads ${f} (got ${files.join(", ")})`);
     });
 
     test("the page runs the core's Kicks, not the JS Kick detector", () => {
         assert.ok(!pageFiles().includes("kick.mjs"), "the page doesn't load kick.mjs");
+    });
+
+    test("the page's bar view runs the core's Lyric Words, not the JS layout", () => {
+        const page = fs.readFileSync(path.join(DOCS, "index.html"), "utf8");
+        for (const f of ["bar-ribbons.mjs", "bar-words.mjs", "lyric-words.mjs"])
+            assert.ok(!page.includes(`./${f}`), `index.html doesn't import ${f}`);
+        assert.match(page, /core\.glyphs\(\)/, "it draws the core's glyphs");
     });
 
     test("the core's WASM build is gitignored, and the Pages Action builds it where the page loads it", () => {
