@@ -30,6 +30,12 @@ pub const FLOW_WRAP: f64 = 40.0 * std::f64::consts::PI;
 /// seconds of display frames. Provisional; the harness refines them.
 pub const SILENCE_THRESHOLD: f64 = 0.02;
 pub const SILENCE_HOLD: f64 = 2.0;
+/// A Kick's Shockwave has played out this many seconds after it fired, on the animation clock
+/// (PLAYED_OUT in docs/lock-ring/ring.frag; viz.frag's Spray is gone at 2 s and its Shockwave
+/// below e^-6.6 of its power).
+pub const PLAYED_OUT: f64 = 3.0;
+/// The Kick level has settled once it's below this: a tenth of a step of an 8-bit color.
+pub const KICK_SETTLED: f64 = 0.001;
 
 /// The Active Player, as the visualizer follows it (MPRIS stays outside the core).
 #[repr(u32)]
@@ -86,6 +92,10 @@ pub struct Frame {
     pub kick_count: u32,
     /// Which Silence case applies; a new Visualizer has no player.
     pub silence: Silence,
+    /// Whether anything still moves without sound: a Kick's Shockwave that hasn't played out
+    /// (while the clock runs at a speed above 0), or the Kick level not yet settled. A visualizer
+    /// in Silence that isn't animating may stop drawing.
+    pub animating: bool,
 }
 
 /// One visualizer instance. Every call is total: bad input is clamped or ignored, never a panic,
@@ -153,6 +163,7 @@ impl Visualizer {
                 kick_power: 0.0,
                 kick_count: 0,
                 silence: Silence::NoPlayer,
+                animating: false,
             },
             settings,
         }
@@ -167,6 +178,7 @@ impl Visualizer {
             self.frame.intensity = settings.intensity;
             self.frame.bass_stretch = settings.bass_stretch;
             self.settings = settings;
+            self.update_animating();
         }
     }
 
@@ -199,6 +211,7 @@ impl Visualizer {
             self.frame.kick_powers[slot] = power;
             self.frame.kick_seeds[slot] = self.kick_seed as f64;
             self.frame.kick_ages[slot] = 0.0;
+            self.update_animating();
         }
     }
 
@@ -218,6 +231,7 @@ impl Visualizer {
         for (age, &at) in self.frame.kick_ages.iter_mut().zip(&self.kick_times) {
             *age = self.clock - at;
         }
+        self.update_animating();
     }
 
     /// The Active Player: none, paused or playing. While it doesn't play, nothing is captured (as
@@ -233,6 +247,13 @@ impl Visualizer {
         }
         self.player = player;
         self.update_silence();
+    }
+
+    fn update_animating(&mut self) {
+        let f = &self.frame;
+        let moving = self.settings.speed > 0.0;
+        let in_flight = f.kick_powers.iter().zip(&f.kick_ages).any(|(&power, &age)| power > 0.0 && age < PLAYED_OUT);
+        self.frame.animating = f.kick > KICK_SETTLED || (moving && in_flight);
     }
 
     fn update_silence(&mut self) {

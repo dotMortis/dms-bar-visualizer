@@ -9,6 +9,7 @@
 #ifndef VISUALIZER_CORE_H
 #define VISUALIZER_CORE_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -62,6 +63,10 @@ typedef struct VisualizerFrame {
     uint32_t kick_count;
     /* Which Silence case applies: a VISUALIZER_SILENCE_* value. A new Visualizer has no player. */
     uint32_t silence;
+    /* Whether anything still moves without sound: a Kick's Shockwave that hasn't played out (3 s
+     * on the animation clock, at a speed above 0), or the Kick level above 0.001. A visualizer in
+     * Silence that isn't animating may stop drawing. */
+    bool animating;
 } VisualizerFrame;
 
 /* A new Visualizer on the default settings, for visualizer_destroy; null only if it couldn't be
