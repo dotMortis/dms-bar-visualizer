@@ -176,3 +176,62 @@ fn bad_frames_are_ignored_so_the_kicks_stay_the_same() {
     }
     assert_eq!(kicks, clean);
 }
+
+// The same rules hold at the C ABI, whatever pointers and lengths it's handed.
+mod c_abi {
+    use std::ptr;
+
+    use super::*;
+    use visualizer_core::c_abi::*;
+
+    #[test]
+    fn push_bands_advance_and_frame_never_allocate_after_configure() {
+        let frames = &fixture("zoo1").frames;
+        let settings = DEFAULTS.json();
+        unsafe {
+            let visualizer = visualizer_create();
+            visualizer_configure(visualizer, settings.as_ptr(), settings.len());
+            let mut sum = 0.0;
+            let n = allocations(|| {
+                for f in frames {
+                    visualizer_push_bands(visualizer, f.values.as_ptr(), f.values.len(), f.time);
+                    visualizer_advance(visualizer, 1.0 / 144.0);
+                    sum += std::hint::black_box(*visualizer_frame(visualizer)).kick;
+                }
+            });
+            visualizer_destroy(visualizer);
+            assert_eq!(n, 0, "allocations per {} frames (kick sum {sum})", frames.len());
+        }
+    }
+
+    #[test]
+    fn null_pointers_short_buffers_and_broken_text_are_ignored() {
+        let bands = [0.5; BANDS];
+        unsafe {
+            // No Visualizer: every call does nothing, frame gives null.
+            visualizer_configure(ptr::null_mut(), "{}".as_ptr(), 2);
+            visualizer_push_bands(ptr::null_mut(), bands.as_ptr(), BANDS, 1.0);
+            visualizer_advance(ptr::null_mut(), 1.0);
+            assert!(visualizer_frame(ptr::null()).is_null());
+            visualizer_destroy(ptr::null_mut());
+
+            let visualizer = visualizer_create();
+            let before = *visualizer_frame(visualizer);
+            let n = allocations(|| {
+                visualizer_push_bands(visualizer, ptr::null(), BANDS, 1.0);
+                visualizer_push_bands(visualizer, bands.as_ptr(), BANDS - 1, 1.0);
+                visualizer_push_bands(visualizer, bands.as_ptr(), 0, 1.0);
+                visualizer_advance(visualizer, f64::NAN);
+            });
+            assert_eq!(n, 0);
+            assert_eq!(*visualizer_frame(visualizer), before);
+
+            // Settings that aren't there or aren't UTF-8 are ignored like broken JSON.
+            visualizer_configure(visualizer, ptr::null(), 99);
+            visualizer_configure(visualizer, [0xff, 0xfe, b'{', b'}'].as_ptr(), 4);
+            visualizer_configure(visualizer, "{\"k".as_ptr(), 3);
+            assert_sane(*visualizer_frame(visualizer), "broken settings through the C ABI");
+            visualizer_destroy(visualizer);
+        }
+    }
+}
