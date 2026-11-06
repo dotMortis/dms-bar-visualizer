@@ -54,8 +54,17 @@ function importGraph(entry) {
 const read = file => fs.readFileSync(path.join(ROOT, file), "utf8");
 
 describe("audio pipeline", () => {
-    test("bundles with nothing but itself, the kick detector and the shared settings", () => {
-        assert.deepEqual(importGraph(PIPELINE).files, [PIPELINE, "docs/config.mjs", "docs/kick.mjs"]);
+    test("bundles with nothing but itself, its Active Player choice, the kick detector and the shared settings", () => {
+        assert.deepEqual(importGraph(PIPELINE).files, [PIPELINE, "audio/active-player.mjs", "docs/config.mjs", "docs/kick.mjs"]);
+    });
+
+    test("chooses the Active Player and the capture source only with the shared module", () => {
+        // audio/active-player.mjs, which tests/active-player.test.mjs replays events through.
+        const source = read(PIPELINE);
+        assert.match(source, /Player\.chooseActivePlayer\(/);
+        assert.match(source, /Player\.chooseSource\(/);
+        for (const own of ["isPlaying", "corked", "application.name"])
+            assert.ok(!source.includes(own), `the pipeline still chooses by ${own} itself`);
     });
 
     test("knows nothing about the bar: no compositor, window or bar settings", () => {
