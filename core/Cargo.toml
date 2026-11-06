@@ -1,0 +1,12 @@
+[package]
+name = "visualizer-core"
+version = "0.1.0"
+edition = "2021"
+description = "The per-frame logic of the Bar Visualizer and the Lock Ring (ADR 0007)"
+publish = false
+
+[lib]
+name = "visualizer_core"
+
+[dependencies]
+serde_json = "1"
