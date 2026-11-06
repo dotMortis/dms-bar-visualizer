@@ -18,6 +18,10 @@ _Avoid_: lock visualizer, lock widget, ring clock
 The MPRIS player DankBar shows; both visualizers capture the output this player's stream plays to.
 _Avoid_: current player, source
 
+**Silence**:
+When there is nothing to hear: no Active Player, the Active Player paused, or it playing but its output silent. In Silence the Bar Visualizer holds still; the Lock Ring's Ribbon keeps breathing as a thin, faint wave.
+_Avoid_: idle, rest, pause (only one of the three cases)
+
 **Kick**:
 One detected bass-drum hit, fired once per hit when a band in the kick range rises sharply above its recent level.
 _Avoid_: beat, onset
