@@ -58,6 +58,12 @@ pub enum Silence {
     Silent = 3,
 }
 
+/// The band cava puts a sine at `hz` in: where kickLowHz and kickHighHz land. Below cava's 30 Hz
+/// it's the first band, above its 14 kHz the last. Computes cava's layout: not for every frame.
+pub fn band_at(hz: f64) -> usize {
+    kick::cava_band(hz)
+}
+
 /// Everything to draw, as of the last call. Laid out as C's `VisualizerFrame`
 /// (include/visualizer_core.h): change both together.
 #[repr(C)]

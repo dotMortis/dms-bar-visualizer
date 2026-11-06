@@ -122,6 +122,11 @@ fn band_at(layout: &[Band; BANDS], hz: f64) -> usize {
     best
 }
 
+/// The band cava puts a sine at `hz` in (cava's range clamps it).
+pub(crate) fn cava_band(hz: f64) -> usize {
+    band_at(&cava_layout(), hz)
+}
+
 /// The hit the last Kick fired for, until it has ended.
 #[derive(Clone, Copy)]
 struct Hit {

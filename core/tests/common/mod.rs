@@ -21,6 +21,16 @@ pub struct Fixture {
     pub about: String,
     pub onsets: Vec<f64>,
     pub frames: Vec<Bands>,
+    /// The tone sweep's tones (none in the others).
+    pub tones: Vec<Tone>,
+}
+
+/// One tone of the sweep: its frequency, when it starts and how long it lasts, in s.
+#[derive(Clone, Copy, Debug)]
+pub struct Tone {
+    pub hz: f64,
+    pub at: f64,
+    pub length: f64,
 }
 
 /// The kick settings the replay tests hold the detector to, and speed (left out when None).
@@ -96,7 +106,20 @@ fn read_fixture(path: &std::path::Path) -> Fixture {
             Some(Bands { time: time.parse().unwrap(), values: parse_bands(raw)? })
         })
         .collect();
-    Fixture { about, onsets, frames }
+    let tones = header["tones"]
+        .as_array()
+        .map(|tones| {
+            tones
+                .iter()
+                .map(|t| Tone {
+                    hz: t["hz"].as_f64().unwrap(),
+                    at: t["at"].as_f64().unwrap(),
+                    length: t["length"].as_f64().unwrap(),
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    Fixture { about, onsets, frames, tones }
 }
 
 /// docs/kick.mjs's parseBands: one line of cava's raw ascii output as the bands in 0..1, None for
