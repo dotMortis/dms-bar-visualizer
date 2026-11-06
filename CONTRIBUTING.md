@@ -105,7 +105,7 @@ python3 tests/fixtures/record.py all          # re-record all of them (about 4 m
 
 ## Measuring
 
-The numbers for every step, from v0.10.0 on, how they were measured and how to re-run them are in [docs/performance.md](docs/performance.md). `node harness/table.mjs <dirs>` turns runs' `result.json` files into its tables.
+The numbers for every step, from v0.10.0 on, how they were measured and how to re-run them are in [docs/performance.md](docs/performance.md). `node harness/table.mjs <dirs>` turns runs' `result.json` files into its tables. How the work is judged, a council round, is in [docs/council.md](docs/council.md).
 
 ```sh
 harness/run music                      # the Bar Visualizer on the reference track: CPU, frames, GPU, profile
@@ -115,6 +115,10 @@ harness/run --check-kicks music        # check the replayed input reaches the Ki
 harness/run music_lyrics               # the same with Lyric Words: their cost is the difference
 harness/run silence_paused             # one of the three Silence cases
 harness/run --host lock music_lyrics   # any of them on the Lock Ring
+```
+
+```sh
+harness/record v0.10.0 HEAD            # screen recordings of two commits on the same input (below)
 ```
 
 | Scenario | Band stream | Active Player | DMS's lyrics |
@@ -135,7 +139,7 @@ The sound server's streams are a stand-in too, `harness/bin/pactl`: the visualiz
 
 The replay harness runs the Bar Visualizer (or the Lock Ring) as it ships, in its own `qs`, but in place of cava it replays a recorded band stream from `tests/fixtures` (the reference track, `steady_house`). After a warm-up it measures whole loops of the track and prints CPU as % of one core, as htop shows it, for `qs`, its capture and every process they start together. The run gets its own runtime dir, config dir (every setting at its default), cache and session bus, so it never sees the live visualizers, DMS, your players or your `config.json`; it does show the visualizer on the desktop while it runs. `--check-kicks` runs the tree's audio pipeline on the same input and checks it fires the Kicks the replay tests expect for the track, loop by loop. `harness/run --help` lists the options.
 
-It isn't a test and isn't part of `node --test` (only its Kick comparison, the timed lyrics, the stand-ins and the parsing of the measures below are, the player skipped without python-dbus): CPU depends on the machine and what else runs on it, so compare runs made back to back on an idle desktop. Keep the screen unlocked: while the session is locked the compositor draws none of the run's windows, Qt renders nothing, and the run would measure a visualizer that doesn't draw. So `harness/run` refuses to start while logind says the session is locked, fails a run if it was locked by the end of the window, and fails a run with music whose window rendered no frame (`--check-kicks` needs no screen and skips these checks). It needs Quickshell, a systemd user session with cgroup v2, `dbus-run-session`, `busctl`, node, python3 with python-dbus and python-gobject, and `qsb`; for the profile, `perf`.
+It isn't a test and isn't part of `node --test` (only its Kick comparison, the timed lyrics, the stand-ins, the parsing of the measures below and the recording stage's sizes are, the player skipped without python-dbus): CPU depends on the machine and what else runs on it, so compare runs made back to back on an idle desktop. Keep the screen unlocked: while the session is locked the compositor draws none of the run's windows, Qt renders nothing, and the run would measure a visualizer that doesn't draw. So `harness/run` refuses to start while logind says the session is locked, fails a run if it was locked by the end of the window, and fails a run with music whose window rendered no frame (`--check-kicks` needs no screen and skips these checks). It needs Quickshell, a systemd user session with cgroup v2, `dbus-run-session`, `busctl`, node, python3 with python-dbus and python-gobject, and `qsb`; for the profile, `perf`.
 
 Besides CPU, every run measures, over the same window (all of it in `result.json`):
 
@@ -149,6 +153,8 @@ Besides CPU, every run measures, over the same window (all of it in `result.json
 The profile is kept: `perf.data` (with `perf-<pid>.map`, the names QML's JIT gave its code) and `profile.txt` (the parts, then `perf report` by thread and library, then by symbol). For call stacks open `perf.data` in a viewer: [hotspot](https://github.com/KDAB/hotspot) (an AppImage works), or `perf report -i perf.data` (`--debuginfod` fetches the Qt libraries' symbols; to name the JIT's code, copy `perf-<pid>.map` back to `/tmp` first). With [inferno](https://github.com/jonhoo/inferno) on PATH a run also writes `profile.svg`, a flame graph. perf must start `qs` (`kernel.yama.ptrace_scope` 1 lets it attach to nothing else), and at `kernel.perf_event_paranoid` 2 it samples user space only, so the kernel's share (system time in the `cpu` line) isn't in the profile.
 
 These measures cost something themselves: the render loop's log and perf's sampling put about half a point of a core on the `cpu` line (2.3 % against 2.9 % for `music` here, mostly system time). Compare runs of the same kind; `--cpu-only` measures CPU alone.
+
+`harness/record A B` screen-records both visualizers at two commits, music and music with Lyric Words, on the same replayed input, so they can be compared by eye (the council round's recordings). Each is a `harness/run --record` run: in place of the desktop the run shows on a stage of its own, a headless Hyprland (no window on the desktop; its own runtime dir, config, cache and the run's private bus, and stand-ins for `systemctl` and `dbus-update-activation-environment`, so it can't point the user's services at itself), the size of the desktop's monitor in logical pixels. `wf-recorder` (libx264) records that stage, cut to the visualizer's window, from the track's first frame for the run's whole loops; nothing of the desktop is in it, and the screen's lock doesn't matter. Then `ffmpeg` puts each pair side by side (the bars one above the other, the rings next to each other), and `README.txt` says which file is which. The encoder costs CPU, so `--record` measures nothing: never record while measuring.
 
 ## The README's animations
 

@@ -22,6 +22,10 @@
 #               --check-kicks  the cheap check instead of measuring: the tree's own audio pipeline
 #                              on the replayed input must give the Kicks the kick-replay tests expect
 #               --cpu-only     CPU alone, without the measures below (they cost about half a point)
+#               --record FILE  screen-record the window to FILE (.mp4) instead of measuring: the run
+#                              shows on a stage of its own, a headless Hyprland, in place of the
+#                              desktop, so FILE holds the visualizer's window and nothing else
+#                              (wf-recorder, libx264). No result.json. harness/record does two commits.
 #
 #   measures    cpu            % of one core, qs + capture + children
 #               frames         frames rendered and late ones (over 1.5 refreshes apart), Qt's GPU
@@ -40,16 +44,17 @@
 # core like htop. Everything it starts is stopped when it exits.
 #
 # Needs: quickshell, systemd --user with cgroup v2, dbus-run-session, busctl, node, python3 with
-# python-dbus and python-gobject, qsb (qt6-shadertools). Shows the visualizer on the desktop for the
-# run's length, so the screen must stay unlocked: while the session is locked the compositor draws
-# none of it, and a run refuses to start (or fails) then. A run with music that rendered no frame
-# fails too. Not a test: CPU depends on the machine and what else runs, so compare runs made back
-# to back.
+# python-dbus and python-gobject, qsb (qt6-shadertools); for --record, Hyprland, wf-recorder and
+# ffprobe. Shows the visualizer on the desktop for the run's length, so the screen must stay
+# unlocked: while the session is locked the compositor draws none of it, and a run refuses to
+# start (or fails) then (not with --record: the stage draws however the desktop is). A run with
+# music that rendered no frame fails too. Not a test: CPU depends on the machine and what else
+# runs, so compare runs made back to back.
 set -euo pipefail
 
 HARNESS=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO=$(dirname "$HARNESS")
-HOST=bar COMMIT="" WARMUP=5 LOOPS=1 OUT="" CHECK_KICKS=0 CPU_ONLY=0 SCENARIO=""
+HOST=bar COMMIT="" WARMUP=5 LOOPS=1 OUT="" CHECK_KICKS=0 CPU_ONLY=0 RECORD="" SCENARIO=""
 
 die() { echo "harness: $*" >&2; exit 2; }
 
@@ -62,6 +67,7 @@ while (($#)); do
         --out) OUT=$2; shift ;;
         --check-kicks) CHECK_KICKS=1 ;;
         --cpu-only) CPU_ONLY=1 ;;
+        --record) RECORD=$2; shift ;;
         -h | --help) sed -n '2,/^set /p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
         -*) die "unknown option $1" ;;
         *) [[ -z $SCENARIO ]] || die "one scenario at a time"; SCENARIO=$1 ;;
@@ -69,6 +75,7 @@ while (($#)); do
     shift
 done
 [[ -n $SCENARIO ]] || die "which scenario? (see --help)"
+[[ -z $RECORD ]] || ((!CHECK_KICKS)) || die "--record or --check-kicks, not both"
 
 # --- Scenarios: the input. Each sets FIXTURE (the band stream) or SILENT=1 (cava's silence instead),
 # TRACK (its name in the report), and PLAYER: the stand-in Active Player's PlaybackStatus at start
@@ -87,7 +94,7 @@ scenario_silence_playing() { FIXTURE="" SILENT=1 TRACK=silence PLAYER=Playing PL
 # with DMS_SOCKET=0 and its own LYRICS_LOG, where its stand-in logs each lyrics lookup
 # (` lyrics.get ... -> found|none`), LYRICS_FROM, what the report calls that stand-in, and
 # LYRICS_NONE, what it says for a scenario without DMS.
-host_bar() { SHELL_DIR=$TREE; }
+host_bar() { SHELL_DIR=$TREE RECORD_WINDOW=bar-visualizer; }
 # The Lock Ring in a test qs (never the live DMS or its lock screen): the plugin from TREE, created
 # from its file:// URL with Qt.createComponent and given what DMS gives a lock-screen widget
 # (Services/PluginService.qml, Modules/Plugins/DesktopWidgetContent.qml), in a layer-shell window
@@ -96,8 +103,8 @@ host_bar() { SHELL_DIR=$TREE; }
 # same timed lyrics in the same process as DMS's; one without gets a DMS without that service (as
 # before DMS 2.0), so the Lock Ring loads no Lyric Words, as the bar has none without DMS.
 host_lock() {
-    SHELL_DIR=$RUN/lock DMS_SOCKET=0 LYRICS_LOG=$OUT/qs.log LYRICS_FROM="the stand-in lyrics service" \
-        LYRICS_NONE="a DMS without its lyrics service"
+    SHELL_DIR=$RUN/lock RECORD_WINDOW=lock-ring-harness DMS_SOCKET=0 LYRICS_LOG=$OUT/qs.log \
+        LYRICS_FROM="the stand-in lyrics service" LYRICS_NONE="a DMS without its lyrics service"
     cp -r "$HARNESS/lockhost" "$SHELL_DIR"
     local services="import qs.Services"
     if ((!DMS)); then rm -r "$SHELL_DIR/Services"; services=""; fi
@@ -166,7 +173,7 @@ session_locked() {
 declare -F "scenario_$SCENARIO" >/dev/null || die "no scenario '$SCENARIO'"
 declare -F "host_$HOST" >/dev/null || die "no host '$HOST'"
 ((CHECK_KICKS)) && HOST=kicks
-((CHECK_KICKS)) || ! session_locked || die "the screen is locked: nothing the run shows would be drawn; unlock it (and keep it unlocked) first"
+((CHECK_KICKS)) || [[ -n $RECORD ]] || ! session_locked || die "the screen is locked: nothing the run shows would be drawn; unlock it (and keep it unlocked) first"
 
 # --- Setup ----------------------------------------------------------------------------------------
 ID=bvh-$$
@@ -176,7 +183,9 @@ TREE=$REPO
 OUT=${OUT:-$(mktemp -d /tmp/bvh-out.XXXXXX)}
 mkdir -p "$OUT"
 cleanup() {
-    systemctl --user stop "$ID-qs.scope" "$ID-aux.scope" 2>/dev/null || true
+    local u
+    # One at a time: systemctl stops none of them if one isn't loaded (not started, or gone).
+    for u in qs rec stage aux; do systemctl --user stop "$ID-$u.scope" 2>/dev/null || true; done
     wait "${QS_JOB:-}" 2>/dev/null || true   # perf, when it wraps qs
     local p
     for p in ${PERF_QS:-}; do rm -f "/tmp/perf-$p.map"; done   # QML's JIT map, if the run failed before the report
@@ -219,10 +228,10 @@ done
 DMS_SOCKET=$DMS LYRICS_LOG=$OUT/dms.log LYRICS_FROM="the stand-in DMS" LYRICS_NONE="no DMS"
 "host_$HOST"
 
-# The run's own runtime dir, linking back only to the compositor, PipeWire and systemd. Pulse is
-# reached by its socket: pactl refuses a symlinked pulse/ dir.
+# The run's own runtime dir, linking back only to PipeWire, systemd and (before qs starts) the
+# compositor. Pulse is reached by its socket: pactl refuses a symlinked pulse/ dir.
 RT=/run/user/$(id -u)
-for f in "${WAYLAND_DISPLAY:-wayland-1}" hypr pipewire-0 systemd; do
+for f in pipewire-0 systemd; do
     [[ -e $RT/$f ]] && ln -s "$RT/$f" "$RUN/$f"
 done
 chmod 700 "$RUN"
@@ -271,6 +280,67 @@ if ((DMS_SOCKET)); then
     for _ in $(seq 50); do dms_up && break; sleep 0.1; done
     dms_up || die "the stand-in DMS didn't start (see $OUT/aux.log)"
 fi
+
+# --- The stage (--record): a headless Hyprland of its own for the run to show on, so a recording
+# holds nothing of the desktop. It has its own runtime dir ($RUN/s, short for its sockets' paths),
+# config, cache, state and data dirs and the run's private bus. It starts as a client of the
+# desktop's compositor and turns its one window there (its WAYLAND-1 output) off at once; it shows
+# on its output STAGE, headless, the size of the desktop's monitor in logical pixels. It never
+# reaches systemd or the user's bus: Hyprland hands its environment to `systemctl --user` and
+# `dbus-update-activation-environment` at start, which would point the user's services at the
+# stage, so stand-ins for both that do nothing are first on its PATH.
+stage_ctl() { XDG_RUNTIME_DIR=$STAGE HYPRLAND_INSTANCE_SIGNATURE=$STAGE_SIG hyprctl "$@"; }
+stage_up() { stage_ctl monitors 2>/dev/null | grep -q '^Monitor STAGE '; }
+stage_start() {
+    STAGE=$RUN/s
+    mkdir -p "$STAGE/bin" "$STAGE/config" "$STAGE/cache" "$STAGE/state" "$STAGE/data"
+    chmod 700 "$STAGE"
+    ln -s "$RT/${WAYLAND_DISPLAY:-wayland-1}" "$STAGE/wayland-host"
+    local stub
+    for stub in systemctl dbus-update-activation-environment; do
+        printf '#!/bin/sh\nexit 0\n' > "$STAGE/bin/$stub"
+        chmod +x "$STAGE/bin/$stub"
+    done
+    XDG_RUNTIME_DIR=$RT hyprctl -j monitors > "$RUN/desktop.json" 2>/dev/null || echo '[]' > "$RUN/desktop.json"
+    local mode
+    mode=$("$NODE" "$HARNESS/stage.mjs" mode "$RUN/desktop.json")
+    cat > "$STAGE/stage.lua" <<EOF
+hl.monitor({ output = "WAYLAND-1", disabled = true })
+hl.monitor({ output = "", mode = "$mode", position = "0x0", scale = 1 })
+hl.config({
+    misc = { disable_hyprland_logo = true, disable_splash_rendering = true, force_default_wallpaper = 0, background_color = 0x000000 },
+    xwayland = { enabled = false },
+    ecosystem = { no_update_news = true, no_donation_nag = true },
+})
+EOF
+    systemd-run --user --scope --unit="$ID-stage" -q \
+        env -u HYPRLAND_INSTANCE_SIGNATURE -u DISPLAY XDG_RUNTIME_DIR="$STAGE" WAYLAND_DISPLAY=wayland-host \
+        XDG_CONFIG_HOME="$STAGE/config" XDG_CACHE_HOME="$STAGE/cache" XDG_STATE_HOME="$STAGE/state" \
+        XDG_DATA_HOME="$STAGE/data" PATH="$STAGE/bin:$PATH" \
+        Hyprland -c "$STAGE/stage.lua" > "$OUT/stage.log" 2>&1 &
+    local sock=""
+    for _ in $(seq 100); do
+        sock=$(compgen -G "$STAGE/hypr/*/.socket.sock" | head -1 || true)
+        [[ -n $sock && -S $STAGE/wayland-1 ]] && break
+        sleep 0.1
+    done
+    [[ -n $sock && -S $STAGE/wayland-1 ]] || die "the stage didn't start (see $OUT/stage.log)"
+    STAGE_SIG=$(basename "$(dirname "$sock")")
+    stage_ctl output create headless STAGE > /dev/null
+    for _ in $(seq 50); do stage_up && break; sleep 0.1; done
+    stage_up || die "the stage has no output (see $OUT/stage.log)"
+}
+
+# The compositor qs shows on: the desktop's, or the stage's.
+SHOW_RT=$RT
+if [[ -n $RECORD ]]; then
+    stage_start
+    SHOW_RT=$STAGE
+    export WAYLAND_DISPLAY=wayland-1 HYPRLAND_INSTANCE_SIGNATURE=$STAGE_SIG
+fi
+for f in "${WAYLAND_DISPLAY:-wayland-1}" hypr; do
+    [[ -e $SHOW_RT/$f ]] && ln -s "$SHOW_RT/$f" "$RUN/$f"
+done
 
 # --- Measures: set up before qs starts (optional), begin before the window, end after it, report
 # after the run. ----------------------------------------------------------------------------------
@@ -402,8 +472,25 @@ measure_profile_report() {
     add_json "$RUN/profile.json"
 }
 
+# The recording (--record): wf-recorder on the stage's output, cut to the visualizer's window, over
+# the window. It runs in its own scope, outside qs's.
+measure_record_begin() {
+    stage_ctl -j layers > "$RUN/layers.json"
+    local region
+    region=$("$NODE" "$HARNESS/stage.mjs" region "$RUN/layers.json" "$RECORD_WINDOW") \
+        || die "no $RECORD_WINDOW window on the stage (see $OUT/qs.log)"
+    WAYLAND_DISPLAY=$STAGE/wayland-1 systemd-run --user --scope --unit="$ID-rec" -q \
+        wf-recorder -y -o STAGE -g "$region" -c libx264 -p crf=18 -r 60 -f "$RECORD" > "$OUT/record.log" 2>&1 &
+    REC_JOB=$!
+}
+measure_record_end() {
+    systemctl --user kill -s INT "$ID-rec.scope" 2>/dev/null || true
+    wait "$REC_JOB" 2>/dev/null || true
+}
+
 MEASURES=(cpu frames gpu profile)
 ((CPU_ONLY || CHECK_KICKS)) && MEASURES=(cpu)
+[[ -z $RECORD ]] || MEASURES=(cpu record)   # cpu for its check that the capture ran, not its number
 
 # --- The run --------------------------------------------------------------------------------------
 QS_WRAP=()
@@ -455,6 +542,14 @@ fi
 
 if ((CHECK_KICKS)); then
     "$NODE" "$HARNESS/kicks.mjs" "$OUT/qs.log" "$LOOPS" "$REFERENCE"
+    exit
+fi
+if [[ -n $RECORD ]]; then
+    [[ -s $RECORD ]] || { echo "FAILED: nothing was recorded (see $OUT/record.log)"; exit 1; }
+    IFS=, read -r W H N < <(ffprobe -v error -count_frames -select_streams v:0 \
+        -show_entries stream=width,height,nb_read_frames -of csv=p=0 "$RECORD")
+    ((${N:-0} > 0)) || { echo "FAILED: the recording has no frame (see $OUT/record.log)"; exit 1; }
+    echo "record   $RECORD: ${W}x$H, $N frames"
     exit
 fi
 

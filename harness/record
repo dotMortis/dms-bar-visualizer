@@ -1,0 +1,83 @@
+#!/bin/bash
+# Screen recordings of two commits on the same replayed input, for judging "same look by eye" (the
+# council round, docs/council.md): the Bar Visualizer and the Lock Ring, music and music with Lyric
+# Words, each commit in turn (harness/run --record), then the two side by side.
+#
+#   harness/record [--out DIR] [--warmup S] [--loops N] <commit A> <commit B>
+#
+#   e.g. harness/record --out ~/council/recordings v0.10.0 HEAD
+#
+#   --out DIR     where the recordings go (default: a new /tmp/bvh-rec.* dir); the runs' logs go
+#                 to DIR/runs
+#   --warmup S    seconds before recording (default 5)
+#   --loops N     whole loops of the reference track to record (default 1, 24.05 s)
+#
+# Each run shows on a stage of its own, a headless Hyprland, not on the desktop, so a recording
+# holds the visualizer's window and nothing else, on black; the bar is as wide as the desktop's
+# monitor. Every recording starts at the track's first frame. Per host and scenario it writes
+# <host>-<scenario>-<A>.mp4, <host>-<scenario>-<B>.mp4 and <host>-<scenario>-<A>-vs-<B>.mp4,
+# A above B for the bar, A left of B for the Lock Ring, and README.txt, which says so. 8 runs,
+# about 4 minutes. Recording costs CPU (the encoder): never record while measuring.
+#
+# Needs what harness/run --record needs, and ffmpeg.
+set -euo pipefail
+
+HARNESS=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+OUT="" RUN_ARGS=() REVS=()
+die() { echo "harness: $*" >&2; exit 2; }
+
+while (($#)); do
+    case $1 in
+        --out) OUT=$2; shift ;;
+        --warmup | --loops) RUN_ARGS+=("$1" "$2"); shift ;;
+        -h | --help) sed -n '2,/^set /p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
+        -*) die "unknown option $1" ;;
+        *) REVS+=("$1") ;;
+    esac
+    shift
+done
+((${#REVS[@]} == 2)) || die "two commits, A and B (see --help)"
+for rev in "${REVS[@]}"; do
+    git -C "$HARNESS/.." rev-parse --verify -q "$rev^{commit}" > /dev/null || die "no commit $rev"
+done
+OUT=${OUT:-$(mktemp -d /tmp/bvh-rec.XXXXXX)}
+mkdir -p "$OUT/runs"
+
+# A commit's name in a file name: v0.10.0 stays v0.10.0, HEAD becomes its short sha.
+label() {
+    if [[ $1 == HEAD* ]]; then git -C "$HARNESS/.." rev-parse --short "$1"; else echo "${1//[^A-Za-z0-9._-]/_}"; fi
+}
+A=$(label "${REVS[0]}") B=$(label "${REVS[1]}")
+[[ $A != "$B" ]] || B=$B-b
+
+{
+    echo "Screen recordings of the same replayed input (the reference track, harness/run's scenarios)"
+    echo "at two commits: A = ${REVS[0]} ($(git -C "$HARNESS/.." rev-parse "${REVS[0]}")),"
+    echo "B = ${REVS[1]} ($(git -C "$HARNESS/.." rev-parse "${REVS[1]}")). Made by harness/record."
+    echo "Each starts at the track's first frame and lasts the same whole loops, every setting at its"
+    echo "default, on black. music: the track, no Lyric Words; music_lyrics: the same with Lyric Words."
+    echo
+} > "$OUT/README.txt"
+
+for scenario in music music_lyrics; do
+    for host in bar lock; do
+        for i in 0 1; do
+            name=$host-$scenario-$( ((i)) && echo "$B" || echo "$A")
+            "$HARNESS/run" --commit "${REVS[$i]}" --host "$host" "${RUN_ARGS[@]}" \
+                --record "$OUT/$name.mp4" --out "$OUT/runs/$name" "$scenario"
+        done
+        # Side by side: the wide bar's strips one above the other, the square rings next to each other.
+        stack=vstack where="A above, B below"
+        [[ $host == lock ]] && stack=hstack where="A left, B right"
+        ffmpeg -v error -y -i "$OUT/$host-$scenario-$A.mp4" -i "$OUT/$host-$scenario-$B.mp4" \
+            -filter_complex "[0:v][1:v]$stack=inputs=2:shortest=1" -c:v libx264 -crf 18 \
+            "$OUT/$host-$scenario-$A-vs-$B.mp4"
+        what=$([[ $host == bar ]] && echo "the Bar Visualizer" || echo "the Lock Ring")
+        {
+            echo "$host-$scenario-$A.mp4   $what, $scenario, A"
+            echo "$host-$scenario-$B.mp4   $what, $scenario, B"
+            echo "$host-$scenario-$A-vs-$B.mp4   both, $where"
+        } >> "$OUT/README.txt"
+    done
+done
+echo "out      $OUT"
