@@ -136,6 +136,116 @@ mod the_end_of_a_lyric_line_on_the_lock_ring {
     }
 }
 
+/// A line of `count` words, one a second from song time `t`, held until a second after its last.
+fn line_of(count: usize, t: f64) -> Value {
+    let texts: Vec<String> = (0..count).map(|i| format!("w{i}")).collect();
+    let pieces: Vec<Value> = texts
+        .iter()
+        .enumerate()
+        .map(|(i, x)| {
+            let x = if i + 1 < count { format!("{x} ") } else { x.clone() };
+            piece(t + i as f64, t + i as f64 + 0.5, &x)
+        })
+        .collect();
+    json!({ "t": t, "e": t + count as f64 + 1.0, "x": texts.join(" "), "w": pieces })
+}
+
+/// The spots of a line of `count` words, all shown, with `seed`.
+fn spots_of(count: usize, seed: u32) -> Vec<Spot> {
+    playing_with(json!([line_of(count, 10.0)]), 300.0, seed).spots(10.0 + count as f64)
+}
+
+mod placement_on_the_lock_ring_ribbons_or_hands {
+    use super::*;
+
+    fn spots() -> Vec<Spot> {
+        (1..=20).flat_map(|seed| spots_of(8, seed)).collect()
+    }
+
+    #[test]
+    fn words_land_on_ribbons_around_the_ring_and_on_every_hand_along_it_and_nowhere_else() {
+        let spots = spots();
+        let (mut ribbons, mut hands) = (0, [0; 3]);
+        for spot in &spots {
+            match *spot {
+                Spot::Ribbon { ribbon, angle } => {
+                    assert!(ribbon < 3 && (0.0..360.0).contains(&angle), "{spot:?}");
+                    ribbons += 1;
+                }
+                Spot::Hand { hand, along } => {
+                    assert!(hand < 3 && (0.0..=1.0).contains(&along), "{spot:?}");
+                    hands[hand] += 1;
+                }
+                Spot::Bar { .. } => panic!("on the bar: {spot:?}"),
+            }
+        }
+        assert!(ribbons > 0);
+        assert!(hands.iter().all(|&n| n > 0), "every Hand: {hands:?}");
+    }
+
+    #[test]
+    fn about_hand_share_of_the_words_land_on_a_hand_however_many_share_the_line() {
+        for count in [1, 3, 10] {
+            let all: Vec<Spot> = (1..=300).flat_map(|seed| spots_of(count, seed)).collect();
+            let share = all.iter().filter(|s| matches!(s, Spot::Hand { .. })).count() as f64 / all.len() as f64;
+            assert!((share - 0.35).abs() < 0.05, "{count} words a line: {share} on a Hand");
+        }
+    }
+
+    #[test]
+    fn a_new_word_lands_away_from_the_words_already_shown() {
+        for seed in 1..=100 {
+            let spots = spots_of(2, seed);
+            match (spots[0], spots[1]) {
+                (Spot::Ribbon { angle: a, .. }, Spot::Ribbon { angle: b, .. }) => {
+                    let d = (a - b).abs() % 360.0;
+                    assert!(d.min(360.0 - d) >= 36.0, "seed {seed}: {a} {b}");
+                }
+                (Spot::Hand { hand: h, along: a }, Spot::Hand { hand: k, along: b }) if h == k => {
+                    assert!((a - b).abs() >= 0.2, "seed {seed}: {a} {b}");
+                }
+                _ => {}
+            }
+        }
+    }
+
+    #[test]
+    fn every_word_lands_on_its_own_spot_no_rows() {
+        let spots = spots_of(4, 3);
+        for (i, a) in spots.iter().enumerate() {
+            assert!(spots[i + 1..].iter().all(|b| b != a), "{spots:?}");
+        }
+    }
+
+    #[test]
+    fn a_word_keeps_its_spot_while_it_is_shown() {
+        let mut song = playing_with(json!([line_of(4, 10.0)]), 300.0, 7);
+        let early = song.spots(11.5);
+        let later = song.spots(14.5);
+        assert_eq!(later[..2], early);
+    }
+
+    #[test]
+    fn the_spots_are_v0_10_0s_for_the_same_seed() {
+        // docs/lyric-words.mjs (v0.10.0), "ribbons-or-hands", seed 42, a line of five words: the
+        // same random draws in the same order give the same spots, bit for bit.
+        let expected = [
+            Spot::Ribbon { ribbon: 1, angle: 306.88768565654755 },
+            Spot::Hand { hand: 0, along: 0.7835472931619734 },
+            Spot::Hand { hand: 1, along: 0.6807689322158694 },
+            Spot::Ribbon { ribbon: 2, angle: 112.79001728631556 },
+            Spot::Ribbon { ribbon: 0, angle: 226.4052201155573 },
+        ];
+        assert_eq!(spots_of(5, 42), expected);
+    }
+
+    #[test]
+    fn the_same_seed_gives_the_same_placement_another_seed_another() {
+        assert_eq!(spots_of(6, 5), spots_of(6, 5));
+        assert_ne!(spots_of(6, 5), spots_of(6, 6));
+    }
+}
+
 // On the Lock Ring a line's words start dissolving right at its end.
 mod a_line_without_an_end_time {
     use super::*;

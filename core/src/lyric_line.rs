@@ -56,6 +56,12 @@ pub const WORD_PACE: f64 = 0.4;
 pub const RIBBONS: usize = 3;
 /// How many random spots a new word tries; it takes the one furthest from the words shown.
 pub const TRIES: usize = 12;
+/// The Lock Ring's Hands a word can land on (lock_ring::HANDS: hour, minute, second).
+pub const HAND_COUNT: usize = 3;
+/// On the Lock Ring, the share of words that land on a Hand; the rest land on a Ribbon. A word
+/// picks one of the two first, and only then spreads out from the words shown there, so the share
+/// holds however crowded either one gets.
+pub const HAND_SHARE: f64 = 0.35;
 /// The most recent Kicks kept for the pop: far more than land within POP_WINDOW of a word.
 const KICKS: usize = 64;
 
@@ -628,14 +634,14 @@ impl LyricLine {
                 }
             }
         }
-        // A new word lands away from all the others shown; a new row does, and its later words
-        // follow its first.
+        // A new word lands away from all the others shown; on the bar a new row does, and its later
+        // words follow its first.
         for &(i, row, kick) in &self.fresh {
             let (line, word) = (self.words[i].line, self.words[i].word);
-            let lead = self.next.iter().find(|h| h.line == line && h.row == row);
+            let lead = self.next.iter().find(|h| !self.ring && h.line == line && h.row == row);
             let spot = match lead {
                 Some(h) => h.spot,
-                None => place(&mut self.random, &self.next),
+                None => place(&mut self.random, &self.next, self.ring),
             };
             self.words[i].spot = spot;
             self.next.push(Held { line, word, row, spot, kick });
@@ -644,14 +650,19 @@ impl LyricLine {
     }
 }
 
-/// A spot on the bar for a new word: of TRIES random ones, the one furthest along the bar from the
-/// words `taken`.
-fn place(random: &mut Random, taken: &[Held]) -> Spot {
+/// A spot for a new word: of TRIES random ones, the one furthest from the words `taken`. On the
+/// Lock Ring (`ring`) it first picks a Hand (HAND_SHARE of the time) or a Ribbon, and tries only
+/// there: a Hand counts as far from every Ribbon, so trying both would favour the Hands.
+fn place(random: &mut Random, taken: &[Held], ring: bool) -> Spot {
+    let on_hand = ring && random.next() < HAND_SHARE;
+    let which = |r: f64, n: usize| libm::floor(r * n as f64) as usize;
     let (mut best, mut best_gap) = (Spot::default(), -1.0);
     for _ in 0..TRIES {
-        let ribbon = libm::floor(random.next() * RIBBONS as f64) as usize;
-        let x = random.next();
-        let spot = Spot::Bar { ribbon, x };
+        let spot = match (ring, on_hand) {
+            (false, _) => Spot::Bar { ribbon: which(random.next(), RIBBONS), x: random.next() },
+            (true, false) => Spot::Ribbon { ribbon: which(random.next(), RIBBONS), angle: random.next() * 360.0 },
+            (true, true) => Spot::Hand { hand: which(random.next(), HAND_COUNT), along: random.next() },
+        };
         let gap = taken.iter().fold(f64::INFINITY, |gap, other| gap.min(apart(&spot, &other.spot)));
         if gap > best_gap {
             best = spot;
