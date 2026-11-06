@@ -11,7 +11,10 @@
 #               silence_paused     Silence: cava's silence, the Active Player paused
 #               silence_playing    Silence: cava's silence while the Active Player reports playing
 #                                  (a silent track, "Silence"; the stand-in DMS has no lyrics for it)
-#   options     --host bar     what runs: bar = the Bar Visualizer (shell.qml), the default
+#   options     --host HOST    what runs: bar = the Bar Visualizer (shell.qml), the default;
+#                              lock = the Lock Ring, loaded as DMS loads it in a test qs
+#                              (harness/lockhost), with a stand-in for DMS's lyrics service in
+#                              place of the DMS socket
 #               --commit REV   measure REV (e.g. v0.10.0) instead of this working tree
 #               --warmup S     seconds before measuring (default 5)
 #               --loops N      whole loops of the track to measure over (default 1, 24.05 s)
@@ -26,9 +29,11 @@
 #               gpu            GPU busy, from the DRM driver's fdinfo
 #               profile        perf.data and profile.txt: where the CPU time goes (needs perf)
 #
-# Only the inputs are swapped: bin/cava stands in for cava (first on PATH), player stands in for the
-# Active Player (an MPRIS player on the run's own session bus, the only one there), dms stands in
-# for DMS's socket where a scenario has one (in the run's runtime dir), and the run gets its own
+# Only the inputs are swapped: bin/cava stands in for cava (first on PATH), bin/pactl answers the
+# sink probe with the scenario's streams, not the desktop's (the real pactl still runs), player
+# stands in for the Active Player (an MPRIS player on the run's own session bus, the only one
+# there), dms stands in for DMS's socket where a scenario has one (in the run's runtime dir),
+# lockhost for the parts of DMS the Lock Ring uses (--host lock), and the run gets its own
 # runtime dir, config dir (default settings), cache and session bus, so it can't see or touch
 # the user's live visualizers, DMS, players or config.json. qs runs in a transient systemd scope, so
 # CPU is the scope's cgroup: qs, its capture and every short-lived child (sh, pactl), as % of one
@@ -76,7 +81,62 @@ scenario_silence_paused() { FIXTURE="" SILENT=1 TRACK=silence PLAYER=Paused PLAY
 scenario_silence_playing() { FIXTURE="" SILENT=1 TRACK=silence PLAYER=Playing PLAYER_TITLE="Silence" DMS=1; }
 
 # --- Hosts: what runs. Each sets SHELL_DIR, the qs config dir, from TREE (the code under test).
+# A scenario's DMS (DMS=1) is the stand-in DMS socket (harness/dms) unless a host says otherwise
+# with DMS_SOCKET=0 and its own LYRICS_LOG, where its stand-in logs each lyrics lookup
+# (` lyrics.get ... -> found|none`), LYRICS_FROM, what the report calls that stand-in, and
+# LYRICS_NONE, what it says for a scenario without DMS.
 host_bar() { SHELL_DIR=$TREE; }
+# The Lock Ring in a test qs (never the live DMS or its lock screen): the plugin from TREE, created
+# from its file:// URL with Qt.createComponent and given what DMS gives a lock-screen widget
+# (Services/PluginService.qml, Modules/Plugins/DesktopWidgetContent.qml), in a layer-shell window
+# of its default size at the top left, click-through, on black. harness/lockhost stands in for the
+# parts of DMS it imports. A scenario with a DMS gets its stand-in lyrics service, which serves the
+# same timed lyrics in the same process as DMS's; one without gets a DMS without that service (as
+# before DMS 2.0), so the Lock Ring loads no Lyric Words, as the bar has none without DMS.
+host_lock() {
+    SHELL_DIR=$RUN/lock DMS_SOCKET=0 LYRICS_LOG=$OUT/qs.log LYRICS_FROM="the stand-in lyrics service" \
+        LYRICS_NONE="a DMS without its lyrics service"
+    cp -r "$HARNESS/lockhost" "$SHELL_DIR"
+    local services="import qs.Services"
+    if ((!DMS)); then rm -r "$SHELL_DIR/Services"; services=""; fi
+    cat > "$SHELL_DIR/shell.qml" <<EOF
+import QtQuick
+import Quickshell
+import Quickshell.Wayland
+// Unused here: Quickshell serves the plugin only the qs.* modules its shell imports.
+import qs.Common
+import qs.Modules.Plugins
+$services
+ShellRoot {
+    PanelWindow {
+        id: win
+        screen: Quickshell.screens[0]
+        anchors { top: true; left: true }
+        implicitWidth: loader.item?.defaultWidth ?? 576
+        implicitHeight: loader.item?.defaultHeight ?? 576
+        color: "black"
+        exclusionMode: ExclusionMode.Ignore
+        WlrLayershell.layer: WlrLayer.Overlay
+        WlrLayershell.namespace: "lock-ring-harness"
+        mask: Region {}
+        readonly property var plugin: Qt.createComponent("file://$TREE/lock-ring/LockRing.qml", Component.PreferSynchronous, win)
+        Component.onCompleted: if (plugin.status === Component.Error) console.warn("harness: the Lock Ring didn't load: " + plugin.errorString())
+        Loader {
+            id: loader
+            anchors.fill: parent
+            sourceComponent: win.plugin
+            onLoaded: {
+                item.pluginId = "lockRing";
+                item.lockScreen = true;
+                item.widgetWidth = Qt.binding(() => loader.width);
+                item.widgetHeight = Qt.binding(() => loader.height);
+                item.screen = Qt.binding(() => win.screen);
+            }
+        }
+    }
+}
+EOF
+}
 # The tree's own AudioPipeline in a bare shell that logs each Kick against the epoch.
 host_kicks() {
     SHELL_DIR=$RUN/kicks
@@ -146,6 +206,7 @@ for frag in "$TREE"/shaders/*.frag "$TREE"/lock-ring/shaders/*.frag; do
     [[ -e $frag && ! ${frag}.qsb -nt $frag ]] || continue
     "$QSB" --glsl "100 es,120,150" --hlsl 50 --msl 12 -o "$frag.qsb" "$frag"
 done
+DMS_SOCKET=$DMS LYRICS_LOG=$OUT/dms.log LYRICS_FROM="the stand-in DMS" LYRICS_NONE="no DMS"
 "host_$HOST"
 
 # The run's own runtime dir, linking back only to the compositor, PipeWire and systemd. Pulse is
@@ -158,12 +219,13 @@ chmod 700 "$RUN"
 mkdir -p "$RUN/config/bar-visualizer" "$RUN/cache" "$RUN/state" "$RUN/data"
 echo '{}' > "$RUN/config/bar-visualizer/config.json"   # every setting at its default
 
-export XDG_RUNTIME_DIR=$RUN XDG_CONFIG_HOME=$RUN/config XDG_CACHE_HOME=$RUN/cache \
+HARNESS_PACTL=$(command -v pactl || true)   # the real one, before bin/ goes first on PATH
+export HARNESS_PACTL XDG_RUNTIME_DIR=$RUN XDG_CONFIG_HOME=$RUN/config XDG_CACHE_HOME=$RUN/cache \
     XDG_STATE_HOME=$RUN/state XDG_DATA_HOME=$RUN/data \
     PULSE_SERVER=unix:$RT/pulse/native PATH=$HARNESS/bin:$PATH NO_AT_BRIDGE=1 \
     HARNESS_FIXTURE=$FIXTURE HARNESS_SILENT=$SILENT HARNESS_LOOP=$LOOP_LENGTH HARNESS_LOG=$OUT/capture.log \
     HARNESS_PLAYER=$PLAYER HARNESS_PLAYER_TITLE=$PLAYER_TITLE HARNESS_PLAYER_LOG=$OUT/player.log \
-    HARNESS_DMS=$DMS HARNESS_DMS_LOG=$OUT/dms.log
+    HARNESS_DMS=$DMS_SOCKET HARNESS_DMS_LOG=$OUT/dms.log HARNESS_LYRICS=$HARNESS/lyrics.json
 : > "$HARNESS_LOG"
 : > "$HARNESS_PLAYER_LOG"
 : > "$HARNESS_DMS_LOG"
@@ -195,7 +257,7 @@ if [[ $PLAYER != none ]]; then
 fi
 # The bar looks for DMS's socket once at start, then only every 15 s: it must be there before qs.
 dms_up() { compgen -G "$RUN/dms-*.sock" >/dev/null; }
-if ((DMS)); then
+if ((DMS_SOCKET)); then
     for _ in $(seq 50); do dms_up && break; sleep 0.1; done
     dms_up || die "the stand-in DMS didn't start (see $OUT/aux.log)"
 fi
@@ -366,14 +428,14 @@ else
     ((READS)) || { echo "FAILED: the visualizer never read the stand-in player (see $OUT/player.log, $OUT/qs.log)"; exit 1; }
     echo "player   $PLAYER \"$PLAYER_TITLE\", the Active Player (read $READS time(s))"
 fi
-# The stand-in DMS answers from its fixed lyrics only: allowNetwork reaches nothing.
-ASKED=$(grep -c ' lyrics\.get ' "$HARNESS_DMS_LOG" || true)
+# The stand-ins answer from the fixed lyrics only: allowNetwork reaches nothing.
+ASKED=$(grep -c ' lyrics\.get ' "$LYRICS_LOG" || true)
 if ((!DMS)); then
-    echo "lyrics   no DMS"
+    echo "lyrics   $LYRICS_NONE"
 elif ((!CHECK_KICKS)); then
-    ((ASKED)) || { echo "FAILED: the visualizer never asked the stand-in DMS for lyrics (see $OUT/dms.log, $OUT/qs.log)"; exit 1; }
-    FOUND=$(grep -c ' lyrics\.get .* -> found$' "$HARNESS_DMS_LOG" || true)
-    echo "lyrics   the stand-in DMS, asked $ASKED time(s) for \"$PLAYER_TITLE\": $( ((FOUND)) && echo "the timed lyrics (harness/lyrics.json)" || echo "none found")"
+    ((ASKED)) || { echo "FAILED: the visualizer never asked $LYRICS_FROM for lyrics (see $LYRICS_LOG, $OUT/qs.log)"; exit 1; }
+    FOUND=$(grep -c ' lyrics\.get .* -> found$' "$LYRICS_LOG" || true)
+    echo "lyrics   $LYRICS_FROM, asked $ASKED time(s) for \"$PLAYER_TITLE\": $( ((FOUND)) && echo "the timed lyrics (harness/lyrics.json)" || echo "none found")"
 fi
 
 if ((CHECK_KICKS)); then

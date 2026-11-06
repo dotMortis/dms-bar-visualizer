@@ -1,0 +1,28 @@
+#!/bin/sh
+# The harness's stand-in for pactl, first on PATH, so the visualizer's sink probe (`pactl -f json
+# list sinks`, `... list sink-inputs`, audio/AudioPipeline.qml) reads the scenario's sinks and
+# streams, not the desktop's: a stream starting or stopping there would change the capture's
+# source and restart it mid-run. One sink; the stand-in player's stream on it while it plays,
+# corked while it's paused, none without a player. So a playing scenario's capture starts twice
+# (the probe moves it from "auto" to that sink's monitor), the others once.
+#
+# The real pactl still runs, with the same arguments and its answer dropped, so its cost (a
+# process and a round trip to the sound server) stays in what's measured.
+#
+# Env: HARNESS_PLAYER  the stand-in player's PlaybackStatus at start: Playing, Paused or none
+#      HARNESS_PACTL   the real pactl (none: skipped)
+[ -z "$HARNESS_PACTL" ] || "$HARNESS_PACTL" "$@" > /dev/null 2>&1
+case "$*" in
+*"list sinks"*)
+    printf '%s' '[{"index":1,"state":"RUNNING","name":"harness_sink","description":"Harness","driver":"harness","monitor_source":"harness_sink.monitor","properties":{}}]' ;;
+*"list sink-inputs"*)
+    case $HARNESS_PLAYER in
+    Playing) corked=false ;;
+    Paused) corked=true ;;
+    *) printf '[]'; exit 0 ;;
+    esac
+    printf '%s' '[{"index":7,"driver":"harness","sink":1,"corked":'$corked',"mute":false,"properties":{"application.name":"harness","application.process.binary":"player","node.name":"harness"}}]' ;;
+*)
+    echo "harness pactl: only the sink probe's lists are stood in for" >&2
+    exit 1 ;;
+esac
