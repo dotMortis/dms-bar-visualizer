@@ -170,7 +170,7 @@ measure_cpu_end() {
     local p
     for p in $(pids); do TICKS1[$p]=$(ticks "$p"); NAME[$p]=${NAME[$p]:-$(comm "$p")}; done
     CAPTURE_ALIVE=0
-    for p in "${!TICKS1[@]}"; do [[ ${NAME[$p]} == cava ]] && CAPTURE_ALIVE=1; done
+    for p in "${!TICKS1[@]}"; do [[ ${NAME[$p]} != cava ]] || CAPTURE_ALIVE=1; done
 }
 measure_cpu_report() {
     local hz ns pct user sys qs=0 cap=0 p d
