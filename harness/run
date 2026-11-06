@@ -15,7 +15,10 @@
 #   options     --host HOST    what runs: bar = the Bar Visualizer (shell.qml), the default;
 #                              lock = the Lock Ring, loaded as DMS loads it in a test qs
 #                              (harness/lockhost), with a stand-in for DMS's lyrics service in
-#                              place of the DMS socket
+#                              place of the DMS socket;
+#                              floor, floor-pipe, floor-parse = Quickshell's floor (harness/floor):
+#                              the bar's window and REV's viz.frag with no script per frame, qs not
+#                              reading the capture, reading it, or parsing it (use --commit v0.10.0)
 #               --commit REV   measure REV (e.g. v0.10.0) instead of this working tree
 #               --warmup S     seconds before measuring (default 5)
 #               --loops N      whole loops of the track to measure over (default 1, 24.05 s)
@@ -111,6 +114,20 @@ host_lock() {
         sed -i '/^import qs\.Services$/d' "$SHELL_DIR/shell.qml"
     fi
 }
+# Quickshell's floor (harness/floor/shell.qml): the bar's window and the tree's viz.frag with no
+# script per frame. floor: qs doesn't read the capture; floor-pipe: it reads every line and does
+# nothing with it; floor-parse: it parses every line as v0.10.0 did (BVH_FLOOR_MODE).
+host_floor_mode() {
+    SHELL_DIR=$RUN/floor RECORD_WINDOW=bar-visualizer
+    lyrics_from_dms_socket
+    mkdir -p "$SHELL_DIR"
+    cp "$HARNESS/floor/shell.qml" "$SHELL_DIR/"
+    ln -s "$TREE/shaders/viz.frag.qsb" "$SHELL_DIR/viz.frag.qsb"
+    export BVH_FLOOR_MODE=$1
+}
+host_floor() { host_floor_mode floor; }
+host_floor-pipe() { host_floor_mode pipe; }
+host_floor-parse() { host_floor_mode parse; }
 # The tree's own AudioPipeline in a bare shell that logs each Kick against the epoch.
 host_kicks() {
     SHELL_DIR=$RUN/kicks RECORD_WINDOW=""
