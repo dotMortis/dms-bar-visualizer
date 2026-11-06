@@ -84,6 +84,73 @@ fn push_bands_advance_and_frame_never_allocate_after_configure() {
     }
 }
 
+/// The shared demo song (harness/lyrics.json, docs/demo-lyrics.mjs's DEMO_LINES), and a line of 60
+/// words that pile up, as DMS's lyrics.get reply.
+fn song() -> String {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../harness/lyrics.json");
+    let mut lines: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let words: Vec<String> = (0..60).map(|i| format!("word{i}")).collect();
+    lines.as_array_mut().unwrap().push(serde_json::json!({ "t": 30, "e": 40, "x": words.join(" ") }));
+    serde_json::json!({ "found": true, "synced": lines }).to_string()
+}
+
+/// A Visualizer showing the song's Lyric Words on an 800 x 40 bar.
+fn singing(settings: &str) -> Visualizer {
+    let mut visualizer = Visualizer::new();
+    visualizer.configure(settings);
+    visualizer.set_bar_size(800.0, 40.0);
+    visualizer.set_letters("abcdefghijklmnopqrstuvwxyz", &[0.55; 26], 1.2);
+    visualizer.set_seed(7);
+    visualizer.set_track("song", 45.0);
+    visualizer.set_lyrics(&song());
+    visualizer
+}
+
+#[test]
+fn the_lyric_words_and_their_glyphs_never_allocate_after_set_lyrics() {
+    let frames = &fixture("steady_house").frames;
+    let mut visualizer = singing(&DEFAULTS.json());
+    let (mut words, mut glyphs) = (0, 0);
+    let n = allocations(|| {
+        visualizer.set_player(Player::Playing);
+        visualizer.set_position(0.0, 1.0);
+        for (i, f) in frames.iter().enumerate() {
+            visualizer.push_bands(&f.values, f.time);
+            visualizer.advance(1.0 / 60.0);
+            // Readings now and then, some of them seeks, and a pause.
+            match i % 600 {
+                100 => visualizer.set_position(visualizer.song_position() + 0.05, 1.0),
+                300 => visualizer.set_position(38.0, 1.0),
+                400 => visualizer.set_player(Player::Paused),
+                420 => visualizer.set_player(Player::Playing),
+                599 => visualizer.set_position(0.5, 1.25),
+                _ => {}
+            }
+            words = words.max(visualizer.lyric_words().len());
+            glyphs = glyphs.max(std::hint::black_box(visualizer.glyphs()).len());
+        }
+    });
+    assert_eq!(n, 0, "allocations over {} frames", frames.len());
+    assert!(words >= 60 && glyphs > 300, "the words did show: {words} words, {glyphs} glyphs at most");
+}
+
+#[test]
+fn the_same_lyrics_again_dont_allocate_per_frame_either() {
+    let mut visualizer = singing("{}");
+    visualizer.set_player(Player::Playing);
+    visualizer.set_position(13.5, 1.0);
+    visualizer.advance(0.0);
+    visualizer.set_lyrics(&song());
+    visualizer.set_track("song", 45.0);
+    let n = allocations(|| {
+        for _ in 0..300 {
+            visualizer.advance(1.0 / 60.0);
+        }
+    });
+    assert_eq!(n, 0);
+    assert!(!visualizer.glyphs().is_empty());
+}
+
 #[test]
 fn bad_input_doesnt_allocate_either() {
     let mut visualizer = Visualizer::new();
@@ -172,6 +239,62 @@ fn bad_input_never_panics_and_frame_stays_drawable() {
             }
             assert_sane(visualizer.frame(), &format!("frame {n} at settings {settings:?}, dt {dt}"));
             visualizer.configure(settings);
+        }
+    }
+}
+
+/// Glyphs anything can draw: every number finite, the opacities in 0..1, each glyph a letter of a
+/// word shown.
+fn assert_drawable(visualizer: &Visualizer, after: &str) {
+    let words = visualizer.lyric_words().len();
+    for g in visualizer.glyphs() {
+        let copies = g.copies.iter().flat_map(|c| [c.color[0], c.color[1], c.color[2], c.dx, c.opacity]);
+        let numbers = [g.x, g.y, g.angle, g.scale, g.pivot_x, g.pivot_y, g.glow, g.glow_spread, g.blur, g.white, g.em];
+        assert!(
+            numbers.into_iter().chain(g.color).chain(g.core).chain(copies).all(f64::is_finite),
+            "{g:?} after {after}"
+        );
+        assert!(g.opacity > 0.0 && g.opacity <= 1.0, "{g:?} after {after}");
+        assert!(char::from_u32(g.letter as u32).is_some() && (g.word as usize) < words, "{g:?} after {after}");
+    }
+}
+
+#[test]
+fn bad_lyrics_input_never_panics_and_the_glyphs_stay_drawable() {
+    let lyrics = [
+        "",
+        "{",
+        "null",
+        "[1, null, {}, {\"t\": -1, \"x\": \"before the start\"}, {\"t\": 1, \"x\": 5}]",
+        r#"{"synced": [{"t": 1e308, "e": -1e308, "x": "far away", "w": [{"t": 1e308, "x": "far "}, {"t": "2", "x": "away"}]}]}"#,
+        r#"[{"t": 0, "x": "   "}, {"t": 0, "x": "", "group": 0.5}, {"t": 0, "e": 0, "x": "zero"}, {"t": 0, "x": "same start"}]"#,
+        r#"[{"t": 1, "x": "a\u0000b \u{feff} ✨ 🎶 ünïcödé", "parts": "no"}, {"t": 2, "x": "x", "w": [{"t": 2, "e": 1, "x": "x"}]}]"#,
+        r#"[{"t": 1, "e": 2, "parts": [null, {"t": 1, "x": "part"}], "x": "ignored"}]"#,
+    ];
+    let frames = &fixture("steady_house").frames;
+    for text in lyrics {
+        for (size, letters) in
+            [((800.0, 40.0), 0.5), ((f64::NAN, -3.0), f64::NAN), ((1e308, 1e308), 1e308), ((1.0, 0.1), 0.0)]
+        {
+            let mut visualizer = Visualizer::new();
+            visualizer.set_bar_size(size.0, size.1);
+            visualizer.set_letters("ab✨", &[letters, -1.0, f64::INFINITY], letters);
+            visualizer.set_track("t", [300.0, f64::NAN, -5.0, 1e308][text.len() % 4]);
+            visualizer.set_lyrics(text);
+            visualizer.set_player(Player::Playing);
+            for (n, f) in frames.iter().enumerate().take(400) {
+                visualizer.push_bands(&f.values, f.time);
+                visualizer.advance([1.0 / 60.0, 0.5, f64::NAN, 1e308][n % 4]);
+                if n % 50 == 0 {
+                    let time = [0.0, f64::NAN, 1e308, -1e308, 1.5][n / 50 % 5];
+                    let rate = [1.0, f64::INFINITY, -2.0, 0.0, 1e308][n / 50 % 5];
+                    visualizer.set_position(time, rate);
+                }
+                assert_drawable(&visualizer, &format!("frame {n} of {text:?} on {size:?}"));
+                for w in visualizer.lyric_words() {
+                    let _ = (visualizer.word_text(w), visualizer.word_row(w));
+                }
+            }
         }
     }
 }

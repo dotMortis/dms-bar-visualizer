@@ -13,6 +13,10 @@ use crate::{Frame, Visualizer};
 pub const FALLBACK_ADVANCE: f64 = 0.5;
 /// The font's line height, in ems, until set_letters gives it.
 pub const FALLBACK_LINE_HEIGHT: f64 = 1.2;
+/// The largest bar (pixels either way) and font measure (ems) taken: anything larger is a mistake,
+/// kept from overflowing.
+pub const MAX_BAR: f64 = 100_000.0;
+pub const MAX_EMS: f64 = 16.0;
 /// How far (in the font's line heights) a letter's middle stays from the bar's top and bottom
 /// edges.
 const CLEARANCE: f64 = 0.32;
@@ -188,24 +192,24 @@ impl Visualizer {
     }
 
     /// The bar's size in pixels, which the glyphs are laid out on; none until it's set (a size
-    /// that isn't above 0 is none).
+    /// that isn't above 0 is none, one above MAX_BAR is MAX_BAR).
     pub fn set_bar_size(&mut self, width: f64, height: f64) {
-        let size = |x: f64| if x.is_finite() && x > 0.0 { x } else { 0.0 };
+        let size = |x: f64| if x > 0.0 { x.min(MAX_BAR) } else { 0.0 };
         (self.lyrics.width, self.lyrics.height) = (size(width), size(height));
     }
 
     /// The font's measures, in ems (shares of its pixel size): each of `letters`' advance, in
     /// order, and its line height. The core loads no fonts: measure the lyrics' letters at any
     /// size and divide. A letter not given is FALLBACK_ADVANCE wide; a measure that isn't a number
-    /// at or above 0 is left out. May allocate.
+    /// at or above 0 is left out, one above MAX_EMS is MAX_EMS. May allocate.
     pub fn set_letters(&mut self, letters: &str, advances: &[f64], line_height: f64) {
         let mut table: Vec<(char, f64)> =
-            letters.chars().zip(advances.iter().copied()).filter(|&(_, a)| a.is_finite() && a >= 0.0).collect();
+            letters.chars().zip(advances.iter().map(|&a| a.min(MAX_EMS))).filter(|&(_, a)| a >= 0.0).collect();
         table.sort_by_key(|l| l.0);
         table.dedup_by_key(|l| l.0);
         self.lyrics.letters = table;
-        if line_height.is_finite() && line_height >= 0.0 {
-            self.lyrics.line_height = line_height;
+        if line_height >= 0.0 {
+            self.lyrics.line_height = line_height.min(MAX_EMS);
         }
     }
 

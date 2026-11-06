@@ -4,7 +4,7 @@
 mod common;
 
 use common::*;
-use visualizer_core::{Visualizer, BANDS, KICK_SETTLED, PLAYED_OUT};
+use visualizer_core::{Player, Visualizer, BANDS, KICK_SETTLED, PLAYED_OUT};
 
 /// A Visualizer on these settings, fed kick_only up to its first Kick.
 fn at_first_kick(settings: &str) -> Visualizer {
@@ -66,4 +66,41 @@ fn at_speed_0_a_shockwave_stands_still_so_only_the_kick_level_animates() {
     run(&mut visualizer, 2.0);
     assert_eq!(visualizer.frame().kick_ages.iter().copied().fold(f64::MAX, f64::min), 0.0);
     assert!(!visualizer.frame().animating);
+}
+
+/// A Visualizer whose song sings one line from 10 to 12 s (its words gone by 14.5 s, after lingering
+/// and dissolving), playing from `from`.
+fn singing(from: f64) -> Visualizer {
+    let mut visualizer = Visualizer::new();
+    visualizer.configure(r#"{"kickThreshold": 1e9}"#);
+    visualizer.set_track("track", 300.0);
+    visualizer.set_lyrics(r#"[{"t": 10, "e": 12, "x": "only line"}]"#);
+    visualizer.set_player(Player::Playing);
+    visualizer.set_position(from, 1.0);
+    visualizer
+}
+
+#[test]
+fn lyric_words_animate_while_the_song_plays_and_a_line_is_shown_or_to_come() {
+    // In Silence (the output silent), the words still come, pop in and dissolve.
+    let mut visualizer = singing(5.0);
+    run(&mut visualizer, 3.0);
+    assert!(visualizer.frame().animating, "a line to come");
+    run(&mut visualizer, 4.0);
+    assert!(!visualizer.lyric_words().is_empty());
+    assert!(visualizer.frame().animating, "a line shown");
+    run(&mut visualizer, 2.6);
+    assert!(visualizer.lyric_words().is_empty());
+    assert!(!visualizer.frame().animating, "the last line is gone");
+}
+
+#[test]
+fn paused_or_without_a_player_the_words_stand_still() {
+    let mut visualizer = singing(11.0);
+    run(&mut visualizer, 0.1);
+    visualizer.set_player(Player::Paused);
+    assert!(!visualizer.frame().animating, "paused");
+    visualizer.set_player(Player::None);
+    run(&mut visualizer, 1.0);
+    assert!(!visualizer.frame().animating, "no player");
 }
