@@ -1,6 +1,8 @@
 // The parity check (spec #41): the WASM build must fire exactly the same Kicks, at the same times
 // with the same powers, as the native build, on every recorded fixture at both replay configs, so
-// the demo can't drift from what runs on the desktop.
+// the demo can't drift from what runs on the desktop. The rest of the frame (the clock, flow, Kick
+// level and slots, Silence, animating) must come out the same too, checked on each replay's last
+// frame, which every frame before it feeds.
 //
 //     node core/parity.mjs
 //
@@ -66,11 +68,32 @@ function replay(scenario, settings) {
     return kicks;
 }
 
+// examples/kicks.rs's last_frame, through the WASM.
+const SILENCE = { "": 0, "no-player": 1, "paused": 2, "silent": 3 };
+function lastFrame(scenario, settings) {
+    const visualizer = new Visualizer();
+    visualizer.configure(settings);
+    visualizer.setPlayer("playing");
+    for (const { time, values } of frames(scenario)) {
+        visualizer.pushBands(values, time);
+        visualizer.advance(1 / 60);
+    }
+    const f = visualizer.frame();
+    const out = [f.time, f.flow, f.kick, f.intensity, f.bassStretch, ...f.kickAges, ...f.kickPowers, ...f.kickSeeds,
+        SILENCE[f.silence], f.animating ? 1 : 0];
+    visualizer.free();
+    return out;
+}
+
 const scenarios = fs.readdirSync(fixtures).filter(f => f.endsWith(".txt")).map(f => f.slice(0, -4)).sort();
 const covered = new Set(native.map(r => r.scenario));
 const failures = scenarios.filter(s => !covered.has(s)).map(s => `${s}: no native replay`);
 let kicks = 0;
-for (const { scenario, config, settings, kicks: expected } of native) {
+for (const { scenario, config, settings, kicks: expected, frame } of native) {
+    const last = lastFrame(scenario, settings);
+    const at = last.findIndex((x, i) => !Object.is(x, frame[i]));
+    if (last.length !== frame.length || at >= 0)
+        failures.push(`${scenario} at ${config}: last frames differ at ${at}: WASM ${last[at]}, native ${frame[at]}`);
     const got = replay(scenario, settings);
     kicks += expected.length;
     const first = got.findIndex((k, i) => !expected[i] || !Object.is(k[0], expected[i][0]) || !Object.is(k[1], expected[i][1]));
@@ -84,4 +107,4 @@ if (failures.length || !native.length) {
     console.error(`parity: WASM and native Kicks differ\n${failures.join("\n") || "no native replays"}`);
     process.exit(1);
 }
-console.log(`parity: ok, ${kicks} Kicks identical in WASM and native over ${native.length} replays (${scenarios.length} fixtures x ${native.length / scenarios.length} configs)`);
+console.log(`parity: ok, ${kicks} Kicks and the last frames identical in WASM and native over ${native.length} replays (${scenarios.length} fixtures x ${native.length / scenarios.length} configs)`);
