@@ -3,12 +3,13 @@
 //!
 //! Every call is total. A null Visualizer, a null or short buffer, or text that isn't UTF-8 is
 //! ignored, and a panic, should one ever happen, is caught here instead of unwinding into the
-//! caller (which would abort DMS). push_bands, advance, set_player and frame never allocate.
+//! caller (which would abort DMS). push_bands, advance, set_player and frame never allocate,
+//! nor do set_kind, set_local_time and lock_ring.
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr;
 
-use crate::{Frame, Player, Visualizer};
+use crate::{Frame, Kind, LockRingFrame, Player, Visualizer};
 
 /// Runs `body`, or gives `fallback` if it panics.
 fn guarded<T>(fallback: T, body: impl FnOnce() -> T) -> T {
@@ -90,6 +91,48 @@ pub unsafe extern "C" fn visualizer_set_player(visualizer: *mut Visualizer, play
     };
     if let Some(visualizer) = visualizer.as_mut() {
         guarded((), || visualizer.set_player(player));
+    }
+}
+
+/// Which visualizer this is: 0 the Bar Visualizer (as created), 1 the Lock Ring (VISUALIZER_KIND_*);
+/// any other value is ignored. See `Visualizer::set_kind`.
+///
+/// # Safety
+/// `visualizer` is null or live.
+#[no_mangle]
+pub unsafe extern "C" fn visualizer_set_kind(visualizer: *mut Visualizer, kind: u32) {
+    let kind = match kind {
+        0 => Kind::Bar,
+        1 => Kind::LockRing,
+        _ => return,
+    };
+    if let Some(visualizer) = visualizer.as_mut() {
+        guarded((), || visualizer.set_kind(kind));
+    }
+}
+
+/// The local time of day the Lock Ring's Hands show, in seconds since local midnight. See
+/// `Visualizer::set_local_time`.
+///
+/// # Safety
+/// `visualizer` is null or live.
+#[no_mangle]
+pub unsafe extern "C" fn visualizer_set_local_time(visualizer: *mut Visualizer, seconds: f64) {
+    if let Some(visualizer) = visualizer.as_mut() {
+        guarded((), || visualizer.set_local_time(seconds));
+    }
+}
+
+/// The Lock Ring's state, owned by the Visualizer: valid until the next call on it. Null for a null
+/// Visualizer. See `Visualizer::lock_ring`.
+///
+/// # Safety
+/// `visualizer` is null or live.
+#[no_mangle]
+pub unsafe extern "C" fn visualizer_lock_ring(visualizer: *const Visualizer) -> *const LockRingFrame {
+    match visualizer.as_ref() {
+        Some(visualizer) => visualizer.lock_ring_ref(),
+        None => ptr::null(),
     }
 }
 
