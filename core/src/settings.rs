@@ -117,6 +117,22 @@ impl Settings {
         )
     }
 
+    /// The settings the Lock Ring runs on (ADR 0005): these, with the lockRing section's
+    /// percentages of intensity and the Kick settings applied, as v0.10.0's lockRingSettings() in
+    /// docs/config.mjs. A negative percentage counts as 0; there is no upper limit, but a result
+    /// too large for a number is the largest one.
+    pub fn lock_ring(&self) -> Settings {
+        let scale = |value: f64, percent: f64| (value * percent.max(0.0) / 100.0).clamp(-f64::MAX, f64::MAX);
+        let r = &self.lock_ring;
+        let mut out = self.clone();
+        out.intensity = scale(self.intensity, r.intensity_percent);
+        out.kick_low_hz = scale(self.kick_low_hz, r.kick_low_hz_percent);
+        out.kick_high_hz = scale(self.kick_high_hz, r.kick_high_hz_percent);
+        out.kick_threshold = scale(self.kick_threshold, r.kick_threshold_percent);
+        out.kick_cooldown = scale(self.kick_cooldown, r.kick_cooldown_percent);
+        out
+    }
+
     /// Values nothing can mean, brought to the nearest that can: a negative speed, kickCooldown or
     /// kickDecay counts as 0. Frequencies are clamped to cava's range where they're mapped to bands.
     fn clamped(mut self) -> Settings {

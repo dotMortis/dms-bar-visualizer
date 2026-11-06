@@ -8,6 +8,7 @@ pub mod bar_words;
 pub mod c_abi;
 mod glyph;
 mod kick;
+pub mod lock_ring;
 pub mod lyric_line;
 pub mod ribbons;
 mod settings;
@@ -17,6 +18,7 @@ mod wasm;
 use bar_lyrics::BarLyrics;
 pub use glyph::{Glyph, GlyphCopy, GLYPH_FIELDS};
 use kick::{KickDetector, KickSettings};
+pub use lock_ring::LockRingFrame;
 pub use lyric_line::LyricWord;
 use settings::Settings;
 
@@ -53,6 +55,16 @@ pub enum Player {
     None = 0,
     Paused = 1,
     Playing = 2,
+}
+
+/// Which visualizer a Visualizer is: the Bar Visualizer, or the Lock Ring, which runs on the bar's
+/// settings with its lockRing percentages applied (ADR 0005) and keeps the Lock Ring's own state
+/// (`Visualizer::lock_ring`).
+#[repr(u32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Kind {
+    Bar = 0,
+    LockRing = 1,
 }
 
 /// Which Silence case applies (GLOSSARY.md), or None when there is something to hear.
@@ -115,6 +127,9 @@ pub struct Frame {
 /// One visualizer instance. Every call is total: bad input is clamped or ignored, never a panic,
 /// and after `new` nothing allocates but `configure`.
 pub struct Visualizer {
+    kind: Kind,
+    /// config.json's settings as configured, and the ones this kind runs on.
+    config: Settings,
     settings: Settings,
     kicks: KickDetector,
     /// The animation clock, unwrapped: the Kick slots' ages are counted on it.
@@ -129,6 +144,8 @@ pub struct Visualizer {
     frame: Frame,
     /// The Lyric Words (bar_lyrics.rs), on the display seconds.
     lyrics: BarLyrics,
+    /// The Lock Ring's own state: stepped only while the kind is the Lock Ring.
+    lock_ring: lock_ring::LockRing,
 }
 
 impl Default for Visualizer {
@@ -156,6 +173,8 @@ impl Visualizer {
     pub fn new() -> Self {
         let settings = Settings::default();
         Visualizer {
+            kind: Kind::Bar,
+            config: settings.clone(),
             kicks: KickDetector::new(kick_settings(&settings)),
             clock: 0.0,
             kick_times: [EMPTY_SLOT; KICK_SLOTS],
@@ -182,6 +201,7 @@ impl Visualizer {
                 silence: Silence::NoPlayer,
                 animating: false,
             },
+            lock_ring: lock_ring::LockRing::default(),
             settings,
         }
     }
@@ -191,12 +211,29 @@ impl Visualizer {
     /// good settings. They take effect on the next frame; the running state carries over.
     pub fn configure(&mut self, settings: &str) {
         if let Some(settings) = Settings::parse(settings) {
-            self.kicks.configure(kick_settings(&settings));
-            self.frame.intensity = settings.intensity;
-            self.frame.bass_stretch = settings.bass_stretch;
-            self.settings = settings;
-            self.update_animating();
+            self.config = settings;
+            self.apply_settings();
         }
+    }
+
+    /// Which visualizer this is: the Bar Visualizer (as new), or the Lock Ring. Configures it as
+    /// that kind on the settings last configured; the running state carries over.
+    pub fn set_kind(&mut self, kind: Kind) {
+        self.kind = kind;
+        self.apply_settings();
+    }
+
+    fn apply_settings(&mut self) {
+        let settings = match self.kind {
+            Kind::Bar => self.config.clone(),
+            Kind::LockRing => self.config.lock_ring(),
+        };
+        self.kicks.configure(kick_settings(&settings));
+        self.frame.intensity = settings.intensity;
+        self.frame.bass_stretch = settings.bass_stretch;
+        self.settings = settings;
+        self.update_lock_ring();
+        self.update_animating();
     }
 
     /// One capture frame: the BANDS bands, 0..1, bass first, and when they came, in real
@@ -231,6 +268,7 @@ impl Visualizer {
             self.lyrics.kick(power, self.seconds);
             self.update_animating();
         }
+        self.update_lock_ring();
     }
 
     /// One display frame, dt seconds after the last. A negative or NaN dt counts as none, an
@@ -250,6 +288,10 @@ impl Visualizer {
             *age = self.clock - at;
         }
         self.lyrics.advance(self.seconds, &self.frame);
+        if self.kind == Kind::LockRing {
+            self.lock_ring.step(&self.frame, dt, speed);
+        }
+        self.update_lock_ring();
         self.update_animating();
     }
 
@@ -267,14 +309,31 @@ impl Visualizer {
         self.player = player;
         self.lyrics.set_running(player == Player::Playing, self.seconds);
         self.update_silence();
+        self.update_lock_ring();
         self.update_animating();
+    }
+
+    /// The local time of day, in seconds since local midnight, that the Lock Ring's Hands show:
+    /// call it on every display frame, before reading the frame. A time past midnight lands on the
+    /// time of day it is; one that isn't a number is ignored. Until the first, it is midnight.
+    pub fn set_local_time(&mut self, seconds: f64) {
+        self.lock_ring.set_local_time(seconds);
+        self.update_lock_ring();
+    }
+
+    fn update_lock_ring(&mut self) {
+        if self.kind == Kind::LockRing {
+            self.lock_ring.update(&self.frame, self.settings.kick_decay, self.settings.lock_ring.hand_waves);
+        }
     }
 
     fn update_animating(&mut self) {
         let f = &self.frame;
         let moving = self.settings.speed > 0.0;
         let in_flight = f.kick_powers.iter().zip(&f.kick_ages).any(|(&power, &age)| power > 0.0 && age < PLAYED_OUT);
-        self.frame.animating = f.kick > KICK_SETTLED || (moving && in_flight) || self.lyrics.animating(self.seconds);
+        let ring_settling = self.kind == Kind::LockRing && self.lock_ring.settling();
+        let singing = self.lyrics.animating(self.seconds);
+        self.frame.animating = f.kick > KICK_SETTLED || (moving && in_flight) || ring_settling || singing;
     }
 
     fn update_silence(&mut self) {
@@ -294,5 +353,16 @@ impl Visualizer {
     /// Everything to draw, in place: for the boundaries, which hand it over without a copy.
     pub(crate) fn frame_ref(&self) -> &Frame {
         &self.frame
+    }
+
+    /// The Lock Ring's own state, on top of the frame: its ring motion, Hands, Hour Points, Digital
+    /// Time and the shader's Kick slots. Kept only while the kind is the Lock Ring.
+    pub fn lock_ring(&self) -> LockRingFrame {
+        self.lock_ring.frame
+    }
+
+    /// The Lock Ring's state, in place: for the boundaries.
+    pub(crate) fn lock_ring_ref(&self) -> &LockRingFrame {
+        &self.lock_ring.frame
     }
 }

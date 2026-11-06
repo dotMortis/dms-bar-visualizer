@@ -63,5 +63,22 @@ fn a_c_program_drives_the_visualizer_through_the_header() {
         offset_of!(GlyphCopy, dx)
     );
     assert_eq!(out.lines().find(|l| l.starts_with("glyph ")), Some(glyph.as_str()));
+    use visualizer_core::lock_ring::TimeHit;
+    use visualizer_core::LockRingFrame as L;
+    let lock_ring = format!(
+        "lock_ring size {} hand_flash {} hand_angles {} hand_levels {} kick_ages {} hour_radii {} hour_glows {} \
+         time_crossing {} time_hit {} white {}",
+        size_of::<L>(),
+        offset_of!(L, hand_flash),
+        offset_of!(L, hand_angles),
+        offset_of!(L, hand_levels),
+        offset_of!(L, kick_ages),
+        offset_of!(L, hour_radii),
+        offset_of!(L, hour_glows),
+        offset_of!(L, time_crossing),
+        offset_of!(L, time_hit),
+        offset_of!(L, time_hit) + offset_of!(TimeHit, white)
+    );
+    assert!(out.lines().any(|line| line == lock_ring), "{out}\nwant: {lock_ring}");
     assert_eq!(out.lines().last(), Some("ok"));
 }

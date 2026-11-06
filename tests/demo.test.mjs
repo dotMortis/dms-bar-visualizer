@@ -2,11 +2,18 @@
 // the Lock Ring, on the same inputs and sliders. Both views tune one set of values shaped like
 // config.json (docs/config.mjs), which "Export config.json" downloads as they are.
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import { describe, test } from "node:test";
 
 import { DEFAULTS, parseConfig } from "../docs/config.mjs";
-import { BANDS, HIGH_HZ, LOW_HZ, coreSettings, defaults, ringSide, setValueAt, slidersFor, valueAt, viewFromHash }
-    from "../docs/demo.mjs";
+import {
+    BANDS, HIGH_HZ, LOW_HZ, coreKind, coreSettings, defaults, localSeconds, ringSide, setValueAt, slidersFor, timeHitOf,
+    valueAt, viewFromHash,
+} from "../docs/demo.mjs";
+import { TIME_HIT, timeHit } from "../lock-ring/clock.mjs";
+
+const ROOT = path.resolve(import.meta.dirname, "..");
 
 const keys = view => slidersFor(view).map(s => s.key);
 
@@ -87,21 +94,37 @@ describe("ring size in the demo", () => {
 
 // The page hands the core (docs/wasm/, src/wasm.rs) config.json's text for the view it shows.
 describe("the core's settings in the demo", () => {
-    test("the bar view runs on the sliders' values as they are", () => {
+    test("both views run on the sliders' values as they are", () => {
         const values = defaults();
         setValueAt(values, "kickThreshold", 0.3);
-        assert.deepEqual(JSON.parse(coreSettings(values, "bar")), values);
+        setValueAt(values, "lockRing.kickThresholdPercent", 50);
+        assert.deepEqual(JSON.parse(coreSettings(values)), values);
     });
 
-    test("the ring view runs on them with the Lock Ring's percentages applied", () => {
-        const values = defaults();
-        setValueAt(values, "lockRing.kickThresholdPercent", 50);
-        setValueAt(values, "lockRing.kickHighHzPercent", 200);
-        const ring = JSON.parse(coreSettings(values, "ring"));
-        assert.equal(ring.kickThreshold, 0.2);
-        assert.equal(ring.kickHighHz, 180);
-        assert.equal(ring.kickLowHz, 20);
-        assert.equal(ring.kickDecay, 6);
+    // The core applies the Lock Ring's percentages itself (core/tests/lock_ring_settings.rs).
+    test("the ring view selects the Lock Ring kind, the bar view the bar's", () => {
+        assert.equal(coreKind("ring"), "lock-ring");
+        assert.equal(coreKind("bar"), "bar");
+    });
+
+    test("the Digital Time's hit, from the core's lockRing(), is shaped as clock.mjs timeHit() gives it", () => {
+        const want = timeHit(0.6);
+        const ring = {
+            timeCopyOffsets: Float64Array.from(want.copies, c => c.offset), timeCopyOpacity: want.copies[0].opacity,
+            timeGlowOpacity: want.glow.opacity, timeGlowScale: want.glow.scale, timeWhite: want.white,
+        };
+        assert.deepEqual(timeHitOf(ring, TIME_HIT.split.map(([color]) => color)), want);
+    });
+
+    test("the Hands' local time is the seconds since local midnight", () => {
+        assert.equal(localSeconds(new Date(2026, 10, 4, 9, 30, 15, 500)), 9 * 3600 + 30 * 60 + 15.5);
+        assert.equal(localSeconds(new Date(2026, 10, 4, 0, 0, 0, 0)), 0);
+    });
+
+    test("the page selects the kind after configuring, whenever either changes", () => {
+        const page = fs.readFileSync(path.join(ROOT, "docs/index.html"), "utf8");
+        assert.match(page, /core\.configure\(coreSettings\(cfg\)\);\s*core\.setKind\(coreKind\(view\)\);/);
+        assert.doesNotMatch(page, /lockRingSettings/, "no percentages applied in the page");
     });
 });
 

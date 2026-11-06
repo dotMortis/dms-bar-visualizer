@@ -177,17 +177,19 @@
 
 <script type="module">
 // The core (core/, ADR 0007), built to WASM by core/build-wasm.sh docs/wasm: the Kicks, band
-// averages and Kick level, as the visualizers will run them. The Pages Action builds it.
+// averages and Kick level, and as the Lock Ring kind the ring's motion, Hands, Hour Points and
+// Digital Time, as the visualizers will run them. The Pages Action builds it.
 import initCore, { Visualizer } from "./wasm/visualizer_core.js";
 // The views and their sliders (demo.mjs). The Lock Ring view runs the
 // plugin's own modules and shader (lock-ring/), which live here because Pages publishes only docs/.
-import { lockRingSettings } from "./config.mjs";
-import { BANDS, GLYPH, HIGH_HZ, LOW_HZ, coreSettings, defaults, ringSide, ringUniforms, setValueAt, slidersFor, valueAt, viewFromHash } from "./demo.mjs";
+import {
+  BANDS, GLYPH, HIGH_HZ, LOW_HZ, coreKind, coreSettings, defaults, localSeconds, ringSide, ringUniforms, setValueAt, slidersFor,
+  timeHitOf, valueAt, viewFromHash,
+} from "./demo.mjs";
 import { toWebGL } from "./webgl.mjs";
-import { DIAL_RATIO, createRingMotion } from "./lock-ring/ring.mjs";
-import { handFlash, shockwaveCrossing } from "./lock-ring/kicks.mjs";
-import { createHandMotion } from "./lock-ring/hands.mjs";
-import { TIME_FONT, TIME_HIT, TIME_RADIUS, TIME_TOP, formatTime, timeHit } from "./lock-ring/clock.mjs";
+import { DIAL_RATIO } from "./lock-ring/ring.mjs";
+import { shockwaveCrossing } from "./lock-ring/kicks.mjs";
+import { TIME_FONT, TIME_HIT, TIME_TOP, formatTime } from "./lock-ring/clock.mjs";
 import { handPoses } from "./lock-ring/hands.mjs";
 import { WORD_FONT, WORD_LOOK, wordLook, wordPlacement } from "./lock-ring/lyrics.mjs";
 // The demo's own timed lines, looping on the demo's clock: through the shared Lyric Words module
@@ -392,12 +394,13 @@ void main() {
 const cfg = defaults();
 let use24Hour = true;
 let view = viewFromHash(location.hash);
-// The settings the view runs on: the Lock Ring's are the bar's with its percentages applied, as in
-// lock-ring/LockAudio.qml.
-const live = () => view === "ring" ? lockRingSettings(cfg) : cfg;
 // Call after any change to cfg or the view. One core for both views, as one Kick detector served
-// both before: its running state carries over when the view or a slider changes.
-const configureKicks = () => core.configure(coreSettings(cfg, view));
+// both before: its running state carries over when the view or a slider changes. As the Lock Ring
+// kind it applies the Lock Ring's percentages itself (ADR 0005).
+const configureKicks = () => {
+  core.configure(coreSettings(cfg));
+  core.setKind(coreKind(view));
+};
 
 const core = new Visualizer();
 // The demo's sources always play: no Active Player to follow, so never Silence but "silent".
@@ -769,9 +772,17 @@ const ringCanvas = document.getElementById("ring");
 const rgl = ringCanvas.getContext("webgl2", { premultipliedAlpha: true, alpha: true, antialias: false });
 let ringProg = null;
 const ringU = [];   // { name, type, loc }
-const ringMotion = createRingMotion();
-const handMotion = createHandMotion();
-const ring = { swell: 0, presence: 0, flash: 0, timeCrossing: 0, handLevels: { bass: 0, mid: 0, treble: 0 }, handPhases: {}, words: [] };
+// The core's lockRing() (readRing()), and what the Lyric Words ride, from it: the ring's swell, the
+// hands' flash, levels and phases.
+let ringState = null;
+const ring = { swell: 0, flash: 0, handLevels: { bass: 0, mid: 0, treble: 0 }, handPhases: {}, words: [] };
+function readRing() {
+  ringState = core.lockRing();
+  const r = ringState;
+  ring.swell = r.swell; ring.flash = r.handFlash;
+  ring.handLevels = { bass: r.handLevels[0], mid: r.handLevels[1], treble: r.handLevels[2] };
+  ring.handPhases = { hour: r.handPhases[0], minute: r.handPhases[1], second: r.handPhases[2] };
+}
 
 function shaderOf(g, type, src) {
   const sh = g.createShader(type);
@@ -805,13 +816,7 @@ function drawRing() {
   resize(ringCanvas);
   rgl.viewport(0, 0, ringCanvas.width, ringCanvas.height);
   rgl.clearColor(0, 0, 0, 0); rgl.clear(rgl.COLOR_BUFFER_BIT);
-  const values = ringUniforms({
-    values: st.values, time: st.time, flow: st.flow, treble: st.treble, kick: st.kick,
-    swell: ring.swell, presence: ring.presence, intensity: live().intensity, bassStretch: cfg.bassStretch,
-    kickAges: st.kickAges, kickPowers: st.kickPowers, kickSeeds: st.kickSeeds,
-    now: new Date(), handLevels: ring.handLevels, handPhases: ring.handPhases, flash: ring.flash, handWaves: cfg.lockRing.handWaves,
-    dialRadius: Math.min(ringCanvas.width, ringCanvas.height) * DIAL_RATIO,
-  });
+  const values = ringUniforms(core.frame(), ringState, Math.min(ringCanvas.width, ringCanvas.height) * DIAL_RATIO);
   values.qt_Opacity = 1;
   for (const { name, type, loc } of ringU) {
     const v = values[name];
@@ -840,7 +845,7 @@ function drawFace() {
 
   const text = formatTime(new Date(), { use24Hour });
   const em = Math.max(10 * dpr, size * TIME_FONT), top = dial * TIME_TOP;
-  const hit = timeHit(ring.timeCrossing);
+  const hit = timeHitOf(ringState, TIME_HIT.split.map(([color]) => color));
   fctx.font = `500 ${em}px Inter, "Segoe UI", Roboto, Ubuntu, system-ui, sans-serif`;
   fctx.textAlign = "center"; fctx.textBaseline = "top";
   // The chromatic split, softened as MultiEffect's blur does.
@@ -1078,25 +1083,20 @@ function frame() {
   // The bar's size, which the core lays the Lyric Words out on.
   resize(wordsCanvas);
   core.setBarSize(wordsCanvas.width, wordsCanvas.height);
+  // The Lock Ring's Hands show the local time; as the Lock Ring kind (the ring view) the core also
+  // steps the ring's and the hands' motion, as LockAudio.qml did.
+  core.setLocalTime(localSeconds(new Date()));
   core.advance(dt);   // the clock and flow run, the Kick level fades at kickDecay, the Kicks age, the words move on
   const reading = readBarPosition(now);
   if (reading !== null) core.setPosition(reading, 1);
   const f = readCore();
+  readRing();
 
   // Ease the corner radius like the Behavior in shell.qml (the inset eases via CSS).
   const targetR = maxBox.checked ? 0 : cfg.radius;
   st.cornerRadius += (targetR - st.cornerRadius) * (1 - Math.exp(-dt * 18));
   document.getElementById("bar").style.borderRadius = `${st.cornerRadius}px`;
 
-  // The Lock Ring's motion, hand motion and hand flash, as LockAudio.qml steps them.
-  const levels = { bass: st.bass, mid: st.mid, treble: st.treble };
-  const m = ringMotion.step(levels, dt);
-  ring.swell = m.swell; ring.presence = m.presence;
-  const h = handMotion.step(levels, dt, cfg.speed);
-  ring.handLevels = h.levels; ring.handPhases = h.phases;
-  const kickAges = st.kickAges;
-  ring.flash = handFlash(kickAges, st.kickPowers, cfg.kickDecay);
-  ring.timeCrossing = shockwaveCrossing(TIME_RADIUS, kickAges, st.kickPowers, st.kickSeeds, Math.PI);  // the time sits at 6 o'clock
   ring.words = ringLyrics.words(now * 1000);
 
   if (view === "ring") {

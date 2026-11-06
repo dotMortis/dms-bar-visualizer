@@ -193,6 +193,7 @@ fn the_demos_glyph_offsets_are_the_cores() {
         ("copySize", at(size_of::<GlyphCopy>())),
         ("stride", GLYPH_FIELDS),
     ];
-    let expected: std::collections::BTreeMap<String, usize> = expected.iter().map(|(k, v)| (k.to_string(), *v)).collect();
+    let expected: std::collections::BTreeMap<String, usize> =
+        expected.iter().map(|(k, v)| (k.to_string(), *v)).collect();
     assert_eq!(offsets, expected);
 }

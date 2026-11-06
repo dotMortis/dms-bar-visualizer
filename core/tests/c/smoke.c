@@ -121,6 +121,44 @@ int main(void) {
 
     visualizer_destroy(v);
     if (lyrics() != 0) return 1;
+
+    /* The Lock Ring kind: its percentages, its Hands on the local time, its state after a Kick. */
+    printf("lock_ring size %zu hand_flash %zu hand_angles %zu hand_levels %zu kick_ages %zu hour_radii %zu "
+           "hour_glows %zu time_crossing %zu time_hit %zu white %zu\n",
+           sizeof(VisualizerLockRing), offsetof(VisualizerLockRing, hand_flash),
+           offsetof(VisualizerLockRing, hand_angles), offsetof(VisualizerLockRing, hand_levels),
+           offsetof(VisualizerLockRing, kick_ages), offsetof(VisualizerLockRing, hour_radii),
+           offsetof(VisualizerLockRing, hour_glows), offsetof(VisualizerLockRing, time_crossing),
+           offsetof(VisualizerLockRing, time_hit), offsetof(VisualizerLockRing, time_hit.white));
+    CHECK(visualizer_lock_ring(NULL) == NULL);
+    Visualizer *ring = visualizer_create();
+    const char *ring_settings = "{\"lockRing\": {\"intensityPercent\": 150}}";
+    visualizer_configure(ring, ring_settings, strlen(ring_settings));
+    visualizer_set_kind(ring, VISUALIZER_KIND_LOCK_RING);
+    CHECK(visualizer_frame(ring)->intensity == 1.5);
+    visualizer_set_player(ring, VISUALIZER_PLAYER_PLAYING);
+    /* 9:00 in the morning: the hour hand at 9 o'clock, the others at 12. */
+    visualizer_set_local_time(ring, 9 * 3600.0);
+    fired_at = -1;
+    for (int n = 0; n < 120; n++) {
+        for (int b = 0; b < VISUALIZER_BANDS; b++) bands[b] = (n >= 60 && b >= 1 && b <= 6) ? 0.8 : 0.0;
+        visualizer_push_bands(ring, bands, VISUALIZER_BANDS, n / 60.0);
+        visualizer_advance(ring, 1.0 / 60.0);
+        if (fired_at < 0 && visualizer_frame(ring)->kick_count == 1) fired_at = n;
+    }
+    CHECK(fired_at >= 60);
+    const VisualizerLockRing *state = visualizer_lock_ring(ring);
+    CHECK(fabs(state->hand_angles[0] - 1.5 * 3.14159265358979) < 1e-9);
+    CHECK(state->hand_angles[1] == 0.0 && state->hand_angles[2] == 0.0);
+    CHECK(state->hand_flash > 0.0 && state->hand_flash < 1.0);
+    CHECK(state->presence > 0.5 && state->swell > 0.0);
+    CHECK(state->kick_powers[1] == visualizer_frame(ring)->kick_power);
+    CHECK(state->kick_powers[0] == 0.0 && state->kick_ages[0] == 100.0);
+    CHECK(state->hour_glows[0] > state->hour_glows[1]);
+    CHECK(state->time_hit.glow_scale >= 1.0);
+    visualizer_set_kind(ring, VISUALIZER_KIND_BAR);
+    CHECK(visualizer_frame(ring)->intensity == 1.0);
+    visualizer_destroy(ring);
     puts("ok");
     return 0;
 }

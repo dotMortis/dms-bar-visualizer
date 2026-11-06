@@ -2,8 +2,9 @@
  *
  * Every call is total: a null Visualizer, a null or short buffer, or settings that aren't UTF-8
  * JSON are ignored. No call unwinds into the caller. visualizer_push_bands, visualizer_advance,
- * visualizer_set_player, visualizer_frame, visualizer_set_position, visualizer_set_bar_size and
- * visualizer_glyphs never allocate.
+ * visualizer_set_player and visualizer_frame never allocate, nor do visualizer_set_kind,
+ * visualizer_set_local_time, visualizer_lock_ring, visualizer_set_position, visualizer_set_bar_size
+ * and visualizer_glyphs.
  *
  * Link against libvisualizer_core.a (or .so) from `cargo build --release` in core/; the static
  * library also needs -lpthread -ldl -lm on Linux. */
@@ -70,6 +71,64 @@ typedef struct VisualizerFrame {
     bool animating;
 } VisualizerFrame;
 
+/* Which visualizer a Visualizer is, for visualizer_set_kind: the Bar Visualizer (as created), or
+ * the Lock Ring, which runs on the bar's settings with its lockRing percentages applied (ADR 0005)
+ * and keeps a VisualizerLockRing. */
+#define VISUALIZER_KIND_BAR 0
+#define VISUALIZER_KIND_LOCK_RING 1
+
+/* How many Hour Points ride the Lock Ring's ribbon: one every 30 degrees from 12 o'clock. */
+#define VISUALIZER_HOUR_POINTS 12
+
+/* How the Digital Time takes a Shockwave crossing it (core/src/lock_ring/clock.rs TimeHit): its
+ * split copies in lavender, mauve and blue (#b4befe, #cba6f7, #89b4fa), each copy_offsets outward
+ * (in font sizes) at copy_opacity, blurred by 0.03 font sizes; the digits' glow (#e6ebff, blur
+ * radius 0.35 font sizes) at glow_opacity and glow_scale times their size; and how far the digits
+ * flare toward white, 0..1. */
+typedef struct VisualizerTimeHit {
+    double copy_offsets[3];
+    double copy_opacity;
+    double glow_opacity;
+    double glow_scale;
+    double white;
+} VisualizerTimeHit;
+
+/* The Lock Ring's state on top of the frame, as of the last call: ring.frag's inputs beyond the
+ * frame's, and the Digital Time's hit. Laid out as core/src/lock_ring/frame.rs's LockRingFrame:
+ * change both. Hands are hour, minute, second (ring.frag's x, y, z); sizes in dial radii. Kept
+ * only while the kind is VISUALIZER_KIND_LOCK_RING. */
+typedef struct VisualizerLockRing {
+    /* The ring's motion: its swell (a fraction of the dial radius) and how much music its ribbon
+     * shows (0 = only its idle wave .. 1). ring.frag's swell and presence. */
+    double swell, presence;
+    /* How brightly every hand flashes, 0..1 (handFlash). */
+    double hand_flash;
+    /* Where each hand points, radians clockwise from 12 o'clock, from the local time alone
+     * (handAngle). */
+    double hand_angles[3];
+    /* handInner, handLength, handAmp, handWidth and handGlow. */
+    double hand_inner[3];
+    double hand_lengths[3];
+    double hand_amplitudes[3];
+    double hand_widths[3];
+    double hand_glows[3];
+    /* How far each hand's wave has travelled, radians (handPhase). */
+    double hand_phases[3];
+    /* Each hand's band (bass, mid, treble) as a share of its own recent peak, 0..1. */
+    double hand_levels[3];
+    /* The Kick slots as ring.frag takes them (kickAge0/1, kickPower0/1, kickSeed0/1): the frame's,
+     * with a played-out or empty slot at age 100, power 0, seed 0. */
+    double kick_ages[VISUALIZER_KICK_SLOTS];
+    double kick_powers[VISUALIZER_KICK_SLOTS];
+    double kick_seeds[VISUALIZER_KICK_SLOTS];
+    /* The Hour Points' radii and glows, as ring.frag draws them. */
+    double hour_radii[VISUALIZER_HOUR_POINTS];
+    double hour_glows[VISUALIZER_HOUR_POINTS];
+    /* How brightly a Shockwave's front is crossing the Digital Time, 0..1, and its look. */
+    double time_crossing;
+    VisualizerTimeHit time_hit;
+} VisualizerLockRing;
+
 /* A new Visualizer on the default settings, for visualizer_destroy; null only if it couldn't be
  * made. */
 Visualizer *visualizer_create(void);
@@ -90,6 +149,16 @@ void visualizer_set_player(Visualizer *visualizer, uint32_t player);
 /* Everything to draw, owned by the Visualizer: valid until the next call on it. Null for a null
  * Visualizer. */
 const VisualizerFrame *visualizer_frame(const Visualizer *visualizer);
+/* Which visualizer this is: a VISUALIZER_KIND_* value (another is ignored). Configures it as that
+ * kind on the settings last configured; the running state carries over. */
+void visualizer_set_kind(Visualizer *visualizer, uint32_t kind);
+/* The local time of day the Lock Ring's Hands show, in seconds since local midnight: call it on
+ * every display frame, before reading the Lock Ring's state. One that isn't a number is ignored;
+ * until the first, it is midnight. */
+void visualizer_set_local_time(Visualizer *visualizer, double seconds);
+/* The Lock Ring's state, owned by the Visualizer: valid until the next call on it. Null for a null
+ * Visualizer. */
+const VisualizerLockRing *visualizer_lock_ring(const Visualizer *visualizer);
 
 /* ---- Lyric Words (core/src/bar_lyrics.rs, core/src/c_abi/lyrics.rs) ---------------------------
  * The Active Player's track, timed lyrics and playback position in; the Lyric Words shown out, as
