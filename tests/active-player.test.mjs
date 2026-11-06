@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { chooseActivePlayer, chooseSource } from "../audio/active-player.mjs";
+import { chooseActivePlayer, chooseSource, rechecksSource } from "../audio/active-player.mjs";
 
 // Replays MPRIS events, as the pipeline sees them: players come and go, and a player's isPlaying
 // changes on the same object (as a Quickshell MprisPlayer's does). After each event the pipeline
@@ -156,5 +156,50 @@ describe("the Active Player and the capture source, replayed", () => {
         assert.deepEqual(replay([
             ["appear", "Spotify"], ["play", "Spotify"], ["stream", "Spotify", HEADSET], ["vanish", "Spotify"], ["end", "Spotify"],
         ]), [["Spotify", "auto"], ["Spotify", "auto"], ["Spotify", headset], [null, headset], [null, "auto"]]);
+    });
+});
+
+// `pactl subscribe` as recorded on a PipeWire desktop (pipewire-pulse) while a stream started on
+// one output, moved to another (`pactl move-sink-input`) and ended. The client lines in between
+// are the pactl processes that moved it and listed the streams: the pipeline's own probe shows up
+// the same way, so it mustn't set off another check.
+const RECORDED_MOVE = `Event 'new' on client #24091
+Event 'change' on client #24091
+Event 'new' on sink-input #24092
+Event 'change' on sink-input #24092
+Event 'change' on sink #88
+Event 'change' on source #88
+Event 'change' on card #75
+Event 'new' on client #24097
+Event 'change' on client #24097
+Event 'remove' on client #24097
+Event 'change' on sink-input #24092
+Event 'change' on sink #90
+Event 'change' on source #90
+Event 'change' on card #76
+Event 'remove' on sink-input #24092
+Event 'remove' on client #24091`.split("\n");
+
+describe("the capture source, from subscription events", () => {
+    test("is checked again on stream and output changes only", () => {
+        assert.deepEqual(RECORDED_MOVE.filter(rechecksSource), [
+            "Event 'new' on sink-input #24092",
+            "Event 'change' on sink-input #24092",
+            "Event 'change' on sink #88",
+            "Event 'change' on sink-input #24092",
+            "Event 'change' on sink #90",
+            "Event 'remove' on sink-input #24092",
+        ]);
+    });
+
+    test("is checked again when the default output changes or an output comes or goes", () => {
+        assert.ok(rechecksSource("Event 'change' on server #-1"));
+        assert.ok(rechecksSource("Event 'new' on sink #95"), "a Bluetooth headset connecting");
+        assert.ok(rechecksSource("Event 'remove' on sink #95"));
+    });
+
+    test("ignores lines that aren't events", () => {
+        for (const line of ["", "Got SIGINT, exiting.", "Connection failure: Connection refused", "sink-input"])
+            assert.ok(!rechecksSource(line), line);
     });
 });

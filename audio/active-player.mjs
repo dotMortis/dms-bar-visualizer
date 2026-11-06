@@ -41,3 +41,11 @@ export function matchesPlayer(player, stream) {
         .filter(Boolean).map(n => n.toLowerCase());
     return names.some(n => keys.some(k => n === k || n.startsWith(k) || k.startsWith(n)));
 }
+
+// Whether a line of `pactl subscribe` can change the source: a stream (sink input) or an output
+// (sink) coming, going or changing (starting, moving, corking), or the server's default output
+// changing. Clients, cards and sources are left out: every pactl run, the pipeline's own check
+// included, is a client coming and going.
+export function rechecksSource(line) {
+    return /^Event '\w+' on (sink-input|sink|server) /.test(line);
+}
