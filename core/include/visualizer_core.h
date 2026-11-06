@@ -21,6 +21,18 @@ extern "C" {
 /* How many Kicks play at once (KICKS in the shaders). */
 #define VISUALIZER_KICK_SLOTS 8
 
+/* The Active Player, for visualizer_set_player. */
+#define VISUALIZER_PLAYER_NONE 0
+#define VISUALIZER_PLAYER_PAUSED 1
+#define VISUALIZER_PLAYER_PLAYING 2
+
+/* The Silence cases (GLOSSARY.md), in VisualizerFrame's silence: none (something to hear), no
+ * Active Player, the Active Player paused, or playing with every band below 0.02 for 2 s. */
+#define VISUALIZER_SILENCE_NONE 0
+#define VISUALIZER_SILENCE_NO_PLAYER 1
+#define VISUALIZER_SILENCE_PAUSED 2
+#define VISUALIZER_SILENCE_SILENT 3
+
 typedef struct Visualizer Visualizer;
 
 /* Everything to draw, as of the last call. Laid out as core/src/lib.rs's Frame: change both. */
@@ -48,6 +60,8 @@ typedef struct VisualizerFrame {
     double kick_power;
     /* How many Kicks have fired so far (wrapping): a new one fired when it changes. */
     uint32_t kick_count;
+    /* Which Silence case applies: a VISUALIZER_SILENCE_* value. A new Visualizer has no player. */
+    uint32_t silence;
 } VisualizerFrame;
 
 /* A new Visualizer on the default settings, for visualizer_destroy; null only if it couldn't be

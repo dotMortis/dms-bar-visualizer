@@ -26,6 +26,31 @@ const SEEDS: u32 = 1000;
 /// Where `Frame::flow` wraps: the shader only uses flow times multiples of 1/20, so every Ribbon
 /// is periodic in 40π and the wrap is seamless (audio/AudioPipeline.qml).
 pub const FLOW_WRAP: f64 = 40.0 * std::f64::consts::PI;
+/// "Silent output" (audio/silence.mjs): every band below SILENCE_THRESHOLD for SILENCE_HOLD
+/// seconds of display frames. Provisional; the harness refines them.
+pub const SILENCE_THRESHOLD: f64 = 0.02;
+pub const SILENCE_HOLD: f64 = 2.0;
+
+/// The Active Player, as the visualizer follows it (MPRIS stays outside the core).
+#[repr(u32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Player {
+    /// No Active Player.
+    None = 0,
+    Paused = 1,
+    Playing = 2,
+}
+
+/// Which Silence case applies (GLOSSARY.md), or None when there is something to hear.
+#[repr(u32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Silence {
+    None = 0,
+    NoPlayer = 1,
+    Paused = 2,
+    /// The Active Player plays, but every band has been below SILENCE_THRESHOLD for SILENCE_HOLD s.
+    Silent = 3,
+}
 
 /// Everything to draw, as of the last call. Laid out as C's `VisualizerFrame`
 /// (include/visualizer_core.h): change both together.
@@ -59,6 +84,8 @@ pub struct Frame {
     pub kick_power: f64,
     /// How many Kicks have fired so far (wrapping): a new one fired when it changes.
     pub kick_count: u32,
+    /// Which Silence case applies; a new Visualizer has no player.
+    pub silence: Silence,
 }
 
 /// One visualizer instance. Every call is total: bad input is clamped or ignored, never a panic,
@@ -71,6 +98,10 @@ pub struct Visualizer {
     /// When each slot's Kick fired, on the clock (-100 for none), and the last Kick's seed.
     kick_times: [f64; KICK_SLOTS],
     kick_seed: u32,
+    player: Player,
+    /// Display seconds so far, and when the output last sounded (or the player started playing).
+    seconds: f64,
+    sound_at: f64,
     frame: Frame,
 }
 
@@ -103,6 +134,9 @@ impl Visualizer {
             clock: 0.0,
             kick_times: [EMPTY_SLOT; KICK_SLOTS],
             kick_seed: 0,
+            player: Player::None,
+            seconds: 0.0,
+            sound_at: 0.0,
             frame: Frame {
                 bands: [0.0; BANDS],
                 bass: 0.0,
@@ -118,6 +152,7 @@ impl Visualizer {
                 bass_stretch: settings.bass_stretch,
                 kick_power: 0.0,
                 kick_count: 0,
+                silence: Silence::NoPlayer,
             },
             settings,
         }
@@ -146,6 +181,10 @@ impl Visualizer {
         for (value, &band) in values.iter_mut().zip(bands) {
             *value = if band.is_nan() { 0.0 } else { band.clamp(0.0, 1.0) };
         }
+        if values.iter().any(|&b| b >= SILENCE_THRESHOLD) {
+            self.sound_at = self.seconds;
+            self.update_silence();
+        }
         self.frame.bands = values;
         self.frame.bass = average(&values[..6]);
         self.frame.mid = average(&values[6..16]);
@@ -167,6 +206,8 @@ impl Visualizer {
     /// infinite one as the longest finite one.
     pub fn advance(&mut self, dt: f64) {
         let dt = if dt > 0.0 { dt.min(f64::MAX) } else { 0.0 };
+        self.seconds = (self.seconds + dt).min(f64::MAX);
+        self.update_silence();
         let speed = self.settings.speed;
         self.clock = (self.clock + dt * speed).min(f64::MAX);
         self.frame.time = self.clock % TIME_WRAP;
@@ -177,6 +218,30 @@ impl Visualizer {
         for (age, &at) in self.frame.kick_ages.iter_mut().zip(&self.kick_times) {
             *age = self.clock - at;
         }
+    }
+
+    /// The Active Player: none, paused or playing. While it doesn't play, nothing is captured (as
+    /// audio/AudioPipeline.qml stops cava), so the bands read as silent until the next push.
+    pub fn set_player(&mut self, player: Player) {
+        if player == Player::Playing && self.player != Player::Playing {
+            self.sound_at = self.seconds;
+        }
+        if player != Player::Playing {
+            let f = &mut self.frame;
+            f.bands = [0.0; BANDS];
+            (f.bass, f.mid, f.treble) = (0.0, 0.0, 0.0);
+        }
+        self.player = player;
+        self.update_silence();
+    }
+
+    fn update_silence(&mut self) {
+        self.frame.silence = match self.player {
+            Player::None => Silence::NoPlayer,
+            Player::Paused => Silence::Paused,
+            Player::Playing if self.seconds - self.sound_at >= SILENCE_HOLD => Silence::Silent,
+            Player::Playing => Silence::None,
+        };
     }
 
     /// Everything to draw.
