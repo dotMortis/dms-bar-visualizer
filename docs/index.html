@@ -183,7 +183,7 @@ import initCore, { Visualizer } from "./wasm/visualizer_core.js";
 // The views and their sliders (demo.mjs). The Lock Ring view runs the
 // plugin's own modules and shader (lock-ring/), which live here because Pages publishes only docs/.
 import {
-  BANDS, GLYPH, HIGH_HZ, LOW_HZ, coreKind, coreSettings, defaults, localSeconds, ringSide, ringUniforms, setValueAt, slidersFor,
+  BANDS, GLYPH, HIGH_HZ, KICK_SLOTS, LOW_HZ, coreKind, coreSettings, defaults, localSeconds, ringSide, ringUniforms, setValueAt, slidersFor,
   timeHitOf, valueAt, viewFromHash,
 } from "./demo.mjs";
 import { toWebGL } from "./webgl.mjs";
@@ -407,7 +407,7 @@ const st = {
   // The core's frame, as of its last call (readCore()): the bands, bass/mid/treble, the Kick level,
   // the animation clock (wrapped at 1200 s), the wave phase (flow) and the Kick slots.
   values: new Float32Array(BANDS), bass: 0, mid: 0, treble: 0, kick: 0, time: 0, flow: 0,
-  kickAges: new Float32Array(8), kickPowers: new Float32Array(8), kickSeeds: new Float32Array(8),
+  kickAges: new Float32Array(KICK_SLOTS), kickPowers: new Float32Array(KICK_SLOTS), kickSeeds: new Float32Array(KICK_SLOTS),
   kickCount: 0,
   inset: cfg.spacing, cornerRadius: cfg.radius,
 };

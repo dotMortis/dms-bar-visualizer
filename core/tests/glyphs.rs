@@ -189,3 +189,19 @@ fn the_demos_glyph_offsets_are_the_cores() {
         expected.iter().map(|(k, v)| (k.to_string(), *v)).collect();
     assert_eq!(offsets, expected);
 }
+
+/// The demo's sources fill cava's layout, and the page sizes the shader's Kick slot uniforms, by
+/// docs/demo.mjs's constants (it loads no other JS that has them): they must be the core's.
+#[test]
+fn the_demos_layout_constants_are_the_cores() {
+    use visualizer_core::{BANDS, HIGH_HZ, KICK_SLOTS, LOW_HZ};
+    let demo = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../docs/demo.mjs")).unwrap();
+    let constant = |name: &str| -> f64 {
+        let line = demo.lines().find(|l| l.starts_with(&format!("export const {name} = "))).expect(name);
+        line.split('=').nth(1).unwrap().trim().trim_end_matches(';').parse().expect(name)
+    };
+    assert_eq!(constant("BANDS"), BANDS as f64);
+    assert_eq!(constant("LOW_HZ"), LOW_HZ);
+    assert_eq!(constant("HIGH_HZ"), HIGH_HZ);
+    assert_eq!(constant("KICK_SLOTS"), KICK_SLOTS as f64);
+}

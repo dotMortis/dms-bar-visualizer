@@ -10,10 +10,12 @@ import { DIAL_RATIO } from "./lock-ring/ring.mjs";
 
 export const VIEWS = ["bar", "ring"];
 
-// cava's layout, which the page's sources stand in for: 32 bands from 30 Hz to 14 kHz, bass first.
+// cava's layout, which the page's sources stand in for: 32 bands from 30 Hz to 14 kHz, bass first;
+// and how many Kick slots the shaders take. The core's (core/tests/glyphs.rs checks them).
 export const BANDS = 32;
 export const LOW_HZ = 30;
 export const HIGH_HZ = 14000;
+export const KICK_SLOTS = 8;
 
 // Where each field of a glyph instance sits in the core's glyphs().data (core/src/glyph.rs's Glyph,
 // core/src/wasm.rs): glyph i starts at i * stride; color and core are r, g, b; copies holds three

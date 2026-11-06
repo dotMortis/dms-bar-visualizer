@@ -22,8 +22,11 @@ pub use lyric_line::{LyricWord, Spot};
 use lyric_words::LyricWords;
 use settings::Settings;
 
-/// cava's layout: 32 bands from 30 Hz to 14 kHz, bass first.
+/// cava's layout: BANDS bands from LOW_HZ to HIGH_HZ, bass first (the audio pipeline configures it
+/// so).
 pub const BANDS: usize = 32;
+pub const LOW_HZ: f64 = 30.0;
+pub const HIGH_HZ: f64 = 14000.0;
 /// Where `Frame::time` wraps (shell.qml's `audio.time % 1200`).
 pub const TIME_WRAP: f64 = 1200.0;
 /// How many Kicks play at once: a new Kick's Shockwave and Spray add to those of the last ones

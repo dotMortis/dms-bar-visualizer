@@ -5,11 +5,8 @@
 // WASM, which differ in the last bit, and the WASM build must fire exactly the native Kicks.
 use libm::{log2, pow, sin};
 
-use crate::BANDS;
+use crate::{BANDS, HIGH_HZ, LOW_HZ};
 
-/// cava's frequency range, which the audio pipeline configures it with.
-const LOW_HZ: f64 = 30.0;
-const HIGH_HZ: f64 = 14000.0;
 /// The sample rate of cava's pulse input.
 const RATE: f64 = 44100.0;
 
