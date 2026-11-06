@@ -7,6 +7,8 @@ publish = false
 
 [lib]
 name = "visualizer_core"
+# rlib for the tests, staticlib and cdylib for C (include/visualizer_core.h), cdylib for WASM.
+crate-type = ["rlib", "staticlib", "cdylib"]
 
 [dependencies]
 serde_json = "1"
