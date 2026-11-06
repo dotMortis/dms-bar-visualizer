@@ -99,12 +99,12 @@ typedef struct VisualizerTimeHit {
  * change both. Hands are hour, minute, second (ring.frag's x, y, z); sizes in dial radii. Kept
  * only while the kind is VISUALIZER_KIND_LOCK_RING. */
 typedef struct VisualizerLockRing {
-    /* The ring's motion: its swell (a fraction of the dial radius) and how much music its ribbon
-     * shows (0 = only its idle wave .. 1). ring.frag's swell and presence. */
+    /* The Lock Ring's motion: its swell (a fraction of the dial radius) and how much music its ribbon
+     * shows (0 = only its calm wave in Silence .. 1). ring.frag's swell and presence. */
     double swell, presence;
-    /* How brightly every hand flashes, 0..1 (handFlash). */
+    /* How brightly every Hand flashes, 0..1 (handFlash). */
     double hand_flash;
-    /* Where each hand points, radians clockwise from 12 o'clock, from the local time alone
+    /* Where each Hand points, radians clockwise from 12 o'clock, from the local time alone
      * (handAngle). */
     double hand_angles[3];
     /* handInner, handLength, handAmp, handWidth and handGlow. */
@@ -113,9 +113,9 @@ typedef struct VisualizerLockRing {
     double hand_amplitudes[3];
     double hand_widths[3];
     double hand_glows[3];
-    /* How far each hand's wave has travelled, radians (handPhase). */
+    /* How far each Hand's wave has travelled, radians (handPhase). */
     double hand_phases[3];
-    /* Each hand's band (bass, mid, treble) as a share of its own recent peak, 0..1. */
+    /* Each Hand's band (bass, mid, treble) as a share of its own recent peak, 0..1. */
     double hand_levels[3];
     /* The Kick slots as ring.frag takes them (kickAge0/1, kickPower0/1, kickSeed0/1): the frame's,
      * with a played-out or empty slot at age 100, power 0, seed 0. */
@@ -168,7 +168,7 @@ const VisualizerLockRing *visualizer_lock_ring(const Visualizer *visualizer);
 
 /* One of a word's split copies, drawn behind it as a Shockwave crosses it: its color (r, g, b
  * 0..1), how far it's pushed in pixels (outward: on the bar along it, away from its center; on the
- * Lock Ring away from the dial's center) and its opacity, under the glyph's own. */
+ * Lock Ring away from the Dial's center) and its opacity, under the glyph's own. */
 typedef struct VisualizerGlyphCopy {
     double color[3];
     double dx, dy;
@@ -185,7 +185,7 @@ typedef struct VisualizerGlyph {
      * its letters' order, and every letter of a word has the same look. */
     double word;
     /* Its middle, in pixels, tilted angle degrees clockwise: on the bar from its top left, on the
-     * Lock Ring from the dial's center (y down). */
+     * Lock Ring from the Dial's center (y down). */
     double x, y, angle;
     /* The word's size (1 = a settled lead vocal's), scaled around its middle (pivot). */
     double scale, pivot_x, pivot_y;
@@ -227,7 +227,7 @@ void visualizer_set_position(Visualizer *visualizer, double time, double rate);
 /* The bar's size in pixels, which the glyphs are laid out on; no glyphs until it's set. */
 void visualizer_set_bar_size(Visualizer *visualizer, double width, double height);
 /* The Lock Ring's side in pixels (the smaller of its width and height), which its glyphs are laid
- * out on, around the dial's center; no glyphs on the Lock Ring until it's set. */
+ * out on, around the Dial's center; no glyphs on the Lock Ring until it's set. */
 void visualizer_set_ring_size(Visualizer *visualizer, double side);
 /* The font's measures in ems (shares of its pixel size): len bytes of UTF-8 letters, count
  * advances, one per letter in order, and the line height. Measure the lyrics' letters at any size

@@ -194,7 +194,7 @@ impl BarLyrics {
 }
 
 impl BarLyrics {
-    /// The words' glyphs on the Lock Ring, around the dial's center, as LockRing.qml laid them out.
+    /// The words' glyphs on the Lock Ring, around the Dial's center, as LockRing.qml laid them out.
     fn lay_out_ring(&mut self, frame: &Frame, ring: &LockRing) {
         if self.side <= 0.0 {
             return;
@@ -312,7 +312,7 @@ impl Visualizer {
     }
 
     /// The Lock Ring's side in pixels (the square it's drawn in: the smaller of its width and
-    /// height), which its glyphs are laid out on, around the dial's center; none until it's set (a
+    /// height), which its glyphs are laid out on, around the Dial's center; none until it's set (a
     /// side that isn't above 0 is none, one above MAX_BAR is MAX_BAR).
     pub fn set_ring_size(&mut self, side: f64) {
         self.lyrics.side = if side > 0.0 { side.min(MAX_BAR) } else { 0.0 };

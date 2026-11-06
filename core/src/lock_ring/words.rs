@@ -113,7 +113,7 @@ pub struct WordScene<'a> {
     pub phases: [f64; 3],
 }
 
-/// One letter of a placed word: its center, px from the dial's center (y down), and its rotation,
+/// One letter of a placed word: its center, px from the Dial's center (y down), and its rotation,
 /// clockwise degrees.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct PlacedLetter {
@@ -122,7 +122,7 @@ pub struct PlacedLetter {
     pub rotation: f64,
 }
 
-/// Where a word sits on the ring this frame: its middle, px from the dial's center (y down); its
+/// Where a word sits on the ring this frame: its middle, px from the Dial's center (y down); its
 /// distance from the center in dial radii and its direction (radians clockwise from 12 o'clock,
 /// 0..2π), where a Shockwave crosses it; and the color it glows in (r, g, b 0..1, 8-bit), its
 /// Ribbon's there or its Hand's, at full brightness.
@@ -155,7 +155,7 @@ fn ribbon_at(theta: f64, k: usize, scene: &WordScene) -> (f64, f64, f64) {
     (ribbon_radius(angle, &at(level)), level, s)
 }
 
-/// Lays letters along a path: `point(t)` gives a point (px from the dial's center, y down) at `t`,
+/// Lays letters along a path: `point(t)` gives a point (px from the Dial's center, y down) at `t`,
 /// `unit` px of the path per unit of t, walking in `read` (+1 or -1) direction. Each letter's center
 /// is its share of the word's advances from the word's middle at t0, turned to the path's tangent.
 fn lay_out(

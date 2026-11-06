@@ -11,31 +11,31 @@ use crate::{Frame, KICK_SLOTS};
 pub const AT_REST: f64 = 0.01;
 
 /// The Lock Ring's state, as of the last call. Laid out as C's `VisualizerLockRing`
-/// (include/visualizer_core.h): change both together. The hands are in HANDS' order (hour, minute,
+/// (include/visualizer_core.h): change both together. The Hands are in HANDS' order (hour, minute,
 /// second), as ring.frag's handAngle..handPhase x, y, z; sizes are in dial radii.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LockRingFrame {
-    /// The ring's motion: how far it swells (a fraction of the dial radius, following the beat),
-    /// and how much music its ribbon shows (0 = only its calm idle wave .. 1). Stepped at display
+    /// The Lock Ring's motion: how far it swells (a fraction of the dial radius, following the beat),
+    /// and how much music its ribbon shows (0 = only its calm wave in Silence .. 1). Stepped at display
     /// time, not at the speed setting.
     pub swell: f64,
     pub presence: f64,
-    /// How brightly every hand flashes, 0..1: lit by each Kick at its power, fading at kickDecay.
+    /// How brightly every Hand flashes, 0..1: lit by each Kick at its power, fading at kickDecay.
     pub hand_flash: f64,
-    /// Where each hand points, in radians clockwise from 12 o'clock: from the local time alone
+    /// Where each Hand points, in radians clockwise from 12 o'clock: from the local time alone
     /// (set_local_time), whatever the music does.
     pub hand_angles: [f64; 3],
-    /// Where each hand starts and ends, from the center; its wave's sideways reach (0 = straight),
+    /// Where each Hand starts and ends, from the center; its wave's sideways reach (0 = straight),
     /// its width and its glow (0..1).
     pub hand_inner: [f64; 3],
     pub hand_lengths: [f64; 3],
     pub hand_amplitudes: [f64; 3],
     pub hand_widths: [f64; 3],
     pub hand_glows: [f64; 3],
-    /// How far each hand's wave has travelled, in radians, wrapped at PHASE_WRAP.
+    /// How far each Hand's wave has travelled, in radians, wrapped at PHASE_WRAP.
     pub hand_phases: [f64; 3],
-    /// Each hand's band (bass, mid, treble) as a share of its own recent peak, 0..1.
+    /// Each Hand's band (bass, mid, treble) as a share of its own recent peak, 0..1.
     pub hand_levels: [f64; 3],
     /// The Kick slots as ring.frag takes them: the Frame's, with a played-out or empty slot at age
     /// 100, power 0 and seed 0.

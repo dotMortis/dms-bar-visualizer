@@ -25,7 +25,7 @@
 //! ```js
 //! visualizer.setKind("lock-ring");                // or "bar", as new
 //! visualizer.setLocalTime(secondsSinceLocalMidnight);
-//! visualizer.setRingSize(side);                   // its Lyric Words come out of glyphs(), around the dial's center
+//! visualizer.setRingSize(side);                   // its Lyric Words come out of glyphs(), around the Dial's center
 //! const { swell, presence, handFlash, handAngles, handInner, handLengths, handAmplitudes,
 //!         handWidths, handGlows, handPhases, handLevels, kickAges, kickPowers, kickSeeds,
 //!         hourRadii, hourGlows, timeCrossing, timeCopyOffsets, timeCopyOpacity, timeGlowOpacity,

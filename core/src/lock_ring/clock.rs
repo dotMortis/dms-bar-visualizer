@@ -7,7 +7,7 @@ use super::ring::DIAL_RATIO;
 pub const DAY: f64 = 86400.0;
 
 /// Clockwise degrees from 12 o'clock for each Hand (hour, minute, second) at the local time of day
-/// `seconds` (since local midnight; any other number lands on the time of day it is). Every hand
+/// `seconds` (since local midnight; any other number lands on the time of day it is). Every Hand
 /// moves on with the units below it, so the second hand sweeps instead of ticking. clock.mjs
 /// handAngles().
 pub fn hand_angles(seconds: f64) -> [f64; 3] {

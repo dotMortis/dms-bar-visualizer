@@ -357,8 +357,8 @@ impl Visualizer {
         &self.frame
     }
 
-    /// The Lock Ring's own state, on top of the frame: its ring motion, Hands, Hour Points, Digital
-    /// Time and the shader's Kick slots. Kept only while the kind is the Lock Ring.
+    /// The Lock Ring's own state, on top of the frame: its motion (the Dial's swell, the Ribbons'
+    /// presence), Hands, Hour Points, Digital Time and the shader's Kick slots. Kept only while the kind is the Lock Ring.
     pub fn lock_ring(&self) -> LockRingFrame {
         self.lock_ring.frame
     }

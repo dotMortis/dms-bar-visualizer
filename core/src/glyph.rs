@@ -5,7 +5,7 @@
 
 /// One of a word's split copies, drawn behind it as a Shockwave crosses it: its color (r, g, b
 /// 0..1), how far it's pushed in pixels (outward: on the bar along it, away from its center; on the
-/// Lock Ring away from the dial's center), and its opacity, under the glyph's own.
+/// Lock Ring away from the Dial's center), and its opacity, under the glyph's own.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct GlyphCopy {
@@ -25,7 +25,7 @@ pub struct Glyph {
     /// together, in its letters' order; every letter of a word has the same look.
     pub word: f64,
     /// Its middle, in pixels, tilted `angle` degrees clockwise: on the bar from its top left, on the
-    /// Lock Ring from the dial's center (y down).
+    /// Lock Ring from the Dial's center (y down).
     pub x: f64,
     pub y: f64,
     pub angle: f64,

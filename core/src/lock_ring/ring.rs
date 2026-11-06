@@ -1,5 +1,5 @@
 // The Lock Ring's look, apart from drawing: where the spectrum sits on the ring, the ribbon that is
-// the Dial (a calm, living wave in silence that the music grows into spectrum ribbons waving
+// the Dial (a calm, living wave in Silence that the music grows into spectrum ribbons waving
 // outward from the swelling Dial), the 12 Hour Points riding on it, and how the ring swells with
 // the music. Ported from v0.10.0's docs/lock-ring/ring.mjs; ring.frag mirrors spectrum_at(),
 // spectrum_level(), ribbon_level(), ribbon_radius() and hour_points().
@@ -78,16 +78,16 @@ pub fn ribbon_level(values: &[f64], s: f64) -> f64 {
     (at(s - 2.0 * d) + 2.0 * at(s - d) + 3.0 * at(s) + 2.0 * at(s + d) + at(s + 2.0 * d)) / 9.0
 }
 
-/// The ribbon in silence: never a fixed circle, but a thin, slow wave around the dial radius.
-/// How far it strays from the dial radius, in dial radii; how fast its wave drifts around the dial,
-/// in turns of phase per second (strand 0); how fast it breathes, times a second; and how bright it
-/// is in silence, as a share of its brightness with music.
+/// The Ribbons in Silence: never a fixed circle, but a thin, slow wave around the dial radius.
+/// How far it strays from the dial radius, in dial radii; how fast its wave drifts around the Dial,
+/// in turns of phase per second (Ribbon 0); how fast it breathes, times a second; and how bright it
+/// is in Silence, as a share of its brightness with music. Named IDLE_* as ring.frag names them.
 pub const IDLE_REACH: f64 = 0.035;
 pub const IDLE_DRIFT: f64 = 0.05;
 pub const IDLE_BREATH: f64 = 0.1;
 pub const IDLE_GLOW: f64 = 0.4;
 
-/// The ribbon with music: how far a strand's crest rises above the Dial at full level, in dial
+/// The ribbon with music: how far a Ribbon's crest rises above the Dial at full level, in dial
 /// radii; how much of the treble rides on the wave as a faster ripple; how far from 6 and 12
 /// o'clock the wave is rounded where the mirrored halves meet, in radians; and how far apart along
 /// the spectrum ribbon_level() averages the levels.
@@ -110,7 +110,8 @@ fn unfold(a: f64) -> f64 {
 }
 
 /// What ribbon_radius() reads: the spectrum's level there (0..1), the wave phase (flow), the
-/// animation clock (time), the treble, the swell, and which strand (0..2).
+/// animation clock (time), the treble, the swell, and which Ribbon (0..2; `strand`, as ring.frag
+/// calls the Ribbons).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct RibbonAt {
     pub level: f64,
@@ -121,9 +122,9 @@ pub struct RibbonAt {
     pub strand: usize,
 }
 
-/// The radius of a strand at `angle` clockwise degrees from 12 o'clock, in dial radii: the Dial
+/// The radius of a Ribbon at `angle` clockwise degrees from 12 o'clock, in dial radii: the Dial
 /// (1), swollen by the swell, waved around by the music (its level, its waves advanced by flow and
-/// rippled by the treble), plus the idle wave, which breathes and drifts with time. Every rate is
+/// rippled by the treble), plus the calm wave of Silence, which breathes and drifts with time. Every rate is
 /// a multiple of 1/1200 Hz, so the shader's time wrap at 1200 s is seamless. ring.frag's
 /// ribbonRadius() mirrors it.
 pub fn ribbon_radius(angle: f64, at: &RibbonAt) -> f64 {
@@ -144,7 +145,7 @@ pub fn ribbon_radius(angle: f64, at: &RibbonAt) -> f64 {
 }
 
 /// What the ribbon and the Hour Points are drawn from: the bands (bass first), the wave phase, the
-/// animation clock, the treble, the ring motion (swell, presence) and the bassStretch setting.
+/// animation clock, the treble, the Lock Ring's motion (swell, presence) and the bassStretch setting.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RingScene<'a> {
     pub values: &'a [f64],
@@ -170,8 +171,8 @@ pub struct HourPoint {
 /// The 12 Hour Points riding on the ribbon. `crossing(radius, theta)` is how brightly a Shockwave's
 /// front is crossing a radius in a direction (radians clockwise from 12 o'clock) right now
 /// (shockwave_crossing()), `surge(radius, theta)` how much the Shockwaves lift the ribbons there
-/// (ribbon_surge()). Each rides strand 0, surged where the strand sits before the surge, as the
-/// ribbon is; its glow is brighter at 12, 3, 6 and 9, dimmer in silence, and flashes as a
+/// (ribbon_surge()). Each rides Ribbon 0, surged where the Ribbon sits before the surge, as the
+/// ribbon is; its glow is brighter at 12, 3, 6 and 9, dimmer in Silence, and flashes as a
 /// Shockwave's front reaches its radius. ring.frag mirrors this.
 pub fn hour_points(
     scene: &RingScene,
@@ -201,10 +202,10 @@ fn follow(value: f64, target: f64, dt: f64, tau: f64) -> f64 {
     value + (target - value) * (1.0 - libm::exp(-dt / tau))
 }
 
-/// The ring's motion, stepped once per display frame with bass/mid/treble (ring.mjs
-/// createRingMotion()): the swell (the ring's radius grows by this fraction of the dial radius,
-/// following the beat) and the presence (0..1, how much music the ribbon shows: 0 = only its calm
-/// idle wave).
+/// The Lock Ring's motion, stepped once per display frame with bass/mid/treble (ring.mjs
+/// createRingMotion()): the swell (the Dial's radius grows by this fraction of the dial radius,
+/// following the beat) and the presence (0..1, how much music the Ribbons show: 0 = only their
+/// calm wave of Silence).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct RingMotion {
     pub swell: f64,

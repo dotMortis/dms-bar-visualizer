@@ -1,6 +1,6 @@
 // Kicks on the Lock Ring, apart from drawing: how each one's Shockwave grows out of the center, how
 // brightly it crosses a radius as it passes, how it lifts the ribbons, how the center punches as it
-// is born, how it pushes the Aura outward, and how the hands flash. Ported from v0.10.0's
+// is born, how it pushes the Aura outward, and how the Hands flash. Ported from v0.10.0's
 // docs/lock-ring/kicks.mjs. lock-ring/shaders/ring.frag mirrors kick_at(), shockwave_front(),
 // shockwave_crossing(), ribbon_surge(), center_punch() and aura_push() and has the same constants
 // (tests/lock_constants.rs). The sparks a Kick flings off the ring are the shader's alone.
@@ -13,7 +13,7 @@ use std::f64::consts::TAU;
 use super::ring::DIAL_RATIO;
 use crate::{KICK_SLOTS, PLAYED_OUT};
 
-/// Where a Shockwave starts (a small round at the center; the hands float around it) and the
+/// Where a Shockwave starts (a small round at the center; the Hands float around it) and the
 /// widget's edge, in dial radii.
 pub const KICK_ORIGIN: f64 = 0.014 / DIAL_RATIO;
 pub const EDGE: f64 = 0.5 / DIAL_RATIO;
