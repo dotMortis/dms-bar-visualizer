@@ -1,6 +1,7 @@
 //! The C ABI of the Lyric Words (bar_lyrics.rs): the Active Player's track, lyrics and playback
 //! position in, glyph instances out. Total like the rest: a null Visualizer or buffer, or text
-//! that isn't UTF-8, is ignored. set_position, set_bar_size, set_ring_size and glyphs never allocate.
+//! that isn't UTF-8, is ignored. set_position, set_bar_size, set_ring_size and glyphs never allocate;
+//! set_track, set_lyrics and set_letters may.
 
 use std::ptr;
 

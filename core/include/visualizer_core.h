@@ -3,8 +3,9 @@
  * Every call is total: a null Visualizer, a null or short buffer, or settings that aren't UTF-8
  * JSON are ignored. No call unwinds into the caller. visualizer_push_bands, visualizer_advance,
  * visualizer_set_player and visualizer_frame never allocate, nor do visualizer_set_kind,
- * visualizer_set_local_time, visualizer_lock_ring, visualizer_set_position, visualizer_set_bar_size
- * and visualizer_glyphs.
+ * visualizer_set_local_time, visualizer_lock_ring, visualizer_set_position, visualizer_set_bar_size,
+ * visualizer_set_ring_size and visualizer_glyphs. visualizer_configure, visualizer_set_track,
+ * visualizer_set_lyrics and visualizer_set_letters may.
  *
  * Link against libvisualizer_core.a (or .so) from `cargo build --release` in core/; the static
  * library also needs -lpthread -ldl -lm on Linux. */
@@ -135,8 +136,8 @@ Visualizer *visualizer_create(void);
 /* Frees a Visualizer from visualizer_create. */
 void visualizer_destroy(Visualizer *visualizer);
 /* The settings, as config.json's text: len bytes of UTF-8, no terminator needed. A key that's
- * missing or of the wrong type gets its default; broken JSON keeps the last good settings. The
- * one call that may allocate. */
+ * missing or of the wrong type gets its default; broken JSON keeps the last good settings. May
+ * allocate. */
 void visualizer_configure(Visualizer *visualizer, const char *json, size_t len);
 /* One capture frame: count bands (VISUALIZER_BANDS, else the frame is ignored), 0..1, bass first,
  * and when they came, in real seconds. */

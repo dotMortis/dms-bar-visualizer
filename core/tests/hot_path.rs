@@ -195,6 +195,35 @@ fn the_same_lyrics_again_dont_allocate_per_frame_either() {
 }
 
 #[test]
+fn set_kind_never_allocates_even_with_lyrics_loaded() {
+    let frames = &fixture("steady_house").frames;
+    let mut visualizer = singing(&DEFAULTS.json());
+    visualizer.set_ring_size(600.0);
+    let (mut bar, mut ring) = (0, 0);
+    let n = allocations(|| {
+        visualizer.set_player(Player::Playing);
+        visualizer.set_position(0.0, 1.0);
+        for (i, f) in frames.iter().enumerate() {
+            // Switch kind every 50 frames, the words shown at the time cleared each time.
+            if i % 50 == 0 {
+                visualizer.set_kind(if i % 100 == 0 { Kind::LockRing } else { Kind::Bar });
+            }
+            visualizer.set_local_time(36000.0 + i as f64 / 60.0);
+            visualizer.push_bands(&f.values, f.time);
+            visualizer.advance(1.0 / 60.0);
+            let shown = std::hint::black_box(visualizer.glyphs()).len();
+            if i % 100 < 50 {
+                ring = ring.max(shown);
+            } else {
+                bar = bar.max(shown);
+            }
+        }
+    });
+    assert_eq!(n, 0, "allocations over {} frames", frames.len());
+    assert!(bar > 0 && ring > 0, "the words did show in both kinds: {bar} bar, {ring} ring glyphs at most");
+}
+
+#[test]
 fn bad_input_doesnt_allocate_either() {
     let mut visualizer = Visualizer::new();
     visualizer.configure("{}");

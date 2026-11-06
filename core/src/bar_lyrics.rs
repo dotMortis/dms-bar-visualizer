@@ -13,7 +13,7 @@ use crate::lock_ring::{
 };
 use crate::lyric_line::{LyricLine, LyricWord, Spot};
 use crate::ribbons::{ribbon_color, shockwave_crossing, RibbonInputs};
-use crate::{Frame, Visualizer};
+use crate::{Frame, Kind, Visualizer};
 
 /// A letter's advance, in ems, when set_letters didn't give it.
 pub const FALLBACK_ADVANCE: f64 = 0.5;
@@ -86,17 +86,17 @@ impl BarLyrics {
         self.line.set_running(running, now);
     }
 
-    /// Whether the words are the Lock Ring's or the bar's: a change clears them.
-    pub fn set_ring(&mut self, ring: bool) {
-        self.line.set_ring(ring);
-        self.make_room();
+    /// Whether the words are the Lock Ring's or the bar's: a change clears them. Never allocates:
+    /// the buffers have room for either kind's words.
+    pub fn set_kind(&mut self, kind: Kind) {
+        self.line.set_kind(kind);
     }
 
     pub fn animating(&self, now: f64) -> bool {
         self.line.animating(now)
     }
 
-    /// Room for the most letters the lyrics can show at once.
+    /// Room for the most letters the lyrics can show at once, in either kind.
     fn make_room(&mut self) {
         let most = self.line.most_letters();
         self.glyphs.reserve_exact(most.saturating_sub(self.glyphs.len()));
@@ -109,7 +109,7 @@ impl BarLyrics {
     pub fn advance(&mut self, now: f64, frame: &Frame, ring: &LockRing) {
         self.line.step(now);
         self.glyphs.clear();
-        if self.line.ring() {
+        if self.line.kind() == Kind::LockRing {
             self.lay_out_ring(frame, ring);
             return;
         }

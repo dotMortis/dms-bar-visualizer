@@ -29,6 +29,8 @@
 
 use serde_json::Value;
 
+use crate::Kind;
+
 /// Seconds a word takes to pop in, from its start.
 pub const POP_IN: f64 = 0.25;
 /// On the Lock Ring, the seconds a Lyric Line's words take to dissolve, from its end (less when the
@@ -416,7 +418,9 @@ pub(crate) struct LyricLine {
     track: Option<String>,
     length: f64,
     plain: Vec<PlainLine>,
-    lines: Vec<Line>,
+    /// The Lyric Lines, as each kind times them (by Kind as usize: the bar's, the Lock Ring's),
+    /// both made with the lyrics so a kind change takes no new ones.
+    lines: [Vec<Line>; 2],
     anchor: Option<Anchor>,
     running: bool,
     /// The song time of the last clear: words sung before it don't pop in.
@@ -432,7 +436,7 @@ pub(crate) struct LyricLine {
     /// The most letters the lyrics can show at once.
     letters: usize,
     /// Where words land: on the bar (lingering, in rows) or on the Lock Ring.
-    ring: bool,
+    kind: Kind,
 }
 
 impl LyricLine {
@@ -441,7 +445,7 @@ impl LyricLine {
             track: None,
             length: 0.0,
             plain: Vec::new(),
-            lines: Vec::new(),
+            lines: [Vec::new(), Vec::new()],
             anchor: None,
             running: false,
             cleared: 0.0,
@@ -453,7 +457,7 @@ impl LyricLine {
             fresh: Vec::new(),
             words: Vec::new(),
             letters: 0,
-            ring: false,
+            kind: Kind::Bar,
         }
     }
 
@@ -481,18 +485,22 @@ impl LyricLine {
     }
 
     /// Whether the words are the Lock Ring's (one Lyric Line at a time, on Ribbons or Hands) or the
-    /// bar's. A change clears the words.
-    pub fn set_ring(&mut self, ring: bool) {
-        if ring != self.ring {
-            self.ring = ring;
-            let lines = lyric_lines(&self.plain, self.length, !ring);
-            self.take(lines, true);
+    /// bar's. A change clears the words. Never allocates: both kinds' lines are made with the lyrics.
+    pub fn set_kind(&mut self, kind: Kind) {
+        if kind != self.kind {
+            self.kind = kind;
+            self.clearing = true;
         }
     }
 
-    /// Whether the words are the Lock Ring's.
-    pub fn ring(&self) -> bool {
-        self.ring
+    /// Whose words these are: the bar's or the Lock Ring's.
+    pub fn kind(&self) -> Kind {
+        self.kind
+    }
+
+    /// The Lyric Lines as this kind times them.
+    fn shown_lines(&self) -> &[Line] {
+        &self.lines[self.kind as usize]
     }
 
     /// The Active Player's track: an identity and its length in seconds (0: unknown). A new
@@ -504,8 +512,7 @@ impl LyricLine {
             self.plain.clear();
         }
         self.length = length;
-        let lines = lyric_lines(&self.plain, self.length, !self.ring);
-        self.take(lines, changed);
+        self.take(changed);
     }
 
     /// DMS's lyrics for the track, as JSON text. The same Lyric Lines again keep the words shown and
@@ -513,15 +520,21 @@ impl LyricLine {
     pub fn set_lyrics(&mut self, lyrics: &str) {
         let lyrics = serde_json::from_str(lyrics).unwrap_or(Value::Null);
         self.plain = plain_lines(&lyrics);
-        let lines = lyric_lines(&self.plain, self.length, !self.ring);
-        let changed = lines != self.lines;
-        self.take(lines, changed);
+        let old = std::mem::take(&mut self.lines[self.kind as usize]);
+        self.take(false);
+        let changed = old != self.lines[self.kind as usize];
+        self.clearing |= changed;
     }
 
-    /// Takes these Lyric Lines, clearing the words if asked, with room for the most they can show.
-    fn take(&mut self, lines: Vec<Line>, clear: bool) {
-        let (words, letters) = most_shown(&lines);
-        self.lines = lines;
+    /// Makes both kinds' Lyric Lines from the plain lines, clearing the words if asked, with room
+    /// for the most either kind can show.
+    fn take(&mut self, clear: bool) {
+        let bar = lyric_lines(&self.plain, self.length, true);
+        let ring = lyric_lines(&self.plain, self.length, false);
+        let (bar_words, bar_letters) = most_shown(&bar);
+        let (ring_words, ring_letters) = most_shown(&ring);
+        let (words, letters) = (bar_words.max(ring_words), bar_letters.max(ring_letters));
+        self.lines = [bar, ring];
         if clear {
             self.clearing = true;
         }
@@ -571,7 +584,7 @@ impl LyricLine {
 
     /// A shown word's text, its row's and the row's before it; empty for a word not in the lyrics.
     pub fn text(&self, word: &LyricWord) -> (&str, &str, &str) {
-        match self.lines.get(word.line).and_then(|l| l.words.get(word.word)) {
+        match self.shown_lines().get(word.line).and_then(|l| l.words.get(word.word)) {
             Some(w) => (&w.text, &w.row_text, &w.before),
             None => ("", "", ""),
         }
@@ -581,7 +594,7 @@ impl LyricLine {
     /// come.
     pub fn animating(&self, now: f64) -> bool {
         let now = self.position(now);
-        self.running && self.lines.iter().any(|l| now < l.gone)
+        self.running && self.shown_lines().iter().any(|l| now < l.gone)
     }
 
     /// Moves the words on to `now` on the core's clock.
@@ -600,7 +613,8 @@ impl LyricLine {
         self.next.clear();
         self.fresh.clear();
         self.words.clear();
-        'lines: for (l, line) in self.lines.iter().enumerate() {
+        let ring = self.kind == Kind::LockRing;
+        'lines: for (l, line) in self.lines[self.kind as usize].iter().enumerate() {
             if now < line.t || now >= line.gone {
                 continue;
             }
@@ -643,10 +657,10 @@ impl LyricLine {
         // words follow its first.
         for &(i, row, kick) in &self.fresh {
             let (line, word) = (self.words[i].line, self.words[i].word);
-            let lead = self.next.iter().find(|h| !self.ring && h.line == line && h.row == row);
+            let lead = self.next.iter().find(|h| !ring && h.line == line && h.row == row);
             let spot = match lead {
                 Some(h) => h.spot,
-                None => place(&mut self.random, &self.next, self.ring),
+                None => place(&mut self.random, &self.next, ring),
             };
             self.words[i].spot = spot;
             self.next.push(Held { line, word, row, spot, kick });

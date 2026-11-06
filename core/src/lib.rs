@@ -124,8 +124,9 @@ pub struct Frame {
     pub animating: bool,
 }
 
-/// One visualizer instance. Every call is total: bad input is clamped or ignored, never a panic,
-/// and after `new` nothing allocates but `configure`.
+/// One visualizer instance. Every call is total: bad input is clamped or ignored, never a panic.
+/// After `new` nothing allocates but `configure`, `set_track`, `set_lyrics` and `set_letters`
+/// (`set_kind` doesn't: both kinds' Lyric Lines are made with the lyrics).
 pub struct Visualizer {
     kind: Kind,
     /// config.json's settings as configured, and the ones this kind runs on.
@@ -220,7 +221,7 @@ impl Visualizer {
     /// that kind on the settings last configured; the running state carries over.
     pub fn set_kind(&mut self, kind: Kind) {
         self.kind = kind;
-        self.lyrics.set_ring(kind == Kind::LockRing);
+        self.lyrics.set_kind(kind);
         self.apply_settings();
     }
 

@@ -4,8 +4,9 @@
 //! Every call is total. A null Visualizer, a null or short buffer, or text that isn't UTF-8 is
 //! ignored, and a panic, should one ever happen, is caught here instead of unwinding into the
 //! caller (which would abort DMS). push_bands, advance, set_player and frame never allocate,
-//! nor do set_kind, set_local_time and lock_ring, nor the Lyric Words' set_position, set_bar_size
-//! and glyphs (c_abi/lyrics.rs).
+//! nor do set_kind, set_local_time and lock_ring, nor the Lyric Words' set_position, set_bar_size,
+//! set_ring_size and glyphs (c_abi/lyrics.rs). configure, set_track, set_lyrics and set_letters
+//! may.
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr;
