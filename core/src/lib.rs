@@ -1,25 +1,25 @@
 //! The per-frame logic of both visualizers, built natively and to WASM (ADR 0007).
 //! [`Visualizer`] is the one seam: everything goes in through it and comes out of its [`Frame`].
 
-// The C ABI is the native boundary; in WASM, wasm-bindgen's exports would clash with its names.
-mod bar_lyrics;
 pub mod bar_words;
+// The C ABI is the native boundary; in WASM, wasm-bindgen's exports would clash with its names.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod c_abi;
 mod glyph;
 mod kick;
 pub mod lock_ring;
 pub mod lyric_line;
+mod lyric_words;
 pub mod ribbons;
 mod settings;
 #[cfg(target_arch = "wasm32")]
 mod wasm;
 
-use bar_lyrics::BarLyrics;
 pub use glyph::{Glyph, GlyphCopy, GLYPH_FIELDS};
 use kick::{KickDetector, KickSettings};
 pub use lock_ring::LockRingFrame;
 pub use lyric_line::{LyricWord, Spot};
+use lyric_words::LyricWords;
 use settings::Settings;
 
 /// cava's layout: 32 bands from 30 Hz to 14 kHz, bass first.
@@ -143,8 +143,8 @@ pub struct Visualizer {
     seconds: f64,
     sound_at: f64,
     frame: Frame,
-    /// The Lyric Words (bar_lyrics.rs), on the display seconds.
-    lyrics: BarLyrics,
+    /// The Lyric Words (lyric_words.rs), on the display seconds.
+    lyrics: LyricWords,
     /// The Lock Ring's own state: stepped only while the kind is the Lock Ring.
     lock_ring: lock_ring::LockRing,
 }
@@ -183,7 +183,7 @@ impl Visualizer {
             player: Player::None,
             seconds: 0.0,
             sound_at: 0.0,
-            lyrics: BarLyrics::new(),
+            lyrics: LyricWords::new(),
             frame: Frame {
                 bands: [0.0; BANDS],
                 bass: 0.0,

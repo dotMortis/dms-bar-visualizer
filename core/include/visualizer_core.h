@@ -161,7 +161,7 @@ void visualizer_set_local_time(Visualizer *visualizer, double seconds);
  * Visualizer. */
 const VisualizerLockRing *visualizer_lock_ring(const Visualizer *visualizer);
 
-/* ---- Lyric Words (core/src/bar_lyrics.rs, core/src/c_abi/lyrics.rs) ---------------------------
+/* ---- Lyric Words (core/src/lyric_words.rs, core/src/c_abi/lyrics.rs) ---------------------------
  * The Active Player's track, timed lyrics and playback position in; the Lyric Words shown out, as
  * glyph instances, one per letter, laid out on the bar. The core loads no fonts: letter advances
  * come in as data. */

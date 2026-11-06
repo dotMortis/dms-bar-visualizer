@@ -36,7 +36,7 @@ const GLOW_RADIUS: f64 = 0.45;
 const COPY_BLUR: f64 = 0.08;
 
 /// The Lyric Words' state in a Visualizer.
-pub(crate) struct BarLyrics {
+pub(crate) struct LyricWords {
     line: LyricLine,
     /// The bar's size in pixels (0 until set: no glyphs).
     width: f64,
@@ -61,9 +61,9 @@ fn advance_of(letters: &[(char, f64)], c: char) -> f64 {
     }
 }
 
-impl BarLyrics {
+impl LyricWords {
     pub fn new() -> Self {
-        BarLyrics {
+        LyricWords {
             line: LyricLine::new(),
             width: 0.0,
             height: 0.0,
@@ -193,7 +193,7 @@ impl BarLyrics {
     }
 }
 
-impl BarLyrics {
+impl LyricWords {
     /// The words' glyphs on the Lock Ring, around the Dial's center, as LockRing.qml laid them out.
     fn lay_out_ring(&mut self, frame: &Frame, ring: &LockRing) {
         if self.side <= 0.0 {

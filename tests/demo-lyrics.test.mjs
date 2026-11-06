@@ -77,7 +77,7 @@ describe("the demo's Lyric Words", () => {
     });
 });
 
-// The bar view's Lyric Words come from the core (core/src/bar_lyrics.rs): the page hands it the
+// The bar view's Lyric Words come from the core (core/src/lyric_words.rs): the page hands it the
 // demo song as DMS's lyrics, the letters to measure, and position readings on the demo's clock.
 describe("the demo song for the core", () => {
     test("is DMS's lyrics.get reply, its synced lines the demo lines", () => {
