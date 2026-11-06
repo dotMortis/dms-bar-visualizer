@@ -54,6 +54,8 @@ The Bar Visualizer is a Wayland layer surface on the `bottom` layer (namespace `
 
 The Lock Ring can't work that way: while the screen is locked, only DMS's own surfaces are visible. So it's a DMS plugin drawn inside the lock screen ([ADR 0001](docs/adr/0001-lock-ring-runs-inside-dms.md)).
 
+In Silence the Lock Ring keeps breathing, but slowly (`lock-ring/pace.mjs`): once the music has played out on the ring (ribbons faded, no Shockwave left, no Lyric Word moving), `LockAudio.qml` steps every ring's frame at `SILENCE_FPS` on a Timer instead of every frame, and stops the pipeline's frame clock (`clockRunning`), since any running frame clock redraws every frame. It keeps the rings' animation clock and the time on the Hands and Digital Time itself, one for every monitor. The first sound brings every frame back at once.
+
 ## Shaders
 
 Qt loads compiled shaders (`.qsb`). After editing one, recompile it.
