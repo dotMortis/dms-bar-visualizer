@@ -1,8 +1,9 @@
 // The harness's frame timing and GPU frame time, from Qt's render-loop log in qs.log
 // (QSG_RENDER_TIMING=1 QSG_RHI_PROFILE=1, `qs --log-times`).
 //
-//   node harness/frames.mjs <qs.log> <start> <end> [--monitors <hyprctl -j monitors>] [--json FILE]
-//   start and end are the window, in wall-clock s since the epoch
+//   node harness/frames.mjs <qs.log> <start> <end> [--monitors <hyprctl -j monitors>] [--json FILE] [--music]
+//   start and end are the window, in wall-clock s since the epoch; --music: the scenario plays
+//   music, so a window without a frame fails (exit 1, drewNothing)
 
 // A render thread's line: its time, its window and what it says.
 const LINE = /^(\d{4})-(\d\d)-(\d\d) (\d\d):(\d\d):(\d\d)\.(\d{3}) .*\[window (\w+)\]\[render thread [^\]]*\] syncAndRender: (.*)/;
@@ -50,6 +51,16 @@ export function frameTiming(log, { start, end, refreshMs }) {
     return { frames, windows: windows.size, fps, late, missed, worstMs: Math.round(worst), idle, idleS, gpu: stats(gpuMs) };
 }
 
+// Why a run's frames can't be trusted, or null. With music playing the visualizer moves, so a window
+// without one frame means nothing was drawn: the compositor showed none of it (a locked screen, a
+// display asleep) and the run measured a visualizer that doesn't draw. In Silence no frame can be
+// the visualizer at rest.
+export function drewNothing(timing, { music }) {
+    return music && timing.frames === 0
+        ? "the visualizer rendered no frame in the window with music playing: nothing of it was on screen (is the screen locked or the display asleep?)"
+        : null;
+}
+
 // The display's refresh rate from `hyprctl -j monitors`. qs's log doesn't say which window is on
 // which monitor, so with several rates the slowest: no frame on time on its own monitor counts late.
 export function displayRefresh(monitors) {
@@ -76,6 +87,7 @@ if (import.meta.main) {
     const args = process.argv.slice(2);
     const option = name => (args.includes(name) ? args.splice(args.indexOf(name), 2)[1] : null);
     const monitors = option("--monitors"), json = option("--json");
+    const music = args.includes("--music") && args.splice(args.indexOf("--music"), 1).length > 0;
     const [log, start, end] = args;
     const display = monitors ? displayRefresh(JSON.parse(fs.readFileSync(monitors, "utf8"))) : null;
     const hz = display?.hz ?? 60;
@@ -94,4 +106,9 @@ if (import.meta.main) {
             frames_missed: t.missed, frames_worst_ms: t.worstMs, frames_idle: t.idle, frames_idle_s: fixed(t.idleS, 2),
             gpu_frame_ms_mean: fixed(g.meanMs, 4), gpu_frame_ms_p95: fixed(g.p95Ms, 4), gpu_frame_ms_max: fixed(g.maxMs, 4),
         }));
+    const failed = drewNothing(t, { music });
+    if (failed) {
+        console.log(`FAILED: ${failed}`);
+        process.exitCode = 1;
+    }
 }

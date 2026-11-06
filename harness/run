@@ -41,8 +41,10 @@
 #
 # Needs: quickshell, systemd --user with cgroup v2, dbus-run-session, busctl, node, python3 with
 # python-dbus and python-gobject, qsb (qt6-shadertools). Shows the visualizer on the desktop for the
-# run's length. Not a test: CPU depends on the machine and what else runs, so compare runs made
-# back to back.
+# run's length, so the screen must stay unlocked: while the session is locked the compositor draws
+# none of it, and a run refuses to start (or fails) then. A run with music that rendered no frame
+# fails too. Not a test: CPU depends on the machine and what else runs, so compare runs made back
+# to back.
 set -euo pipefail
 
 HARNESS=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -154,9 +156,17 @@ ShellRoot {
 EOF
 }
 
+# The session's lock (logind's LockedHint): while it's locked the compositor draws none of the run's
+# windows, so Qt renders nothing and the run would measure a visualizer that doesn't draw.
+session_locked() {
+    local id=${XDG_SESSION_ID:-$(loginctl show-user "$(id -u)" -p Display --value 2>/dev/null || true)}
+    [[ -n $id && $(loginctl show-session "$id" -p LockedHint --value 2>/dev/null) == yes ]]
+}
+
 declare -F "scenario_$SCENARIO" >/dev/null || die "no scenario '$SCENARIO'"
 declare -F "host_$HOST" >/dev/null || die "no host '$HOST'"
 ((CHECK_KICKS)) && HOST=kicks
+((CHECK_KICKS)) || ! session_locked || die "the screen is locked: nothing the run shows would be drawn; unlock it (and keep it unlocked) first"
 
 # --- Setup ----------------------------------------------------------------------------------------
 ID=bvh-$$
@@ -318,7 +328,9 @@ measure_frames_end() { FRAMES_T1=$(now); }
 measure_frames_report() {
     local monitors=()
     hyprctl -j monitors > "$RUN/monitors.json" 2>/dev/null && monitors=(--monitors "$RUN/monitors.json")
-    "$NODE" "$HARNESS/frames.mjs" "$OUT/qs.log" "$FRAMES_T0" "$FRAMES_T1" "${monitors[@]}" --json "$RUN/frames.json"
+    local music=()
+    ((SILENT)) || music=(--music)   # with music the visualizer moves: no frame means nothing was drawn
+    "$NODE" "$HARNESS/frames.mjs" "$OUT/qs.log" "$FRAMES_T0" "$FRAMES_T1" "${monitors[@]}" "${music[@]}" --json "$RUN/frames.json" || exit 1
     add_json "$RUN/frames.json"
 }
 
@@ -411,11 +423,14 @@ for m in "${MEASURES[@]}"; do "measure_${m}_end"; done
 ((CHECK_KICKS)) && sleep 0.3
 PLAYER_ALIVE=0
 [[ $PLAYER == none ]] || ! player_on_bus || PLAYER_ALIVE=1
+LOCKED=0
+((CHECK_KICKS)) || ! session_locked || LOCKED=1
 systemctl --user stop "$ID-qs.scope" "$ID-aux.scope" 2>/dev/null || true
 
 STARTS=$(grep -c '^start' "$HARNESS_LOG" || true)
 echo "harness  $SCENARIO on $HOST, $TREE_DESC"
 echo "window   $LOOPS x $TRACK ($WINDOW s) after a ${WARMUP} s warm-up, load avg $LOAD"
+((!LOCKED)) || { echo "FAILED: the screen was locked at the end of the window, so nothing the run showed was drawn"; exit 1; }
 ((CAPTURE_ALIVE)) || { echo "FAILED: the capture wasn't running at the end of the window (see $OUT/capture.log, $OUT/qs.log)"; exit 1; }
 echo "capture  alive, started $STARTS time(s)$( ((SILENT)) && echo ", silent")"
 # The stand-in is the only player on the run's bus, so the visualizer reading it means it's the

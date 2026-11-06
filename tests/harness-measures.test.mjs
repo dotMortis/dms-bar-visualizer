@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { displayRefresh, frameTiming } from "../harness/frames.mjs";
+import { displayRefresh, drewNothing, frameTiming } from "../harness/frames.mjs";
 import { gpuBusy } from "../harness/gpu.mjs";
 import { profileParts } from "../harness/profile.mjs";
 
@@ -78,6 +78,16 @@ describe("harness frame timing", () => {
         assert.ok(Math.abs(t.gpu.meanMs - 0.34) < 1e-9, `mean ${t.gpu.meanMs}`);
         assert.equal(t.gpu.p95Ms, 0.2);
         assert.equal(t.gpu.maxMs, 5);
+    });
+
+    test("a run with music that rendered no frame in its window fails: nothing was drawn (a locked screen, say)", () => {
+        const none = frameTiming("", window);
+        assert.match(drewNothing(none, { music: true }), /no frame/);
+        assert.equal(drewNothing(frameTiming(frames(0, 4).join("\n"), window), { music: true }), null);
+    });
+
+    test("in Silence no frame can be the visualizer at rest, so it doesn't fail", () => {
+        assert.equal(drewNothing(frameTiming("", window), { music: false }), null);
     });
 
     test("the display's refresh comes from Hyprland's monitors, the slowest one if they differ", () => {
