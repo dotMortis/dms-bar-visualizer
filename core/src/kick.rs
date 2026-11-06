@@ -1,6 +1,10 @@
 // The one Kick detector, ported from docs/kick.mjs (v0.10.0) operation for operation, so it fires
 // the same Kicks. Fixed-size state only: pushing a frame never allocates.
 
+// Transcendentals come from libm, not std: std's are the platform's natively and Rust's own in
+// WASM, which differ in the last bit, and the WASM build must fire exactly the native Kicks.
+use libm::{log2, pow, sin};
+
 use crate::BANDS;
 
 /// cava's frequency range, which the audio pipeline configures it with.
@@ -11,12 +15,12 @@ const RATE: f64 = 44100.0;
 
 /// How much of each band's running average is left after a second: 0.92 per frame at 60 fps.
 fn average_keep() -> f64 {
-    0.92f64.powf(60.0)
+    pow(0.92, 60.0)
 }
 
 /// How much of the kick range's recent peak is left after a second: it halves in 1.15 s.
 fn peak_keep() -> f64 {
-    0.99f64.powf(60.0)
+    pow(0.99, 60.0)
 }
 
 /// The peak's floor on cava's scale, so a near-silent range can't fire Kicks on noise.
@@ -55,7 +59,7 @@ fn cava_layout() -> [Band; BANDS] {
         let prev = if n > 0 { Some(edges[n - 1]) } else { None };
         // BANDS + 1 cutoffs, evenly spaced on a log scale. One that crowds into the cutoff below
         // moves up past it by about a bass bin.
-        let mut hz = LOW_HZ * (HIGH_HZ / LOW_HZ).powf(n as f64 / BANDS as f64);
+        let mut hz = LOW_HZ * pow(HIGH_HZ / LOW_HZ, n as f64 / BANDS as f64);
         if let Some(p) = prev {
             if p.hz >= hz {
                 hz = p.hz + (RATE / (2.0 * fft)).floor();
@@ -85,7 +89,7 @@ fn cava_layout() -> [Band; BANDS] {
         let (last, cutoff) = (edges[n + 1].last, edges[n + 1].hz);
         // cava's EQ: it divides by log2(size), boosts higher bands by their upper cutoff^0.85 and
         // averages over the band's bins. A sine's peak in an FFT also grows with the FFT's size.
-        let eq = cutoff.powf(0.85) / size.log2() / (last - first + 1.0);
+        let eq = pow(cutoff, 0.85) / log2(size) / (last - first + 1.0);
         layout[n] = Band { size, first, last, gain: eq * size };
     }
     layout
@@ -94,7 +98,7 @@ fn cava_layout() -> [Band; BANDS] {
 /// A sine's magnitude in an FFT bin d bins from its frequency, through cava's Hann window,
 /// relative to its magnitude in a bin right on it.
 fn hann(d: f64) -> f64 {
-    let sinc = |x: f64| if x == 0.0 { 1.0 } else { (std::f64::consts::PI * x).sin() / (std::f64::consts::PI * x) };
+    let sinc = |x: f64| if x == 0.0 { 1.0 } else { sin(std::f64::consts::PI * x) / (std::f64::consts::PI * x) };
     (sinc(d) + (sinc(d - 1.0) + sinc(d + 1.0)) / 2.0).abs()
 }
 
@@ -204,13 +208,13 @@ impl KickDetector {
         self.last_frame = Some(time);
         self.clock += dt;
         self.animation += dt * self.speed;
-        let keep = self.average_keep.powf(dt);
+        let keep = pow(self.average_keep, dt);
         let (mut level, mut previous_level) = (0.0f64, 0.0f64); // the kick range's, this frame and the last
         for i in from..to {
             level = level.max(values[i]);
             previous_level = previous_level.max(self.previous[i]);
         }
-        self.peak = previous_level.max(self.peak * self.peak_keep.powf(dt)).max(PEAK_FLOOR);
+        self.peak = previous_level.max(self.peak * pow(self.peak_keep, dt)).max(PEAK_FLOOR);
         // Rises are measured against the peak, or this frame's level if it goes higher.
         let scale = self.peak.max(level);
         // Each band in the kick range on its own, so a wide range still catches a note in one band.

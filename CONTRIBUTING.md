@@ -17,7 +17,7 @@ How the pieces fit together, and how to change them. For installing and using th
 | `audio/active-player.mjs` | The pipeline's two choices: the Active Player, and the output the capture follows |
 | `lock-ring/` | The Lock Ring plugin (`LockRing.qml`, `LockAudio.qml`, `LockLyrics.qml`, `plugin.json`) |
 | `docs/` | The live demo (GitHub Pages), plus the plain-JS modules both visualizers and the demo import |
-| `core/` | The Rust core ([ADR 0007](docs/adr/0007-no-script-in-the-per-frame-hot-path.md)): one `Visualizer` with all per-frame logic, so far the Kicks, bass/mid/treble and the Kick level. It replaces the JS modules below as later steps of spec #41 wire it in |
+| `core/` | The Rust core ([ADR 0007](docs/adr/0007-no-script-in-the-per-frame-hot-path.md)): one `Visualizer` with all per-frame logic, so far the Kicks, bass/mid/treble and the Kick level, behind a C ABI (`core/include/visualizer_core.h`) and a wasm-bindgen API (`core/src/wasm.rs`, built by `core/build-wasm.sh`). It replaces the JS modules below as later steps of spec #41 wire it in |
 | `docs/kick.mjs` | The Kick detector the visualizers and demo still run, until they run `core/` |
 | `docs/config.mjs` | The defaults of every `config.json` key |
 | `docs/bar-ribbons.mjs` | The Bar Visualizer's Ribbons: each one's height and color at any x across the bar, and the Shockwaves crossing it |
@@ -104,7 +104,20 @@ The Rust core has its own tests, which need only the Rust toolchain:
 cargo test --manifest-path core/Cargo.toml
 ```
 
-They hold `core/`'s `Visualizer` to the same budgets on the same `tests/fixtures`, plus the frame-rate, one-kick-per-hit, volume and speed tests, and the hot path's rules: after `configure`, `push_bands`, `advance` and `frame` never allocate, and no input makes a call panic.
+They hold `core/`'s `Visualizer` to the same budgets on the same `tests/fixtures`, plus the frame-rate, one-kick-per-hit, volume and speed tests, and the hot path's rules: after `configure`, `push_bands`, `advance` and `frame` never allocate, and no input makes a call panic, through the Rust API and the C ABI (`core/include/visualizer_core.h`) alike. A C program (`core/tests/c/smoke.c`) drives the C ABI end to end; it needs a C compiler, `cc`.
+
+The parity check proves the WASM build the demo runs fires exactly the same Kicks, times and powers to the last bit, as the native build, on every fixture:
+
+```sh
+node core/parity.mjs
+```
+
+It builds the WASM with `core/build-wasm.sh`, which needs the WASM target and the wasm-bindgen CLI of exactly the version `core/Cargo.toml` pins (the script says which if it's missing):
+
+```sh
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli --version 0.2.127 --locked
+```
 
 With Qt's `qml` runner installed (`qt6-declarative`), `tests/qml-modules.test.mjs` also loads every `.mjs` the QML imports through Qt's own JS engine. That engine rejects some syntax node accepts, object spread `{ ...x }` among it, and a module it rejects takes the whole plugin down with it. Without `qml` that test is skipped.
 
