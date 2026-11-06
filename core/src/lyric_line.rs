@@ -31,6 +31,9 @@ use serde_json::Value;
 
 /// Seconds a word takes to pop in, from its start.
 pub const POP_IN: f64 = 0.25;
+/// On the Lock Ring, the seconds a Lyric Line's words take to dissolve, from its end (less when the
+/// next line's first word comes sooner).
+pub const DISSOLVE: f64 = 0.6;
 /// On the bar, where each row has its own place, a Lyric Line's words linger: they stay whole
 /// LINGER_HOLD seconds past its end, then dissolve over LINGER_DISSOLVE seconds, while the next
 /// line's words come.
@@ -74,10 +77,29 @@ pub struct LyricWord {
     pub pop: f64,
     /// How far the line's dissolve has got, 0 (whole) .. 1 (gone).
     pub dissolve: f64,
-    /// Where it landed, kept while it is shown: which Ribbon (0..RIBBONS - 1), and where across the
-    /// bar its row lies, 0 (flush with the left edge) .. 1 (flush with the right).
-    pub ribbon: usize,
-    pub x: f64,
+    /// Where it landed, kept while it is shown.
+    pub spot: Spot,
+}
+
+/// Where a Lyric Word landed: on the bar, on a Ribbon at a place across it; on the Lock Ring, on a
+/// Ribbon at an angle around the ring, or on a Hand at a share along it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Spot {
+    /// On the bar: which Ribbon (0..RIBBONS - 1), and where across the bar the word's row lies, 0
+    /// (flush with the left edge) .. 1 (flush with the right).
+    Bar { ribbon: usize, x: f64 },
+    /// On the Lock Ring, on a Ribbon (0..RIBBONS - 1), at `angle` clockwise degrees from 12
+    /// o'clock, 0..360.
+    Ribbon { ribbon: usize, angle: f64 },
+    /// On the Lock Ring, on a Hand (0..HANDS - 1: hour, minute, second), `along` it from 0 (its
+    /// inner end) to 1 (its tip).
+    Hand { hand: usize, along: f64 },
+}
+
+impl Default for Spot {
+    fn default() -> Self {
+        Spot::Bar { ribbon: 0, x: 0.0 }
+    }
 }
 
 /// Whitespace as JS's `\s` has it: what ends a word and splits a line into words.
@@ -258,9 +280,11 @@ fn line_end(line: &PlainLine, next: f64, track_end: f64) -> f64 {
     end
 }
 
-/// The Lyric Lines of `plain`, in order, for a track `length` seconds long (0 or less: unknown),
-/// lingering as on the bar.
-fn lyric_lines(plain: &[PlainLine], length: f64) -> Vec<Line> {
+/// The Lyric Lines of `plain`, in order, for a track `length` seconds long (0 or less: unknown).
+/// With `linger` (the bar) a line's words linger past its end (LINGER_HOLD), then dissolve over
+/// LINGER_DISSOLVE; else (the Lock Ring) they dissolve from its end over DISSOLVE seconds, gone by
+/// the next Lyric Line's first word at the latest, so only one Lyric Line is ever shown.
+fn lyric_lines(plain: &[PlainLine], length: f64, linger: bool) -> Vec<Line> {
     #[derive(PartialEq)]
     enum Key {
         Group(f64),
@@ -312,6 +336,14 @@ fn lyric_lines(plain: &[PlainLine], length: f64) -> Vec<Line> {
         let fade = end + LINGER_HOLD;
         lines.push(Line { t: *t, end, fade, gone: fade + LINGER_DISSOLVE, words });
     }
+    if !linger {
+        for i in 0..lines.len() {
+            let next_word = lines.get(i + 1).map_or(f64::INFINITY, |l| l.words.first().map_or(l.t, |w| w.t));
+            let line = &mut lines[i];
+            line.fade = line.end;
+            line.gone = (line.end + DISSOLVE).min(line.end.max(next_word));
+        }
+    }
     lines
 }
 
@@ -362,8 +394,7 @@ struct Held {
     line: usize,
     word: usize,
     row: usize,
-    ribbon: usize,
-    x: f64,
+    spot: Spot,
     kick: f64,
 }
 
@@ -394,6 +425,8 @@ pub(crate) struct LyricLine {
     words: Vec<LyricWord>,
     /// The most letters the lyrics can show at once.
     letters: usize,
+    /// Where words land: on the bar (lingering, in rows) or on the Lock Ring.
+    ring: bool,
 }
 
 impl LyricLine {
@@ -414,6 +447,7 @@ impl LyricLine {
             fresh: Vec::new(),
             words: Vec::new(),
             letters: 0,
+            ring: false,
         }
     }
 
@@ -440,6 +474,16 @@ impl LyricLine {
         }
     }
 
+    /// Whether the words are the Lock Ring's (one Lyric Line at a time, on Ribbons or Hands) or the
+    /// bar's. A change clears the words.
+    pub fn set_ring(&mut self, ring: bool) {
+        if ring != self.ring {
+            self.ring = ring;
+            let lines = lyric_lines(&self.plain, self.length, !ring);
+            self.take(lines, true);
+        }
+    }
+
     /// The Active Player's track: an identity and its length in seconds (0: unknown). A new
     /// identity drops the lyrics and clears the words.
     pub fn set_track(&mut self, id: &str, length: f64) {
@@ -449,7 +493,7 @@ impl LyricLine {
             self.plain.clear();
         }
         self.length = length;
-        let lines = lyric_lines(&self.plain, self.length);
+        let lines = lyric_lines(&self.plain, self.length, !self.ring);
         self.take(lines, changed);
     }
 
@@ -458,7 +502,7 @@ impl LyricLine {
     pub fn set_lyrics(&mut self, lyrics: &str) {
         let lyrics = serde_json::from_str(lyrics).unwrap_or(Value::Null);
         self.plain = plain_lines(&lyrics);
-        let lines = lyric_lines(&self.plain, self.length);
+        let lines = lyric_lines(&self.plain, self.length, !self.ring);
         let changed = lines != self.lines;
         self.take(lines, changed);
     }
@@ -576,8 +620,7 @@ impl LyricLine {
                     pop_in,
                     pop: POP_BASE + POP_KICK * kick,
                     dissolve,
-                    ribbon: held.map_or(0, |h| h.ribbon),
-                    x: held.map_or(0.0, |h| h.x),
+                    spot: held.map_or(Spot::default(), |h| h.spot),
                 });
                 match held {
                     Some(h) => self.next.push(Held { kick, ..h }),
@@ -590,13 +633,12 @@ impl LyricLine {
         for &(i, row, kick) in &self.fresh {
             let (line, word) = (self.words[i].line, self.words[i].word);
             let lead = self.next.iter().find(|h| h.line == line && h.row == row);
-            let (ribbon, x) = match lead {
-                Some(h) => (h.ribbon, h.x),
+            let spot = match lead {
+                Some(h) => h.spot,
                 None => place(&mut self.random, &self.next),
             };
-            self.words[i].ribbon = ribbon;
-            self.words[i].x = x;
-            self.next.push(Held { line, word, row, ribbon, x, kick });
+            self.words[i].spot = spot;
+            self.next.push(Held { line, word, row, spot, kick });
         }
         std::mem::swap(&mut self.held, &mut self.next);
     }
@@ -604,16 +646,32 @@ impl LyricLine {
 
 /// A spot on the bar for a new word: of TRIES random ones, the one furthest along the bar from the
 /// words `taken`.
-fn place(random: &mut Random, taken: &[Held]) -> (usize, f64) {
-    let (mut best, mut best_gap) = ((0, 0.0), -1.0);
+fn place(random: &mut Random, taken: &[Held]) -> Spot {
+    let (mut best, mut best_gap) = (Spot::default(), -1.0);
     for _ in 0..TRIES {
         let ribbon = libm::floor(random.next() * RIBBONS as f64) as usize;
         let x = random.next();
-        let gap = taken.iter().fold(f64::INFINITY, |gap, other| gap.min((x - other.x).abs()));
+        let spot = Spot::Bar { ribbon, x };
+        let gap = taken.iter().fold(f64::INFINITY, |gap, other| gap.min(apart(&spot, &other.spot)));
         if gap > best_gap {
-            best = (ribbon, x);
+            best = spot;
             best_gap = gap;
         }
     }
     best
+}
+
+/// How far apart two spots are, 0 (on top of each other) .. 1. The Ribbons wave across each other,
+/// so only the way along them counts: across the bar, or around the ring. A Hand turns, so its words
+/// are only apart from each other along it, and from words elsewhere far apart.
+fn apart(a: &Spot, b: &Spot) -> f64 {
+    match (a, b) {
+        (Spot::Bar { x: a, .. }, Spot::Bar { x: b, .. }) => (a - b).abs(),
+        (Spot::Ribbon { angle: a, .. }, Spot::Ribbon { angle: b, .. }) => {
+            let d = (a - b).abs() % 360.0;
+            d.min(360.0 - d) / 180.0
+        }
+        (Spot::Hand { hand: h, along: a }, Spot::Hand { hand: k, along: b }) if h == k => (a - b).abs(),
+        _ => 1.0,
+    }
 }

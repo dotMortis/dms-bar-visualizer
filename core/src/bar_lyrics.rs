@@ -5,7 +5,7 @@
 
 use crate::bar_words::{em, lay_word, row_widths, word_look};
 use crate::glyph::{Glyph, GlyphCopy};
-use crate::lyric_line::{LyricLine, LyricWord};
+use crate::lyric_line::{LyricLine, LyricWord, Spot};
 use crate::ribbons::{ribbon_color, shockwave_crossing, RibbonInputs};
 use crate::{Frame, Visualizer};
 
@@ -72,6 +72,12 @@ impl BarLyrics {
         self.line.set_running(running, now);
     }
 
+    /// Whether the words are the Lock Ring's or the bar's: a change clears them.
+    pub fn set_ring(&mut self, ring: bool) {
+        self.line.set_ring(ring);
+        self.make_room();
+    }
+
     pub fn animating(&self, now: f64) -> bool {
         self.line.animating(now)
     }
@@ -107,6 +113,7 @@ impl BarLyrics {
         };
         let letters = &self.letters;
         for (index, word) in self.line.words().iter().enumerate() {
+            let Spot::Bar { ribbon, x } = word.spot else { continue };
             let (text, row, before) = self.line.text(word);
             let count = text.chars().count();
             if self.glyphs.len() + count > self.glyphs.capacity() || count > self.advances.capacity() {
@@ -116,7 +123,7 @@ impl BarLyrics {
             self.advances.extend(text.chars().map(|c| advance_of(letters, c) * em));
             let rows = row_widths(row, before, |c| advance_of(letters, c) * em, em);
             let start = self.glyphs.len();
-            let letters = lay_word(word.ribbon, word.x, &self.advances, &inputs, clearance, Some(rows));
+            let letters = lay_word(ribbon, x, &self.advances, &inputs, clearance, Some(rows));
             for (letter, c) in letters.zip(text.chars()) {
                 let (x, y, angle) = (letter.x, letter.y, letter.angle);
                 self.glyphs.push(Glyph {
@@ -139,7 +146,7 @@ impl BarLyrics {
                 self.glyphs.truncate(start);
                 continue;
             }
-            let color = ribbon_color(middle, word.ribbon, &inputs);
+            let color = ribbon_color(middle, ribbon, &inputs);
             let whiten = CORE_WHITE + (1.0 - CORE_WHITE) * look.white;
             let outward = if middle < self.width / 2.0 { -1.0 } else { 1.0 };
             for glyph in &mut self.glyphs[start..] {

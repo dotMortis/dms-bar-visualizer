@@ -94,7 +94,15 @@ impl Song {
     }
 
     fn spots(&mut self, t: f64) -> Vec<(usize, f64)> {
-        self.at(t).into_iter().map(|w| (w.word.ribbon, w.word.x)).collect()
+        self.at(t).into_iter().map(|w| bar_spot(&w.word)).collect()
+    }
+}
+
+/// A bar word's Ribbon and place across the bar.
+fn bar_spot(word: &LyricWord) -> (usize, f64) {
+    match word.spot {
+        visualizer_core::Spot::Bar { ribbon, x } => (ribbon, x),
+        spot => panic!("not on the bar: {spot:?}"),
     }
 }
 
@@ -541,7 +549,7 @@ mod placement_on_the_bar_visualizer_ribbons_only {
             let words = placing(json!([line_of(4, 10.0)]), seed).at(13.5);
             let first = &words[0];
             for w in &words {
-                assert_eq!((w.word.ribbon, w.word.x, w.row.as_str()), (first.word.ribbon, first.word.x, "w0 w1 w2 w3"));
+                assert_eq!((bar_spot(&w.word), w.row.as_str()), (bar_spot(&first.word), "w0 w1 w2 w3"));
             }
             let befores: Vec<_> = words.iter().map(|w| w.before.as_str()).collect();
             assert_eq!(befores, ["", "w0 ", "w0 w1 ", "w0 w1 w2 "]);
@@ -621,7 +629,7 @@ mod placement_after_the_words_clear {
             let before = song.spots(10.5)[0];
             song.read(10.5, 30.0, 1.0, true);
             let after = song.words_at_wall(30.0)[0].word;
-            moved += (after.x != before.1) as usize;
+            moved += (bar_spot(&after).1 != before.1) as usize;
         }
         assert!(moved > 0);
     }

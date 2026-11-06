@@ -4,7 +4,15 @@
 use serde_json::json;
 use visualizer_core::bar_words::{lay_word, word_look, RowWidths};
 use visualizer_core::ribbons::{ribbon_color, shockwave_crossing, RibbonInputs};
-use visualizer_core::{Glyph, Player, Visualizer, BANDS};
+use visualizer_core::{Glyph, LyricWord, Player, Spot, Visualizer, BANDS};
+
+/// A bar word's Ribbon and place across the bar.
+fn bar_spot(word: &LyricWord) -> (usize, f64) {
+    match word.spot {
+        Spot::Bar { ribbon, x } => (ribbon, x),
+        spot => panic!("not on the bar: {spot:?}"),
+    }
+}
 
 fn near(actual: f64, expected: f64, msg: &str) {
     assert!((actual - expected).abs() < 1e-9, "{msg} {actual} != {expected}");
@@ -63,7 +71,10 @@ fn the_letters_sit_as_lay_word_puts_them_at_the_bars_em() {
         kick_powers: &frame.kick_powers,
     };
     let clearance = 1.25 * 32.0 * 0.32;
-    let expected: Vec<_> = lay_word(word.ribbon, word.x, &[16.0, 16.0], &inputs, clearance, Some(row)).collect();
+    let expected: Vec<_> = {
+        let (ribbon, x) = bar_spot(&word);
+        lay_word(ribbon, x, &[16.0, 16.0], &inputs, clearance, Some(row)).collect()
+    };
     for (g, e) in glyphs.iter().zip(&expected) {
         near(g.x, e.x, "x");
         near(g.y, e.y, "y");
@@ -98,7 +109,7 @@ fn each_glyph_carries_its_words_look_color_and_pivot() {
     near(first.pivot_x, middle, "pivot x");
     near(first.pivot_y, (glyphs[0].y + glyphs[1].y) / 2.0, "pivot y");
     let look = word_look(&word, shockwave_crossing(middle, &inputs));
-    let color = ribbon_color(middle, word.ribbon, &inputs);
+    let color = ribbon_color(middle, bar_spot(&word).0, &inputs);
     near(first.scale, look.scale, "scale");
     near(first.opacity, look.opacity.min(1.0), "opacity");
     near(first.glow, look.glow, "glow");

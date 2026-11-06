@@ -19,7 +19,7 @@ use bar_lyrics::BarLyrics;
 pub use glyph::{Glyph, GlyphCopy, GLYPH_FIELDS};
 use kick::{KickDetector, KickSettings};
 pub use lock_ring::LockRingFrame;
-pub use lyric_line::LyricWord;
+pub use lyric_line::{LyricWord, Spot};
 use settings::Settings;
 
 /// cava's layout: 32 bands from 30 Hz to 14 kHz, bass first.
@@ -220,6 +220,7 @@ impl Visualizer {
     /// that kind on the settings last configured; the running state carries over.
     pub fn set_kind(&mut self, kind: Kind) {
         self.kind = kind;
+        self.lyrics.set_ring(kind == Kind::LockRing);
         self.apply_settings();
     }
 
