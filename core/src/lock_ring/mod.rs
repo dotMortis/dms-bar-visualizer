@@ -2,11 +2,14 @@
 //! and its Digital Time, ported from v0.10.0's docs/lock-ring/*.mjs. lock-ring/shaders/ring.frag
 //! draws them and repeats these numbers (tests/lock_constants.rs keeps them in step).
 mod clock;
+mod frame;
 mod hands;
 mod kicks;
 mod ring;
 
 pub use clock::*;
+pub(crate) use frame::LockRing;
+pub use frame::{LockRingFrame, AT_REST};
 pub use hands::*;
 pub use kicks::*;
 pub use ring::*;

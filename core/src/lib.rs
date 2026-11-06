@@ -12,6 +12,7 @@ mod settings;
 mod wasm;
 
 use kick::{KickDetector, KickSettings};
+pub use lock_ring::LockRingFrame;
 use settings::Settings;
 
 /// cava's layout: 32 bands from 30 Hz to 14 kHz, bass first.
@@ -134,6 +135,8 @@ pub struct Visualizer {
     seconds: f64,
     sound_at: f64,
     frame: Frame,
+    /// The Lock Ring's own state: stepped only while the kind is the Lock Ring.
+    lock_ring: lock_ring::LockRing,
 }
 
 impl Default for Visualizer {
@@ -188,6 +191,7 @@ impl Visualizer {
                 silence: Silence::NoPlayer,
                 animating: false,
             },
+            lock_ring: lock_ring::LockRing::default(),
             settings,
         }
     }
@@ -218,6 +222,7 @@ impl Visualizer {
         self.frame.intensity = settings.intensity;
         self.frame.bass_stretch = settings.bass_stretch;
         self.settings = settings;
+        self.update_lock_ring();
         self.update_animating();
     }
 
@@ -252,6 +257,7 @@ impl Visualizer {
             self.frame.kick_ages[slot] = 0.0;
             self.update_animating();
         }
+        self.update_lock_ring();
     }
 
     /// One display frame, dt seconds after the last. A negative or NaN dt counts as none, an
@@ -270,6 +276,10 @@ impl Visualizer {
         for (age, &at) in self.frame.kick_ages.iter_mut().zip(&self.kick_times) {
             *age = self.clock - at;
         }
+        if self.kind == Kind::LockRing {
+            self.lock_ring.step(&self.frame, dt, speed);
+        }
+        self.update_lock_ring();
         self.update_animating();
     }
 
@@ -286,13 +296,29 @@ impl Visualizer {
         }
         self.player = player;
         self.update_silence();
+        self.update_lock_ring();
+    }
+
+    /// The local time of day, in seconds since local midnight, that the Lock Ring's Hands show:
+    /// call it on every display frame, before reading the frame. A time past midnight lands on the
+    /// time of day it is; one that isn't a number is ignored. Until the first, it is midnight.
+    pub fn set_local_time(&mut self, seconds: f64) {
+        self.lock_ring.set_local_time(seconds);
+        self.update_lock_ring();
+    }
+
+    fn update_lock_ring(&mut self) {
+        if self.kind == Kind::LockRing {
+            self.lock_ring.update(&self.frame, self.settings.kick_decay, self.settings.lock_ring.hand_waves);
+        }
     }
 
     fn update_animating(&mut self) {
         let f = &self.frame;
         let moving = self.settings.speed > 0.0;
         let in_flight = f.kick_powers.iter().zip(&f.kick_ages).any(|(&power, &age)| power > 0.0 && age < PLAYED_OUT);
-        self.frame.animating = f.kick > KICK_SETTLED || (moving && in_flight);
+        let ring_settling = self.kind == Kind::LockRing && self.lock_ring.settling();
+        self.frame.animating = f.kick > KICK_SETTLED || (moving && in_flight) || ring_settling;
     }
 
     fn update_silence(&mut self) {
@@ -312,5 +338,16 @@ impl Visualizer {
     /// Everything to draw, in place: for the boundaries, which hand it over without a copy.
     pub(crate) fn frame_ref(&self) -> &Frame {
         &self.frame
+    }
+
+    /// The Lock Ring's own state, on top of the frame: its ring motion, Hands, Hour Points, Digital
+    /// Time and the shader's Kick slots. Kept only while the kind is the Lock Ring.
+    pub fn lock_ring(&self) -> LockRingFrame {
+        self.lock_ring.frame
+    }
+
+    /// The Lock Ring's state, in place: for the boundaries.
+    pub(crate) fn lock_ring_ref(&self) -> &LockRingFrame {
+        &self.lock_ring.frame
     }
 }

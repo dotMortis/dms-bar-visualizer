@@ -183,7 +183,8 @@ impl HandMotion {
         }
         for i in 0..3 {
             let pace = PACE_CALM + PACE_DRIVE * self.levels[i];
-            self.phases[i] = (self.phases[i] + dt * speed * pace) % PHASE_WRAP;
+            // Kept finite whatever dt and speed, so the phase wraps instead of turning NaN.
+            self.phases[i] = (self.phases[i] + (dt * speed * pace).min(f64::MAX)).min(f64::MAX) % PHASE_WRAP;
         }
     }
 }
