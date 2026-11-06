@@ -2,6 +2,7 @@
 //! [`Visualizer`] is the one seam: everything goes in through it and comes out of its [`Frame`].
 
 // The C ABI is the native boundary; in WASM, wasm-bindgen's exports would clash with its names.
+mod bar_lyrics;
 pub mod bar_words;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod c_abi;
@@ -12,6 +13,7 @@ mod settings;
 #[cfg(target_arch = "wasm32")]
 mod wasm;
 
+use bar_lyrics::BarLyrics;
 use kick::{KickDetector, KickSettings};
 pub use lyric_line::LyricWord;
 use settings::Settings;
@@ -123,6 +125,8 @@ pub struct Visualizer {
     seconds: f64,
     sound_at: f64,
     frame: Frame,
+    /// The Lyric Words (bar_lyrics.rs), on the display seconds.
+    lyrics: BarLyrics,
 }
 
 impl Default for Visualizer {
@@ -157,6 +161,7 @@ impl Visualizer {
             player: Player::None,
             seconds: 0.0,
             sound_at: 0.0,
+            lyrics: BarLyrics::new(),
             frame: Frame {
                 bands: [0.0; BANDS],
                 bass: 0.0,
@@ -221,6 +226,7 @@ impl Visualizer {
             self.frame.kick_powers[slot] = power;
             self.frame.kick_seeds[slot] = self.kick_seed as f64;
             self.frame.kick_ages[slot] = 0.0;
+            self.lyrics.kick(power, self.seconds);
             self.update_animating();
         }
     }
@@ -241,6 +247,7 @@ impl Visualizer {
         for (age, &at) in self.frame.kick_ages.iter_mut().zip(&self.kick_times) {
             *age = self.clock - at;
         }
+        self.lyrics.advance(self.seconds);
         self.update_animating();
     }
 
@@ -256,14 +263,16 @@ impl Visualizer {
             (f.bass, f.mid, f.treble) = (0.0, 0.0, 0.0);
         }
         self.player = player;
+        self.lyrics.set_running(player == Player::Playing, self.seconds);
         self.update_silence();
+        self.update_animating();
     }
 
     fn update_animating(&mut self) {
         let f = &self.frame;
         let moving = self.settings.speed > 0.0;
         let in_flight = f.kick_powers.iter().zip(&f.kick_ages).any(|(&power, &age)| power > 0.0 && age < PLAYED_OUT);
-        self.frame.animating = f.kick > KICK_SETTLED || (moving && in_flight);
+        self.frame.animating = f.kick > KICK_SETTLED || (moving && in_flight) || self.lyrics.animating(self.seconds);
     }
 
     fn update_silence(&mut self) {
