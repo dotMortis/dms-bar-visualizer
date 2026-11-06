@@ -5,7 +5,7 @@ import { describe, test } from "node:test";
 
 import { displayRefresh, drewNothing, frameTiming } from "../harness/frames.mjs";
 import { gpuBusy } from "../harness/gpu.mjs";
-import { profileParts } from "../harness/profile.mjs";
+import { profileBreakdown, profileParts } from "../harness/profile.mjs";
 
 // qs.log as `qs --log-times` writes it: local wall-clock time to the ms.
 const BASE = new Date(2026, 10, 6, 13, 0, 0).getTime() / 1000;
@@ -169,10 +169,55 @@ describe("harness CPU profile", () => {
             "gui thread, the rest": 160,      // Qt Core's event loop, libc, malloc
             "scene graph, render thread": 45,
             "GPU driver, render thread": 175, // mesa, EGL, libglvnd
+            "GPU driver, its own threads": 0,
             "qs, other threads": 80,
             "capture": 90,
             "pactl": 100,
             "sh and other children": 40,
         });
+    });
+
+    test("Mesa's own threads in qs (its driver, shader compiler and disk cache threads) are the GPU driver, not a child", () => {
+        const report = [
+            row(600, "QSGRenderThread", "libgallium-26.2.6-arch1.1.so"),
+            row(300, "qs:gdrv0", "libgallium-26.2.6-arch1.1.so"),
+            row(60, "qs:sh0", "libgallium-26.2.6-arch1.1.so"),
+            row(10, "qs:disk$0", "libc.so.6"),
+            row(30, "sh", "bash"),
+            "",
+        ].join("\n");
+        const share = Object.fromEntries(profileParts(report).parts.map(p => [p.part, p.period]));
+        assert.equal(share["GPU driver, render thread"], 600);
+        assert.equal(share["GPU driver, its own threads"], 370);
+        assert.equal(share["sh and other children"], 30);
+    });
+});
+
+describe("harness CPU breakdown", () => {
+    // A run with every measure: its user and system CPU, and its profile's shares of user space.
+    const run = (user, system, pct) => ({ host: "bar", scenario: "music", cpu_pct: user + system, cpu_user_pct: user, cpu_system_pct: system, profile_pct: pct });
+
+    test("each part's share of user space becomes % of one core, and system time is the kernel's", () => {
+        const [cell] = profileBreakdown([run(2, 1, { "JS engine": 50, "scene graph, render thread": 25, capture: 25 })]);
+        assert.equal(cell.host, "bar");
+        assert.equal(cell.scenario, "music");
+        assert.equal(cell.runs, 1);
+        assert.equal(cell.cpu, 3);
+        assert.deepEqual(cell.parts, { "JS engine": 1, "scene graph, render thread": 0.5, capture: 0.5, kernel: 1 });
+    });
+
+    test("several runs of a cell: the median of each part", () => {
+        const [cell] = profileBreakdown([
+            run(2, 1, { "JS engine": 50, capture: 50 }),
+            run(4, 2, { "JS engine": 75, capture: 25 }),
+            run(10, 3, { "JS engine": 90, capture: 10 }),
+        ]);
+        assert.equal(cell.runs, 3);
+        assert.equal(cell.cpu, 6);
+        assert.deepEqual(cell.parts, { "JS engine": 3, capture: 1, kernel: 2 });
+    });
+
+    test("runs without a profile (--cpu-only) are left out", () => {
+        assert.deepEqual(profileBreakdown([{ host: "bar", scenario: "music", cpu_pct: 1.6 }]), []);
     });
 });
