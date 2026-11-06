@@ -109,9 +109,9 @@ The Rust core has its own tests, which need only the Rust toolchain:
 cargo test --manifest-path core/Cargo.toml
 ```
 
-They hold `core/`'s `Visualizer` to the same budgets on the same `tests/fixtures`, plus the frame-rate, one-kick-per-hit, volume and speed tests, and the hot path's rules: after `configure`, `push_bands`, `advance` and `frame` never allocate, and no input makes a call panic, through the Rust API and the C ABI (`core/include/visualizer_core.h`) alike. A C program (`core/tests/c/smoke.c`) drives the C ABI end to end; it needs a C compiler, `cc`.
+They hold `core/`'s `Visualizer` to the same budgets on the same `tests/fixtures`, plus the frame-rate, one-kick-per-hit, volume, speed, band-mapping, bar-constants (the Ribbons' numbers in `core/src/ribbons.rs` against `shaders/viz.frag` and the demo's port), shader-input and Silence tests, and the hot path's rules: after `configure`, `push_bands`, `advance`, `set_player` and `frame` never allocate, and no input makes a call panic, through the Rust API and the C ABI (`core/include/visualizer_core.h`) alike. A C program (`core/tests/c/smoke.c`) drives the C ABI end to end; it needs a C compiler, `cc`.
 
-The parity check proves the WASM build the demo runs fires exactly the same Kicks, times and powers to the last bit, as the native build, on every fixture:
+The parity check proves the WASM build the demo runs fires exactly the same Kicks, times and powers to the last bit, as the native build, on every fixture, and ends each replay on the same frame (clock, flow, Kick slots, Silence):
 
 ```sh
 node core/parity.mjs
