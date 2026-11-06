@@ -1,0 +1,160 @@
+#!/usr/bin/python3 -I
+# The harness's stand-in Active Player: an MPRIS player on the session bus (the run's private one),
+# org.mpris.MediaPlayer2.harness, that plays the replayed track. The visualizers find it through
+# Quickshell's Mpris like any player; it's the only one on that bus.
+#
+# While Playing, its position is on the stand-in cava's timeline: (now - HARNESS_EPOCH) mod
+# HARNESS_LOOP, so it is at the track's start whenever the track is, and lyrics timed against it
+# (#46) line up with the music. At each wrap it emits Seeked, as a player looping a track does:
+# MPRIS clients extrapolate the position and only re-read it on a seek or a state change.
+# Play / Pause / PlayPause / Stop work (playerctl -p harness ..., on the same bus); paused, the
+# position holds, and Play goes on from there.
+#
+# Env: HARNESS_PLAYER           its PlaybackStatus at start: Playing, Paused or Stopped
+#      HARNESS_EPOCH            wall-clock s at which the track is at its start (default: now)
+#      HARNESS_LOOP             the track's length in s
+#      HARNESS_PLAYER_TITLE     xesam:title (default "Steady House"); artist "Harness", album "Replay"
+#      HARNESS_PLAYER_POSITION  the position in s while not playing at start (default 0)
+#      HARNESS_PLAYER_LOG       a file every property read and call is logged to, with its sender
+import os
+import time
+
+import dbus
+import dbus.mainloop.glib
+import dbus.service
+from gi.repository import GLib
+
+ROOT, PLAYER, PROPS = "org.mpris.MediaPlayer2", "org.mpris.MediaPlayer2.Player", "org.freedesktop.DBus.Properties"
+
+length = float(os.environ["HARNESS_LOOP"])
+title = os.environ.get("HARNESS_PLAYER_TITLE") or "Steady House"
+log_path = os.environ.get("HARNESS_PLAYER_LOG")
+
+
+def log(what, sender):
+    if log_path:
+        with open(log_path, "a") as f:
+            f.write(f"{time.time():.3f} {sender} {what}\n")
+
+
+class Player(dbus.service.Object):
+    def __init__(self, bus):
+        super().__init__(bus, "/org/mpris/MediaPlayer2")
+        self.status = os.environ.get("HARNESS_PLAYER") or "Playing"
+        # While playing: the wall-clock s at which the track was (or would have been) at its start.
+        self.start = float(os.environ.get("HARNESS_EPOCH") or time.time())
+        self.held = float(os.environ.get("HARNESS_PLAYER_POSITION") or 0)  # while not playing
+        self.wrap_timer = None
+        if self.status == "Playing":
+            self.schedule_wrap()
+
+    def position(self):
+        return (time.time() - self.start) % length if self.status == "Playing" else self.held
+
+    def schedule_wrap(self):
+        # A few ms past the wrap, so the position read there is just after the start, not just before the end.
+        wait = length - (time.time() - self.start) % length + 0.005
+        self.wrap_timer = GLib.timeout_add(int(wait * 1000), self.on_wrap)
+
+    def on_wrap(self):
+        self.Seeked(dbus.Int64(int(self.position() * 1e6)))
+        self.schedule_wrap()
+        return False
+
+    def set_status(self, status):
+        if status == self.status:
+            return
+        if self.status == "Playing":
+            self.held = self.position()
+            GLib.source_remove(self.wrap_timer)
+        if status == "Stopped":
+            self.held = 0.0
+        if status == "Playing":
+            self.start = time.time() - self.held
+            self.schedule_wrap()
+        self.status = status
+        self.PropertiesChanged(PLAYER, {"PlaybackStatus": status, "Position": dbus.Int64(int(self.position() * 1e6))}, [])
+
+    def props(self, iface):
+        if iface == ROOT:
+            return {"Identity": "harness", "DesktopEntry": "harness", "CanQuit": False, "CanRaise": False,
+                    "HasTrackList": False, "SupportedUriSchemes": dbus.Array([], signature="s"),
+                    "SupportedMimeTypes": dbus.Array([], signature="s")}
+        meta = dbus.Dictionary({
+            "mpris:trackid": dbus.ObjectPath("/harness/track/1"),
+            "mpris:length": dbus.Int64(int(length * 1e6)),
+            "xesam:title": title,
+            "xesam:artist": dbus.Array(["Harness"], signature="s"),
+            "xesam:album": "Replay",
+        }, signature="sv")
+        return {"PlaybackStatus": self.status, "Metadata": meta, "Position": dbus.Int64(int(self.position() * 1e6)),
+                "Rate": 1.0, "MinimumRate": 1.0, "MaximumRate": 1.0, "Volume": 1.0, "LoopStatus": "Track",
+                "Shuffle": False, "CanGoNext": False, "CanGoPrevious": False, "CanPlay": True, "CanPause": True,
+                "CanSeek": False, "CanControl": True}
+
+    @dbus.service.method(PROPS, in_signature="ss", out_signature="v", sender_keyword="sender")
+    def Get(self, iface, name, sender=None):
+        log(f"Get {iface} {name}", sender)
+        return self.props(iface)[name]
+
+    @dbus.service.method(PROPS, in_signature="s", out_signature="a{sv}", sender_keyword="sender")
+    def GetAll(self, iface, sender=None):
+        log(f"GetAll {iface}", sender)
+        return self.props(iface)
+
+    @dbus.service.method(PROPS, in_signature="ssv")
+    def Set(self, iface, name, value):
+        pass
+
+    @dbus.service.signal(PROPS, signature="sa{sv}as")
+    def PropertiesChanged(self, iface, changed, invalidated):
+        pass
+
+    @dbus.service.signal(PLAYER, signature="x")
+    def Seeked(self, position):
+        pass
+
+    @dbus.service.method(PLAYER, sender_keyword="sender")
+    def Play(self, sender=None):
+        log("Play", sender)
+        self.set_status("Playing")
+
+    @dbus.service.method(PLAYER, sender_keyword="sender")
+    def Pause(self, sender=None):
+        log("Pause", sender)
+        self.set_status("Paused")
+
+    @dbus.service.method(PLAYER, sender_keyword="sender")
+    def PlayPause(self, sender=None):
+        log("PlayPause", sender)
+        self.set_status("Paused" if self.status == "Playing" else "Playing")
+
+    @dbus.service.method(PLAYER, sender_keyword="sender")
+    def Stop(self, sender=None):
+        log("Stop", sender)
+        self.set_status("Stopped")
+
+    @dbus.service.method(PLAYER)
+    def Next(self):
+        pass
+
+    @dbus.service.method(PLAYER)
+    def Previous(self):
+        pass
+
+    @dbus.service.method(PLAYER, in_signature="x")
+    def Seek(self, offset):
+        pass
+
+    @dbus.service.method(PLAYER, in_signature="ox")
+    def SetPosition(self, track, position):
+        pass
+
+
+dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+bus = dbus.SessionBus()
+player = Player(bus)
+name = dbus.service.BusName("org.mpris.MediaPlayer2.harness", bus)  # after the object, so it's there once the name is
+loop = GLib.MainLoop()
+GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, 15, loop.quit)  # SIGTERM: a clean exit
+loop.run()

@@ -3,7 +3,12 @@
 #
 #   harness/run [options] <scenario>
 #
-#   scenarios   music          the reference track (harness/kicks.mjs REFERENCE_TRACK), no Lyric Words
+#   scenarios   music              the reference track (harness/kicks.mjs REFERENCE_TRACK), the Active
+#                                  Player playing it; no Lyric Words
+#               silence_no_player  Silence: cava's silence, no Active Player
+#               silence_paused     Silence: cava's silence, the Active Player paused
+#               silence_playing    Silence: cava's silence while the Active Player reports playing
+#                                  (a silent track, "Silence")
 #   options     --host bar     what runs: bar = the Bar Visualizer (shell.qml), the default
 #               --commit REV   measure REV (e.g. v0.10.0) instead of this working tree
 #               --warmup S     seconds before measuring (default 5)
@@ -12,15 +17,17 @@
 #               --check-kicks  the cheap check instead of measuring: the tree's own audio pipeline
 #                              on the replayed input must give the Kicks the kick-replay tests expect
 #
-# Only the inputs are swapped: bin/cava stands in for cava (first on PATH), and the run gets its own
-# runtime dir, config dir (default settings), cache and session bus, so it can't see or touch the
-# user's live visualizers, DMS, players or config.json. qs runs in a transient systemd scope, so
+# Only the inputs are swapped: bin/cava stands in for cava (first on PATH), player stands in for the
+# Active Player (an MPRIS player on the run's own session bus, the only one there), and the run gets
+# its own runtime dir, config dir (default settings), cache and session bus, so it can't see or touch
+# the user's live visualizers, DMS, players or config.json. qs runs in a transient systemd scope, so
 # CPU is the scope's cgroup: qs, its capture and every short-lived child (sh, pactl), as % of one
 # core like htop. Everything it starts is stopped when it exits.
 #
-# Needs: quickshell, systemd --user with cgroup v2, dbus-run-session, node, python3, qsb
-# (qt6-shadertools). Shows the visualizer on the desktop for the run's length. Not a test: CPU
-# depends on the machine and what else runs, so compare runs made back to back.
+# Needs: quickshell, systemd --user with cgroup v2, dbus-run-session, busctl, node, python3 with
+# python-dbus and python-gobject, qsb (qt6-shadertools). Shows the visualizer on the desktop for the
+# run's length. Not a test: CPU depends on the machine and what else runs, so compare runs made
+# back to back.
 set -euo pipefail
 
 HARNESS=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -45,9 +52,15 @@ while (($#)); do
 done
 [[ -n $SCENARIO ]] || die "which scenario? (see --help)"
 
-# --- Scenarios: the input. Each sets FIXTURE (the band stream) and SILENT (1: cava's silence
-# instead). Later: the Active Player and the lyrics.
-scenario_music() { FIXTURE=$REPO/tests/fixtures/$REFERENCE.txt SILENT=0; }
+# --- Scenarios: the input. Each sets FIXTURE (the band stream) or SILENT=1 (cava's silence instead),
+# TRACK (its name in the report), and PLAYER: the stand-in Active Player's PlaybackStatus at start
+# (Playing, Paused) or none, with PLAYER_TITLE, the track it reports. It plays a track as long as the
+# reference track's loop, on the same timeline. Later: the lyrics.
+scenario_music() { FIXTURE=$REPO/tests/fixtures/$REFERENCE.txt SILENT=0 TRACK=$REFERENCE PLAYER=Playing PLAYER_TITLE="Steady House"; }
+scenario_silence_no_player() { FIXTURE="" SILENT=1 TRACK=silence PLAYER=none PLAYER_TITLE=""; }
+scenario_silence_paused() { FIXTURE="" SILENT=1 TRACK=silence PLAYER=Paused PLAYER_TITLE="Steady House"; }
+# A silent track has no words: the lyrics stand-in (#46) is to answer none for "Silence".
+scenario_silence_playing() { FIXTURE="" SILENT=1 TRACK=silence PLAYER=Playing PLAYER_TITLE="Silence"; }
 
 # --- Hosts: what runs. Each sets SHELL_DIR, the qs config dir, from TREE (the code under test).
 host_bar() { SHELL_DIR=$TREE; }
@@ -97,6 +110,7 @@ read -r REFERENCE LOOP_LENGTH < <("$NODE" --input-type=module -e "
     console.log(REFERENCE_TRACK, replayTrack(REFERENCE_TRACK).length.toFixed(6));")
 [[ -n ${LOOP_LENGTH:-} ]] || die "couldn't read the reference track from kicks.mjs"
 "scenario_$SCENARIO"
+((CHECK_KICKS && SILENT)) && die "--check-kicks needs a scenario with music"
 
 # The code under test: this working tree, or REV exported from git (nothing in the checkout changes).
 if [[ -n $COMMIT ]]; then
@@ -131,17 +145,10 @@ echo '{}' > "$RUN/config/bar-visualizer/config.json"   # every setting at its de
 export XDG_RUNTIME_DIR=$RUN XDG_CONFIG_HOME=$RUN/config XDG_CACHE_HOME=$RUN/cache \
     XDG_STATE_HOME=$RUN/state XDG_DATA_HOME=$RUN/data \
     PULSE_SERVER=unix:$RT/pulse/native PATH=$HARNESS/bin:$PATH NO_AT_BRIDGE=1 \
-    HARNESS_FIXTURE=$FIXTURE HARNESS_SILENT=$SILENT HARNESS_LOOP=$LOOP_LENGTH HARNESS_LOG=$OUT/capture.log
+    HARNESS_FIXTURE=$FIXTURE HARNESS_SILENT=$SILENT HARNESS_LOOP=$LOOP_LENGTH HARNESS_LOG=$OUT/capture.log \
+    HARNESS_PLAYER=$PLAYER HARNESS_PLAYER_TITLE=$PLAYER_TITLE HARNESS_PLAYER_LOG=$OUT/player.log
 : > "$HARNESS_LOG"
-
-# A private session bus, held open in its own scope (the stand-ins will run there too).
-systemd-run --user --scope --unit="$ID-aux" -q \
-    dbus-run-session --config-file="$HARNESS/bus.conf" -- \
-    sh -c 'echo "$DBUS_SESSION_BUS_ADDRESS" > "$XDG_RUNTIME_DIR/bus.addr"; exec sleep infinity' \
-    > "$OUT/aux.log" 2>&1 &
-for _ in $(seq 50); do [[ -s $RUN/bus.addr ]] && break; sleep 0.1; done
-[[ -s $RUN/bus.addr ]] || die "the private session bus didn't start (see $OUT/aux.log)"
-export DBUS_SESSION_BUS_ADDRESS=$(cat "$RUN/bus.addr")
+: > "$HARNESS_PLAYER_LOG"
 
 # The epoch: the track is at its first frame when the window opens, so every window holds the
 # same whole loops; the warm-up plays the track's end.
@@ -149,6 +156,23 @@ now() { date +%s.%N; }
 sleep_until() { local s; s=$(awk -v t="$1" -v n="$(now)" 'BEGIN { d = t - n; print (d > 0 ? d : 0) }'); sleep "$s"; }
 export HARNESS_EPOCH=$(awk -v n="$(now)" -v w="$WARMUP" 'BEGIN { printf "%.6f", n + w }')
 WINDOW=$(awk -v l="$LOOP_LENGTH" -v n="$LOOPS" 'BEGIN { printf "%.6f", l * n }')
+
+# A private session bus, held open in its own scope with the stand-ins on it. They stand in for
+# the user's session (the stand-in player for Spotify, say), so their CPU isn't the visualizer's.
+systemd-run --user --scope --unit="$ID-aux" -q \
+    dbus-run-session --config-file="$HARNESS/bus.conf" -- \
+    sh -c 'echo "$DBUS_SESSION_BUS_ADDRESS" > "$XDG_RUNTIME_DIR/bus.addr"
+           [ "$HARNESS_PLAYER" = none ] || "$0/player" &
+           exec sleep infinity' "$HARNESS" \
+    > "$OUT/aux.log" 2>&1 &
+for _ in $(seq 50); do [[ -s $RUN/bus.addr ]] && break; sleep 0.1; done
+[[ -s $RUN/bus.addr ]] || die "the private session bus didn't start (see $OUT/aux.log)"
+export DBUS_SESSION_BUS_ADDRESS=$(cat "$RUN/bus.addr")
+player_on_bus() { busctl --address="$DBUS_SESSION_BUS_ADDRESS" list --no-legend 2>/dev/null | grep -q '^org\.mpris\.MediaPlayer2\.harness '; }
+if [[ $PLAYER != none ]]; then
+    for _ in $(seq 50); do player_on_bus && break; sleep 0.1; done
+    player_on_bus || die "the stand-in player didn't start (see $OUT/aux.log)"
+fi
 
 systemd-run --user --scope --unit="$ID-qs" -q qs -p "$SHELL_DIR" --no-color --log-times > "$OUT/qs.log" 2>&1 &
 
@@ -202,20 +226,32 @@ sleep_until "$(awk -v e="$HARNESS_EPOCH" -v w="$WINDOW" 'BEGIN { printf "%.6f", 
 for m in "${MEASURES[@]}"; do "measure_${m}_end"; done
 # A short tail so the window's last Kicks reach the log.
 ((CHECK_KICKS)) && sleep 0.3
+PLAYER_ALIVE=0
+[[ $PLAYER == none ]] || ! player_on_bus || PLAYER_ALIVE=1
 systemctl --user stop "$ID-qs.scope" "$ID-aux.scope" 2>/dev/null || true
 
 STARTS=$(grep -c '^start' "$HARNESS_LOG" || true)
 echo "harness  $SCENARIO on $HOST, $TREE_DESC"
-echo "window   $LOOPS x $REFERENCE ($WINDOW s) after a ${WARMUP} s warm-up, load avg $LOAD"
+echo "window   $LOOPS x $TRACK ($WINDOW s) after a ${WARMUP} s warm-up, load avg $LOAD"
 ((CAPTURE_ALIVE)) || { echo "FAILED: the capture wasn't running at the end of the window (see $OUT/capture.log, $OUT/qs.log)"; exit 1; }
-echo "capture  alive, started $STARTS time(s)"
+echo "capture  alive, started $STARTS time(s)$( ((SILENT)) && echo ", silent")"
+# The stand-in is the only player on the run's bus, so the visualizer reading it means it's the
+# Active Player (AudioPipeline.updateActivePlayer takes the only player there is).
+READS=$(grep -c ' Get' "$HARNESS_PLAYER_LOG" || true)
+if [[ $PLAYER == none ]]; then
+    echo "player   none"
+else
+    ((PLAYER_ALIVE)) || { echo "FAILED: the stand-in player wasn't on the bus at the end of the window (see $OUT/aux.log)"; exit 1; }
+    ((READS)) || { echo "FAILED: the visualizer never read the stand-in player (see $OUT/player.log, $OUT/qs.log)"; exit 1; }
+    echo "player   $PLAYER \"$PLAYER_TITLE\", the Active Player (read $READS time(s))"
+fi
 
 if ((CHECK_KICKS)); then
     "$NODE" "$HARNESS/kicks.mjs" "$OUT/qs.log" "$LOOPS" "$REFERENCE"
     exit
 fi
 
-RESULT_JSON="{\"scenario\": \"$SCENARIO\", \"host\": \"$HOST\", \"commit\": \"$REV\", \"tree\": \"$TREE_DESC\", \"track\": \"$REFERENCE\", \"window_s\": $WINDOW, \"warmup_s\": $WARMUP, \"loadavg\": \"$LOAD\", \"capture_starts\": $STARTS, "
+RESULT_JSON="{\"scenario\": \"$SCENARIO\", \"host\": \"$HOST\", \"commit\": \"$REV\", \"tree\": \"$TREE_DESC\", \"track\": \"$TRACK\", \"player\": \"$PLAYER\", \"player_title\": \"$PLAYER_TITLE\", \"window_s\": $WINDOW, \"warmup_s\": $WARMUP, \"loadavg\": \"$LOAD\", \"capture_starts\": $STARTS, "
 for m in "${MEASURES[@]}"; do "measure_${m}_report"; done
 echo "${RESULT_JSON%, }}" > "$OUT/result.json"
 echo "out      $OUT"
