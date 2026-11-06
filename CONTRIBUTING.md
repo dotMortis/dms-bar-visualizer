@@ -106,7 +106,8 @@ python3 tests/fixtures/record.py all          # re-record all of them (about 4 m
 ## Measuring
 
 ```sh
-harness/run music                      # CPU of the Bar Visualizer on the reference track
+harness/run music                      # the Bar Visualizer on the reference track: CPU, frames, GPU, profile
+harness/run --cpu-only music           # CPU alone
 harness/run --commit v0.10.0 music     # the same for another commit
 harness/run --check-kicks music        # check the replayed input reaches the Kick detector
 harness/run silence_paused             # one of the three Silence cases
@@ -123,7 +124,20 @@ The Active Player is a stand-in, `harness/player`: an MPRIS player on the run's 
 
 The replay harness runs the Bar Visualizer as it ships, in its own `qs`, but in place of cava it replays a recorded band stream from `tests/fixtures` (the reference track, `steady_house`). After a warm-up it measures whole loops of the track and prints CPU as % of one core, as htop shows it, for `qs`, its capture and every process they start together. The run gets its own runtime dir, config dir (every setting at its default), cache and session bus, so it never sees the live visualizers, DMS, your players or your `config.json`; it does show the visualizer on the desktop while it runs. `--check-kicks` runs the tree's audio pipeline on the same input and checks it fires the Kicks the replay tests expect for the track, loop by loop. `harness/run --help` lists the options.
 
-It isn't a test and isn't part of `node --test` (only its Kick comparison and the stand-in player are, the player skipped without python-dbus): CPU depends on the machine and what else runs on it, so compare runs made back to back on an idle desktop. It needs Quickshell, a systemd user session with cgroup v2, `dbus-run-session`, `busctl`, node, python3 with python-dbus and python-gobject, and `qsb`.
+It isn't a test and isn't part of `node --test` (only its Kick comparison, the stand-in player and the parsing of the measures below are, the player skipped without python-dbus): CPU depends on the machine and what else runs on it, so compare runs made back to back on an idle desktop. It needs Quickshell, a systemd user session with cgroup v2, `dbus-run-session`, `busctl`, node, python3 with python-dbus and python-gobject, and `qsb`; for the profile, `perf`.
+
+Besides CPU, every run measures, over the same window (all of it in `result.json`):
+
+| Line | What | From |
+| --- | --- | --- |
+| `frames` | frames rendered, per window, and how many came late: more than 1.5 refreshes (25 ms at 60 Hz) after the frame before, so the display showed the old one again; and how many refreshes those missed in all. A pause over 250 ms is the scene at rest (Qt renders nothing while nothing moves), counted apart, not as late. | Qt's render loop log (`QSG_RENDER_TIMING=1`) in `qs.log`, against the display's refresh from `hyprctl -j monitors` (the slowest monitor's if they differ; 60 Hz without Hyprland) |
+| `gpu frame time` | the GPU's time per frame: mean, 95th percentile, worst | Qt's GPU timestamp queries (`QSG_RHI_PROFILE=1`), same log; each reading lags a frame or two |
+| `gpu busy` | % of the GPU's render engine the run kept busy | the DRM driver's per-client counters in `/proc/<pid>/fdinfo` (xe, i915, amdgpu) |
+| `profile` | where the CPU time goes: QML's JS engine (and its JIT), Qt Quick, Quickshell and the rest of `qs`'s gui thread, the render thread's scene graph and its GPU driver, `qs`'s other threads, the capture, `pactl`, the shells `qs` starts. Self time, user space only, by thread name and library. | `perf record` of every process in the run, in the window only |
+
+The profile is kept: `perf.data` (with `perf-<pid>.map`, the names QML's JIT gave its code) and `profile.txt` (the parts, then `perf report` by thread and library, then by symbol). For call stacks open `perf.data` in a viewer: [hotspot](https://github.com/KDAB/hotspot) (an AppImage works), or `perf report -i perf.data` (`--debuginfod` fetches the Qt libraries' symbols; to name the JIT's code, copy `perf-<pid>.map` back to `/tmp` first). With [inferno](https://github.com/jonhoo/inferno) on PATH a run also writes `profile.svg`, a flame graph. perf must start `qs` (`kernel.yama.ptrace_scope` 1 lets it attach to nothing else), and at `kernel.perf_event_paranoid` 2 it samples user space only, so the kernel's share (system time in the `cpu` line) isn't in the profile.
+
+These measures cost something themselves: the render loop's log and perf's sampling put about half a point of a core on the `cpu` line (2.3 % against 2.9 % for `music` here, mostly system time). Compare runs of the same kind; `--cpu-only` measures CPU alone.
 
 ## The README's animations
 

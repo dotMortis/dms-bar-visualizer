@@ -16,6 +16,13 @@
 #               --out DIR      where logs and result.json go (default: a new /tmp/bvh-out.* dir)
 #               --check-kicks  the cheap check instead of measuring: the tree's own audio pipeline
 #                              on the replayed input must give the Kicks the kick-replay tests expect
+#               --cpu-only     CPU alone, without the measures below (they cost about half a point)
+#
+#   measures    cpu            % of one core, qs + capture + children
+#               frames         frames rendered and late ones (over 1.5 refreshes apart), Qt's GPU
+#                              frame time (QSG_RENDER_TIMING, QSG_RHI_PROFILE in qs.log)
+#               gpu            GPU busy, from the DRM driver's fdinfo
+#               profile        perf.data and profile.txt: where the CPU time goes (needs perf)
 #
 # Only the inputs are swapped: bin/cava stands in for cava (first on PATH), player stands in for the
 # Active Player (an MPRIS player on the run's own session bus, the only one there), and the run gets
@@ -32,7 +39,7 @@ set -euo pipefail
 
 HARNESS=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO=$(dirname "$HARNESS")
-HOST=bar COMMIT="" WARMUP=5 LOOPS=1 OUT="" CHECK_KICKS=0 SCENARIO=""
+HOST=bar COMMIT="" WARMUP=5 LOOPS=1 OUT="" CHECK_KICKS=0 CPU_ONLY=0 SCENARIO=""
 
 die() { echo "harness: $*" >&2; exit 2; }
 
@@ -44,6 +51,7 @@ while (($#)); do
         --loops) LOOPS=$2; shift ;;
         --out) OUT=$2; shift ;;
         --check-kicks) CHECK_KICKS=1 ;;
+        --cpu-only) CPU_ONLY=1 ;;
         -h | --help) sed -n '2,/^set /p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
         -*) die "unknown option $1" ;;
         *) [[ -z $SCENARIO ]] || die "one scenario at a time"; SCENARIO=$1 ;;
@@ -94,6 +102,9 @@ OUT=${OUT:-$(mktemp -d /tmp/bvh-out.XXXXXX)}
 mkdir -p "$OUT"
 cleanup() {
     systemctl --user stop "$ID-qs.scope" "$ID-aux.scope" 2>/dev/null || true
+    wait "${QS_JOB:-}" 2>/dev/null || true   # perf, when it wraps qs
+    local p
+    for p in ${PERF_QS:-}; do rm -f "/tmp/perf-$p.map"; done   # QML's JIT map, if the run failed before the report
     rm -rf "$RUN"
 }
 trap cleanup EXIT
@@ -174,12 +185,13 @@ if [[ $PLAYER != none ]]; then
     player_on_bus || die "the stand-in player didn't start (see $OUT/aux.log)"
 fi
 
-systemd-run --user --scope --unit="$ID-qs" -q qs -p "$SHELL_DIR" --no-color --log-times > "$OUT/qs.log" 2>&1 &
-
-# --- Measures: begin before the window, end after it, report after the run. -----------------------
+# --- Measures: set up before qs starts (optional), begin before the window, end after it, report
+# after the run. ----------------------------------------------------------------------------------
 pids() { cat "$CG/cgroup.procs" 2>/dev/null; }
-comm() { cat "/proc/$1/comm" 2>/dev/null; }
-ticks() { sed 's/.*) //' "/proc/$1/stat" 2>/dev/null | awk '{ print $12 + $13 }'; }   # utime + stime
+# A short-lived child (sh, pactl) can exit while it's read: then empty, not a failed run (set -e,
+# pipefail).
+comm() { cat "/proc/$1/comm" 2>/dev/null || true; }
+ticks() { { sed 's/.*) //' "/proc/$1/stat" 2>/dev/null || true; } | awk '{ print $12 + $13 }'; }   # utime + stime
 usage() { awk -v k="$1" '$1 == k { print $2 }' "$CG/cpu.stat"; }
 
 measure_cpu_begin() {
@@ -203,7 +215,7 @@ measure_cpu_report() {
     # Processes alive for the whole window, by name; whatever else ran in it (sh, pactl, a capture
     # restarted mid-window) is the rest of the total.
     for p in "${!TICKS1[@]}"; do
-        [[ -n ${TICKS0[$p]:-} ]] || continue
+        [[ -n ${TICKS0[$p]:-} && -n ${TICKS1[$p]} ]] || continue
         d=$(((${TICKS1[$p]} - ${TICKS0[$p]}) * 1000000 / hz))
         case ${NAME[$p]} in qs) qs=$((qs + d)) ;; cava) cap=$((cap + d)) ;; esac
     done
@@ -215,9 +227,103 @@ measure_cpu_report() {
     echo "         qs $pqs, capture $pcap, other (sh, pactl, ...) $prest"
     RESULT_JSON+="\"cpu_pct\": $pct, \"cpu_user_pct\": $user, \"cpu_system_pct\": $sys, \"cpu_qs_pct\": $pqs, \"cpu_capture_pct\": $pcap, \"cpu_other_pct\": $prest, "
 }
-MEASURES=(cpu)
+
+# The deeper measures report through a node script each: it prints its lines and writes its
+# result.json fields (one JSON object) to a file, appended here.
+add_json() { local j; j=$(cat "$1"); j=${j#\{}; j=${j%\}}; [[ -z $j ]] || RESULT_JSON+="$j, "; }
+
+# Frame timing and GPU frame time, from Qt's own render-loop log in qs.log: QSG_RENDER_TIMING logs
+# each frame the render loop renders, per window, QSG_RHI_PROFILE adds the GPU's time for it
+# (timestamp queries). Late is measured against the display's refresh (hyprctl).
+measure_frames_setup() { export QSG_RENDER_TIMING=1 QSG_RHI_PROFILE=1; }
+measure_frames_begin() { FRAMES_T0=$(now); }
+measure_frames_end() { FRAMES_T1=$(now); }
+measure_frames_report() {
+    local monitors=()
+    hyprctl -j monitors > "$RUN/monitors.json" 2>/dev/null && monitors=(--monitors "$RUN/monitors.json")
+    "$NODE" "$HARNESS/frames.mjs" "$OUT/qs.log" "$FRAMES_T0" "$FRAMES_T1" "${monitors[@]}" --json "$RUN/frames.json"
+    add_json "$RUN/frames.json"
+}
+
+# GPU busy: the DRM driver's per-client engine time (/proc/<pid>/fdinfo of each /dev/dri fd), for
+# every process in the scope, over the window.
+gpu_snapshot() {
+    local p fd
+    echo "time $(date +%s%N)"
+    for p in $(pids); do
+        for fd in /proc/"$p"/fd/*; do
+            [[ $(readlink "$fd" 2>/dev/null) == /dev/dri/* ]] || continue
+            echo "fdinfo $p ${fd##*/}"
+            cat "/proc/$p/fdinfo/${fd##*/}" 2>/dev/null || true
+        done
+    done
+}
+measure_gpu_begin() { gpu_snapshot > "$RUN/gpu0.txt"; }
+measure_gpu_end() { gpu_snapshot > "$RUN/gpu1.txt"; }
+measure_gpu_report() {
+    "$NODE" "$HARNESS/gpu.mjs" "$RUN/gpu0.txt" "$RUN/gpu1.txt" --json "$RUN/gpu.json"
+    add_json "$RUN/gpu.json"
+}
+
+# The CPU profile: perf samples every process in the scope (qs's threads, the capture, sh, pactl)
+# in the window only, user space only (all perf_event_paranoid 2 allows). perf must be qs's
+# parent (ptrace_scope 1), so it wraps the launch and stays out of the scope's cgroup; its control
+# fifo switches sampling on and off. QML's JIT names its functions in /tmp/perf-<pid>.map, which
+# moves to the output dir after the report.
+PERF=0
+measure_profile_setup() {
+    command -v perf >/dev/null || { echo "harness: no perf on PATH, so no CPU profile" >&2; return 0; }
+    rm -f "$OUT/perf.data"   # not kept as perf.data.old
+    mkfifo "$RUN/perf.ctl" "$RUN/perf.ack"
+    QS_WRAP=(perf record -q -e cycles:u -F 1999 -g --user-callchains -N -D -1
+        --control "fifo:$RUN/perf.ctl,$RUN/perf.ack" -o "$OUT/perf.data" --)
+    export QV4_PROFILE_WRITE_PERF_MAP=1
+    PERF=1
+}
+perf_ctl() {
+    timeout 5 sh -c 'echo "$1" > "$2" && head -c 4 "$3" > /dev/null' sh "$1" "$RUN/perf.ctl" "$RUN/perf.ack" \
+        || echo "harness: perf didn't $1 sampling" >&2
+}
+measure_profile_begin() {
+    ((PERF)) || return 0
+    local p
+    PERF_QS=""
+    for p in $(pids); do if [[ $(comm "$p") == qs ]]; then PERF_QS+=" $p"; fi; done
+    perf_ctl enable
+}
+measure_profile_end() { ((PERF)) || return 0; perf_ctl disable; }
+measure_profile_report() {
+    ((PERF)) || return 0
+    wait "$QS_JOB" 2>/dev/null || true   # perf writes perf.data once qs is gone
+    local report=(perf report -i "$OUT/perf.data" --stdio --no-children -g none)
+    "${report[@]}" -q --sort comm,dso -F sample,period,comm,dso --percent-limit 0 -t $'\t' > "$RUN/parts.tsv" 2>/dev/null
+    "$NODE" "$HARNESS/profile.mjs" "$RUN/parts.tsv" --json "$RUN/profile.json" > "$RUN/parts.txt"
+    {
+        cat "$RUN/parts.txt"
+        echo; "${report[@]}" --sort comm,dso 2>/dev/null
+        echo; "${report[@]}" --sort comm,dso,sym --percent-limit 0.2 2>/dev/null
+    } > "$OUT/profile.txt"
+    if command -v inferno-flamegraph >/dev/null && command -v inferno-collapse-perf >/dev/null; then
+        perf script -i "$OUT/perf.data" 2>/dev/null | inferno-collapse-perf | inferno-flamegraph > "$OUT/profile.svg" || true
+    fi
+    local p
+    for p in $PERF_QS; do if [[ -e /tmp/perf-$p.map ]]; then mv "/tmp/perf-$p.map" "$OUT/"; fi; done
+    cat "$RUN/parts.txt"
+    echo "         $OUT/perf.data, $OUT/profile.txt"
+    add_json "$RUN/profile.json"
+}
+
+MEASURES=(cpu frames gpu profile)
+((CPU_ONLY || CHECK_KICKS)) && MEASURES=(cpu)
 
 # --- The run --------------------------------------------------------------------------------------
+QS_WRAP=()
+for m in "${MEASURES[@]}"; do
+    if declare -F "measure_${m}_setup" > /dev/null; then "measure_${m}_setup"; fi
+done
+"${QS_WRAP[@]}" systemd-run --user --scope --unit="$ID-qs" -q qs -p "$SHELL_DIR" --no-color --log-times > "$OUT/qs.log" 2>&1 &
+QS_JOB=$!
+
 LOAD=$(cut -d' ' -f1-3 /proc/loadavg)
 sleep_until "$HARNESS_EPOCH"
 [[ -n $(pids) ]] || die "qs isn't running (see $OUT/qs.log)"
