@@ -1,17 +1,61 @@
 //! The Bar Visualizer's Lyric Words, in the Visualizer: the Active Player's track, lyrics and
-//! playback position in, the words shown out. Their timing is lyric_line.rs's.
+//! playback position in, the words shown out, letter by letter as glyph instances (what
+//! lyrics/LyricWordsLayer.qml computed per frame in v0.10.0). Their timing is lyric_line.rs's,
+//! their layout and look bar_words.rs's, the Ribbons they ride ribbons.rs's.
 
+use crate::bar_words::{em, lay_word, row_widths, word_look};
+use crate::glyph::{Glyph, GlyphCopy};
 use crate::lyric_line::{LyricLine, LyricWord};
-use crate::Visualizer;
+use crate::ribbons::{ribbon_color, shockwave_crossing, RibbonInputs};
+use crate::{Frame, Visualizer};
+
+/// A letter's advance, in ems, when set_letters didn't give it.
+pub const FALLBACK_ADVANCE: f64 = 0.5;
+/// The font's line height, in ems, until set_letters gives it.
+pub const FALLBACK_LINE_HEIGHT: f64 = 1.2;
+/// How far (in the font's line heights) a letter's middle stays from the bar's top and bottom
+/// edges.
+const CLEARANCE: f64 = 0.32;
+/// How far toward white a word's bright core is, and the rest of the way in a flash.
+const CORE_WHITE: f64 = 0.55;
+/// How far a word's glow spreads beyond it per unit of glow above GLOW_SPREAD_FROM.
+const GLOW_SPREAD: f64 = 0.06;
+const GLOW_SPREAD_FROM: f64 = 0.5;
 
 /// The Lyric Words' state in a Visualizer.
 pub(crate) struct BarLyrics {
     line: LyricLine,
+    /// The bar's size in pixels (0 until set: no glyphs).
+    width: f64,
+    height: f64,
+    /// Each letter's advance in ems, sorted by letter, and the font's line height in ems.
+    letters: Vec<(char, f64)>,
+    line_height: f64,
+    /// The glyphs, as of the last display frame; room for the most letters the lyrics can show.
+    glyphs: Vec<Glyph>,
+    /// A word's letters' advances, in pixels, while it's laid out.
+    advances: Vec<f64>,
+}
+
+/// A letter's advance in `letters`, in ems.
+fn advance_of(letters: &[(char, f64)], c: char) -> f64 {
+    match letters.binary_search_by_key(&c, |l| l.0) {
+        Ok(i) => letters[i].1,
+        Err(_) => FALLBACK_ADVANCE,
+    }
 }
 
 impl BarLyrics {
     pub fn new() -> Self {
-        BarLyrics { line: LyricLine::new() }
+        BarLyrics {
+            line: LyricLine::new(),
+            width: 0.0,
+            height: 0.0,
+            letters: Vec::new(),
+            line_height: FALLBACK_LINE_HEIGHT,
+            glyphs: Vec::new(),
+            advances: Vec::new(),
+        }
     }
 
     /// A Kick the core's detector fired, at `now` on the core's clock.
@@ -24,13 +68,92 @@ impl BarLyrics {
         self.line.set_running(running, now);
     }
 
-    /// One display frame, at `now` on the core's clock.
-    pub fn advance(&mut self, now: f64) {
-        self.line.step(now);
-    }
-
     pub fn animating(&self, now: f64) -> bool {
         self.line.animating(now)
+    }
+
+    /// Room for the most letters the lyrics can show at once.
+    fn make_room(&mut self) {
+        let most = self.line.most_letters();
+        self.glyphs.reserve_exact(most.saturating_sub(self.glyphs.len()));
+        self.advances.reserve_exact(most.saturating_sub(self.advances.len()));
+    }
+
+    /// One display frame, at `now` on the core's clock: the words move on, and their glyphs are
+    /// laid out on the Ribbons as `frame` has them.
+    pub fn advance(&mut self, now: f64, frame: &Frame) {
+        self.line.step(now);
+        self.glyphs.clear();
+        if !(self.width > 0.0 && self.height > 0.0) {
+            return;
+        }
+        let em = em(self.height);
+        let clearance = self.line_height * em * CLEARANCE;
+        let inputs = RibbonInputs {
+            width: self.width,
+            height: self.height,
+            bands: &frame.bands,
+            time: frame.time,
+            kick: frame.kick,
+            treble: frame.treble,
+            flow: frame.flow,
+            bass_stretch: frame.bass_stretch,
+            kick_ages: &frame.kick_ages,
+            kick_powers: &frame.kick_powers,
+        };
+        let letters = &self.letters;
+        for (index, word) in self.line.words().iter().enumerate() {
+            let (text, row, before) = self.line.text(word);
+            let count = text.chars().count();
+            if self.glyphs.len() + count > self.glyphs.capacity() || count > self.advances.capacity() {
+                break;
+            }
+            self.advances.clear();
+            self.advances.extend(text.chars().map(|c| advance_of(letters, c) * em));
+            let rows = row_widths(row, before, |c| advance_of(letters, c) * em, em);
+            let start = self.glyphs.len();
+            let letters = lay_word(word.ribbon, word.x, &self.advances, &inputs, clearance, Some(rows));
+            for (letter, c) in letters.zip(text.chars()) {
+                let (x, y, angle) = (letter.x, letter.y, letter.angle);
+                self.glyphs.push(Glyph {
+                    letter: c as u32 as f64,
+                    word: index as f64,
+                    x,
+                    y,
+                    angle,
+                    ..Glyph::default()
+                });
+            }
+            let laid = &self.glyphs[start..];
+            if laid.is_empty() {
+                continue;
+            }
+            let middle = (laid[0].x + laid[laid.len() - 1].x) / 2.0;
+            let middle_y = laid.iter().map(|g| g.y).sum::<f64>() / laid.len() as f64;
+            let look = word_look(word, shockwave_crossing(middle, &inputs));
+            if !(look.opacity > 0.0) {
+                self.glyphs.truncate(start);
+                continue;
+            }
+            let color = ribbon_color(middle, word.ribbon, &inputs);
+            let whiten = CORE_WHITE + (1.0 - CORE_WHITE) * look.white;
+            let outward = if middle < self.width / 2.0 { -1.0 } else { 1.0 };
+            for glyph in &mut self.glyphs[start..] {
+                glyph.scale = look.scale;
+                glyph.pivot_x = middle;
+                glyph.pivot_y = middle_y;
+                glyph.color = color;
+                glyph.core = color.map(|c| c + (1.0 - c) * whiten);
+                glyph.opacity = look.opacity.min(1.0);
+                glyph.glow = look.glow;
+                glyph.glow_spread = 1.0 + GLOW_SPREAD * (look.glow - GLOW_SPREAD_FROM).max(0.0);
+                glyph.blur = look.blur;
+                glyph.white = look.white;
+                glyph.em = em;
+                glyph.copies =
+                    look.copies.map(|c| GlyphCopy { color: c.color, dx: c.offset * em * outward, opacity: c.opacity });
+            }
+        }
     }
 }
 
@@ -44,6 +167,7 @@ impl Visualizer {
     /// identity drops the lyrics and clears the words; the same one again keeps them.
     pub fn set_track(&mut self, id: &str, length: f64) {
         self.lyrics.line.set_track(id, length);
+        self.lyrics.make_room();
     }
 
     /// The track's lyrics, as the JSON text of DMS's lyrics.get reply's result ({ found, synced,
@@ -53,6 +177,7 @@ impl Visualizer {
     /// shown; others clear them. Takes effect on the next display frame. May allocate.
     pub fn set_lyrics(&mut self, lyrics: &str) {
         self.lyrics.line.set_lyrics(lyrics);
+        self.lyrics.make_room();
     }
 
     /// A playback position reading, now: the song time in seconds and the playback rate (1 =
@@ -60,6 +185,28 @@ impl Visualizer {
     /// One more than a second off from where it ran to is a seek, which clears the words.
     pub fn set_position(&mut self, time: f64, rate: f64) {
         self.lyrics.line.read(time, rate, self.seconds);
+    }
+
+    /// The bar's size in pixels, which the glyphs are laid out on; none until it's set (a size
+    /// that isn't above 0 is none).
+    pub fn set_bar_size(&mut self, width: f64, height: f64) {
+        let size = |x: f64| if x.is_finite() && x > 0.0 { x } else { 0.0 };
+        (self.lyrics.width, self.lyrics.height) = (size(width), size(height));
+    }
+
+    /// The font's measures, in ems (shares of its pixel size): each of `letters`' advance, in
+    /// order, and its line height. The core loads no fonts: measure the lyrics' letters at any
+    /// size and divide. A letter not given is FALLBACK_ADVANCE wide; a measure that isn't a number
+    /// at or above 0 is left out. May allocate.
+    pub fn set_letters(&mut self, letters: &str, advances: &[f64], line_height: f64) {
+        let mut table: Vec<(char, f64)> =
+            letters.chars().zip(advances.iter().copied()).filter(|&(_, a)| a.is_finite() && a >= 0.0).collect();
+        table.sort_by_key(|l| l.0);
+        table.dedup_by_key(|l| l.0);
+        self.lyrics.letters = table;
+        if line_height.is_finite() && line_height >= 0.0 {
+            self.lyrics.line_height = line_height;
+        }
     }
 
     /// The song time now, in seconds, run on from the last reading.
@@ -82,5 +229,11 @@ impl Visualizer {
     pub fn word_row(&self, word: &LyricWord) -> (&str, &str) {
         let (_, row, before) = self.lyrics.line.text(word);
         (row, before)
+    }
+
+    /// The Lyric Words shown as glyph instances, one per letter, as of the last display frame:
+    /// laid out on the bar (set_bar_size) with the font's measures (set_letters).
+    pub fn glyphs(&self) -> &[Glyph] {
+        &self.lyrics.glyphs
     }
 }

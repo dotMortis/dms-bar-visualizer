@@ -6,6 +6,7 @@ mod bar_lyrics;
 pub mod bar_words;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod c_abi;
+mod glyph;
 mod kick;
 pub mod lyric_line;
 pub mod ribbons;
@@ -14,6 +15,7 @@ mod settings;
 mod wasm;
 
 use bar_lyrics::BarLyrics;
+pub use glyph::{Glyph, GlyphCopy, GLYPH_FIELDS};
 use kick::{KickDetector, KickSettings};
 pub use lyric_line::LyricWord;
 use settings::Settings;
@@ -247,7 +249,7 @@ impl Visualizer {
         for (age, &at) in self.frame.kick_ages.iter_mut().zip(&self.kick_times) {
             *age = self.clock - at;
         }
-        self.lyrics.advance(self.seconds);
+        self.lyrics.advance(self.seconds, &self.frame);
         self.update_animating();
     }
 
