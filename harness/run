@@ -4,11 +4,13 @@
 #   harness/run [options] <scenario>
 #
 #   scenarios   music              the reference track (harness/kicks.mjs REFERENCE_TRACK), the Active
-#                                  Player playing it; no Lyric Words
+#                                  Player playing it; no Lyric Words (no DMS)
+#               music_lyrics       music with Lyric Words: the same, with a stand-in DMS answering the
+#                                  bar's lyrics request with the fixed timed lyrics (harness/lyrics.json)
 #               silence_no_player  Silence: cava's silence, no Active Player
 #               silence_paused     Silence: cava's silence, the Active Player paused
 #               silence_playing    Silence: cava's silence while the Active Player reports playing
-#                                  (a silent track, "Silence")
+#                                  (a silent track, "Silence"; the stand-in DMS has no lyrics for it)
 #   options     --host bar     what runs: bar = the Bar Visualizer (shell.qml), the default
 #               --commit REV   measure REV (e.g. v0.10.0) instead of this working tree
 #               --warmup S     seconds before measuring (default 5)
@@ -18,8 +20,9 @@
 #                              on the replayed input must give the Kicks the kick-replay tests expect
 #
 # Only the inputs are swapped: bin/cava stands in for cava (first on PATH), player stands in for the
-# Active Player (an MPRIS player on the run's own session bus, the only one there), and the run gets
-# its own runtime dir, config dir (default settings), cache and session bus, so it can't see or touch
+# Active Player (an MPRIS player on the run's own session bus, the only one there), dms stands in
+# for DMS's socket where a scenario has one (in the run's runtime dir), and the run gets its own
+# runtime dir, config dir (default settings), cache and session bus, so it can't see or touch
 # the user's live visualizers, DMS, players or config.json. qs runs in a transient systemd scope, so
 # CPU is the scope's cgroup: qs, its capture and every short-lived child (sh, pactl), as % of one
 # core like htop. Everything it starts is stopped when it exits.
@@ -55,12 +58,14 @@ done
 # --- Scenarios: the input. Each sets FIXTURE (the band stream) or SILENT=1 (cava's silence instead),
 # TRACK (its name in the report), and PLAYER: the stand-in Active Player's PlaybackStatus at start
 # (Playing, Paused) or none, with PLAYER_TITLE, the track it reports. It plays a track as long as the
-# reference track's loop, on the same timeline. Later: the lyrics.
-scenario_music() { FIXTURE=$REPO/tests/fixtures/$REFERENCE.txt SILENT=0 TRACK=$REFERENCE PLAYER=Playing PLAYER_TITLE="Steady House"; }
-scenario_silence_no_player() { FIXTURE="" SILENT=1 TRACK=silence PLAYER=none PLAYER_TITLE=""; }
-scenario_silence_paused() { FIXTURE="" SILENT=1 TRACK=silence PLAYER=Paused PLAYER_TITLE="Steady House"; }
-# A silent track has no words: the lyrics stand-in (#46) is to answer none for "Silence".
-scenario_silence_playing() { FIXTURE="" SILENT=1 TRACK=silence PLAYER=Playing PLAYER_TITLE="Silence"; }
+# reference track's loop, on the same timeline. DMS=1 runs the stand-in DMS socket (harness/dms):
+# it has the timed lyrics (harness/lyrics.json) for "Steady House" and none for any other title.
+scenario_music() { FIXTURE=$REPO/tests/fixtures/$REFERENCE.txt SILENT=0 TRACK=$REFERENCE PLAYER=Playing PLAYER_TITLE="Steady House" DMS=0; }
+scenario_music_lyrics() { scenario_music; DMS=1; }
+scenario_silence_no_player() { FIXTURE="" SILENT=1 TRACK=silence PLAYER=none PLAYER_TITLE="" DMS=0; }
+scenario_silence_paused() { FIXTURE="" SILENT=1 TRACK=silence PLAYER=Paused PLAYER_TITLE="Steady House" DMS=0; }
+# A silent track has no words: the stand-in DMS finds none for "Silence".
+scenario_silence_playing() { FIXTURE="" SILENT=1 TRACK=silence PLAYER=Playing PLAYER_TITLE="Silence" DMS=1; }
 
 # --- Hosts: what runs. Each sets SHELL_DIR, the qs config dir, from TREE (the code under test).
 host_bar() { SHELL_DIR=$TREE; }
@@ -146,9 +151,11 @@ export XDG_RUNTIME_DIR=$RUN XDG_CONFIG_HOME=$RUN/config XDG_CACHE_HOME=$RUN/cach
     XDG_STATE_HOME=$RUN/state XDG_DATA_HOME=$RUN/data \
     PULSE_SERVER=unix:$RT/pulse/native PATH=$HARNESS/bin:$PATH NO_AT_BRIDGE=1 \
     HARNESS_FIXTURE=$FIXTURE HARNESS_SILENT=$SILENT HARNESS_LOOP=$LOOP_LENGTH HARNESS_LOG=$OUT/capture.log \
-    HARNESS_PLAYER=$PLAYER HARNESS_PLAYER_TITLE=$PLAYER_TITLE HARNESS_PLAYER_LOG=$OUT/player.log
+    HARNESS_PLAYER=$PLAYER HARNESS_PLAYER_TITLE=$PLAYER_TITLE HARNESS_PLAYER_LOG=$OUT/player.log \
+    HARNESS_DMS=$DMS HARNESS_DMS_LOG=$OUT/dms.log
 : > "$HARNESS_LOG"
 : > "$HARNESS_PLAYER_LOG"
+: > "$HARNESS_DMS_LOG"
 
 # The epoch: the track is at its first frame when the window opens, so every window holds the
 # same whole loops; the warm-up plays the track's end.
@@ -158,11 +165,13 @@ export HARNESS_EPOCH=$(awk -v n="$(now)" -v w="$WARMUP" 'BEGIN { printf "%.6f", 
 WINDOW=$(awk -v l="$LOOP_LENGTH" -v n="$LOOPS" 'BEGIN { printf "%.6f", l * n }')
 
 # A private session bus, held open in its own scope with the stand-ins on it. They stand in for
-# the user's session (the stand-in player for Spotify, say), so their CPU isn't the visualizer's.
+# the user's session (the stand-in player for Spotify, say, and the stand-in DMS for DMS), so
+# their CPU isn't the visualizer's.
 systemd-run --user --scope --unit="$ID-aux" -q \
     dbus-run-session --config-file="$HARNESS/bus.conf" -- \
     sh -c 'echo "$DBUS_SESSION_BUS_ADDRESS" > "$XDG_RUNTIME_DIR/bus.addr"
            [ "$HARNESS_PLAYER" = none ] || "$0/player" &
+           [ "$HARNESS_DMS" = 0 ] || "$0/dms" &
            exec sleep infinity' "$HARNESS" \
     > "$OUT/aux.log" 2>&1 &
 for _ in $(seq 50); do [[ -s $RUN/bus.addr ]] && break; sleep 0.1; done
@@ -172,6 +181,12 @@ player_on_bus() { busctl --address="$DBUS_SESSION_BUS_ADDRESS" list --no-legend 
 if [[ $PLAYER != none ]]; then
     for _ in $(seq 50); do player_on_bus && break; sleep 0.1; done
     player_on_bus || die "the stand-in player didn't start (see $OUT/aux.log)"
+fi
+# The bar looks for DMS's socket once at start, then only every 15 s: it must be there before qs.
+dms_up() { compgen -G "$RUN/dms-*.sock" >/dev/null; }
+if ((DMS)); then
+    for _ in $(seq 50); do dms_up && break; sleep 0.1; done
+    dms_up || die "the stand-in DMS didn't start (see $OUT/aux.log)"
 fi
 
 systemd-run --user --scope --unit="$ID-qs" -q qs -p "$SHELL_DIR" --no-color --log-times > "$OUT/qs.log" 2>&1 &
@@ -245,13 +260,22 @@ else
     ((READS)) || { echo "FAILED: the visualizer never read the stand-in player (see $OUT/player.log, $OUT/qs.log)"; exit 1; }
     echo "player   $PLAYER \"$PLAYER_TITLE\", the Active Player (read $READS time(s))"
 fi
+# The stand-in DMS answers from its fixed lyrics only: allowNetwork reaches nothing.
+ASKED=$(grep -c ' lyrics\.get ' "$HARNESS_DMS_LOG" || true)
+if ((!DMS)); then
+    echo "lyrics   no DMS"
+elif ((!CHECK_KICKS)); then
+    ((ASKED)) || { echo "FAILED: the visualizer never asked the stand-in DMS for lyrics (see $OUT/dms.log, $OUT/qs.log)"; exit 1; }
+    FOUND=$(grep -c ' lyrics\.get .* -> found$' "$HARNESS_DMS_LOG" || true)
+    echo "lyrics   the stand-in DMS, asked $ASKED time(s) for \"$PLAYER_TITLE\": $( ((FOUND)) && echo "the timed lyrics (harness/lyrics.json)" || echo "none found")"
+fi
 
 if ((CHECK_KICKS)); then
     "$NODE" "$HARNESS/kicks.mjs" "$OUT/qs.log" "$LOOPS" "$REFERENCE"
     exit
 fi
 
-RESULT_JSON="{\"scenario\": \"$SCENARIO\", \"host\": \"$HOST\", \"commit\": \"$REV\", \"tree\": \"$TREE_DESC\", \"track\": \"$TRACK\", \"player\": \"$PLAYER\", \"player_title\": \"$PLAYER_TITLE\", \"window_s\": $WINDOW, \"warmup_s\": $WARMUP, \"loadavg\": \"$LOAD\", \"capture_starts\": $STARTS, "
+RESULT_JSON="{\"scenario\": \"$SCENARIO\", \"host\": \"$HOST\", \"commit\": \"$REV\", \"tree\": \"$TREE_DESC\", \"track\": \"$TRACK\", \"player\": \"$PLAYER\", \"player_title\": \"$PLAYER_TITLE\", \"dms\": $DMS, \"lyrics_requests\": $ASKED, \"window_s\": $WINDOW, \"warmup_s\": $WARMUP, \"loadavg\": \"$LOAD\", \"capture_starts\": $STARTS, "
 for m in "${MEASURES[@]}"; do "measure_${m}_report"; done
 echo "${RESULT_JSON%, }}" > "$OUT/result.json"
 echo "out      $OUT"

@@ -109,21 +109,25 @@ python3 tests/fixtures/record.py all          # re-record all of them (about 4 m
 harness/run music                      # CPU of the Bar Visualizer on the reference track
 harness/run --commit v0.10.0 music     # the same for another commit
 harness/run --check-kicks music        # check the replayed input reaches the Kick detector
+harness/run music_lyrics               # the same with Lyric Words: their cost is the difference
 harness/run silence_paused             # one of the three Silence cases
 ```
 
-| Scenario | Band stream | Active Player |
-| --- | --- | --- |
-| `music` | the reference track | playing it ("Steady House") |
-| `silence_no_player` | cava's silence | none |
-| `silence_paused` | cava's silence | paused |
-| `silence_playing` | cava's silence | playing a silent track ("Silence") |
+| Scenario | Band stream | Active Player | DMS's lyrics |
+| --- | --- | --- | --- |
+| `music` | the reference track | playing it ("Steady House") | no DMS |
+| `music_lyrics` | the reference track | playing it ("Steady House") | the timed lyrics |
+| `silence_no_player` | cava's silence | none | no DMS |
+| `silence_paused` | cava's silence | paused | no DMS |
+| `silence_playing` | cava's silence | playing a silent track ("Silence") | none found |
+
+DMS is a stand-in too, `harness/dms`, where a scenario has one: a socket in the run's own runtime dir (`dms-<its pid>.sock`, where the bar looks for DMS, ADR 0006) that answers the bar's `lyrics.get` with the fixed timed lyrics in `harness/lyrics.json` for "Steady House" and with none for any other track. Nothing reaches the live DMS or the network, whatever the request's `allowNetwork`. `harness/lyrics.json` is a copy of the demo's lines (`docs/demo-lyrics.mjs`), in DMS's synced format and timed to fit the reference track's 24.05 s loop: two lines with word timing, one with line timing and a background vocal, and a 4.5 s instrumental gap, all gone before the loop wraps. It's a copy so the measured input stays fixed if the demo changes. `harness/run` fails a run with a stand-in DMS the visualizer never asked.
 
 The Active Player is a stand-in, `harness/player`: an MPRIS player on the run's own session bus, the only player there, so the visualizer takes it as the Active Player. While it plays, its position follows the replayed track (both start at the run's epoch, and it announces each loop's wrap with `Seeked`); paused, the position holds. `harness/run` fails a run if the visualizer never read it. It runs beside the bus, outside what's measured, as your player would. To drive it by hand during a run, point `playerctl -p harness play|pause` at the run's bus (`DBUS_SESSION_BUS_ADDRESS=$(cat /tmp/bvh.*/bus.addr)`, the run's runtime dir). Cava's silence is what cava prints when nothing plays: 5 s of all-zero frames, then nothing.
 
 The replay harness runs the Bar Visualizer as it ships, in its own `qs`, but in place of cava it replays a recorded band stream from `tests/fixtures` (the reference track, `steady_house`). After a warm-up it measures whole loops of the track and prints CPU as % of one core, as htop shows it, for `qs`, its capture and every process they start together. The run gets its own runtime dir, config dir (every setting at its default), cache and session bus, so it never sees the live visualizers, DMS, your players or your `config.json`; it does show the visualizer on the desktop while it runs. `--check-kicks` runs the tree's audio pipeline on the same input and checks it fires the Kicks the replay tests expect for the track, loop by loop. `harness/run --help` lists the options.
 
-It isn't a test and isn't part of `node --test` (only its Kick comparison and the stand-in player are, the player skipped without python-dbus): CPU depends on the machine and what else runs on it, so compare runs made back to back on an idle desktop. It needs Quickshell, a systemd user session with cgroup v2, `dbus-run-session`, `busctl`, node, python3 with python-dbus and python-gobject, and `qsb`.
+It isn't a test and isn't part of `node --test` (only its Kick comparison, the timed lyrics and the stand-ins are, the player skipped without python-dbus): CPU depends on the machine and what else runs on it, so compare runs made back to back on an idle desktop. It needs Quickshell, a systemd user session with cgroup v2, `dbus-run-session`, `busctl`, node, python3 with python-dbus and python-gobject, and `qsb`.
 
 ## The README's animations
 
