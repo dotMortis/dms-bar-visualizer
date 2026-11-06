@@ -273,5 +273,5 @@ mod a_words_look {
 
 #[test]
 fn words_scale_with_the_ring_smaller_than_the_digital_time() {
-    assert!(WORD_FONT > 0.0 && WORD_FONT < TIME_FONT);
+    const { assert!(WORD_FONT > 0.0 && WORD_FONT < TIME_FONT) };
 }

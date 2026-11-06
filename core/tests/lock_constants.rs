@@ -229,7 +229,9 @@ mod the_lyric_words_ride_and_glow_like_ring_frags_strands_and_hands {
     #[test]
     fn catppuccins_colors_are_ring_frags() {
         let code = code();
-        for (name, color) in [("LAVENDER", RING_LAVENDER), ("MAUVE", RING_MAUVE), ("PINK", RING_PINK), ("BLUE", RING_BLUE)] {
+        for (name, color) in
+            [("LAVENDER", RING_LAVENDER), ("MAUVE", RING_MAUVE), ("PINK", RING_PINK), ("BLUE", RING_BLUE)]
+        {
             let line = code
                 .lines()
                 .find(|l| l.split_whitespace().take(3).eq(["const", "vec3", name]))

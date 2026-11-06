@@ -17,12 +17,12 @@ export const HIGH_HZ = 14000;
 
 // Where each field of a glyph instance sits in the core's glyphs().data (core/src/glyph.rs's Glyph,
 // core/src/wasm.rs): glyph i starts at i * stride; color and core are r, g, b; copies holds three
-// copies, each copySize numbers from copyColor (r, g, b), copyDx and copyOpacity on.
+// copies, each copySize numbers from copyColor (r, g, b), copyDx, copyDy and copyOpacity on.
 // core/tests/glyphs.rs checks them against the core's.
 export const GLYPH = {
     letter: 0, word: 1, x: 2, y: 3, angle: 4, scale: 5, pivotX: 6, pivotY: 7, color: 8, core: 11, opacity: 14,
-    glow: 15, glowSpread: 16, blur: 17, white: 18, em: 19, copies: 20,
-    copyColor: 0, copyDx: 3, copyOpacity: 4, copySize: 5, stride: 35,
+    glow: 15, glowSpread: 16, blur: 17, white: 18, em: 19, glowRadius: 20, copyBlur: 21, copies: 22,
+    copyColor: 0, copyDx: 3, copyDy: 4, copyOpacity: 5, copySize: 6, stride: 40,
 };
 
 // A fresh copy of config.json's defaults, for the sliders to change.

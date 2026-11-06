@@ -25,6 +25,7 @@
 //! ```js
 //! visualizer.setKind("lock-ring");                // or "bar", as new
 //! visualizer.setLocalTime(secondsSinceLocalMidnight);
+//! visualizer.setRingSize(side);                   // its Lyric Words come out of glyphs(), around the dial's center
 //! const { swell, presence, handFlash, handAngles, handInner, handLengths, handAmplitudes,
 //!         handWidths, handGlows, handPhases, handLevels, kickAges, kickPowers, kickSeeds,
 //!         hourRadii, hourGlows, timeCrossing, timeCopyOffsets, timeCopyOpacity, timeGlowOpacity,
@@ -281,6 +282,12 @@ impl WasmVisualizer {
         self.visualizer.set_bar_size(width, height);
     }
 
+    /// The Lock Ring's side in pixels. See `Visualizer::set_ring_size`.
+    #[wasm_bindgen(js_name = setRingSize)]
+    pub fn set_ring_size(&mut self, side: f64) {
+        self.visualizer.set_ring_size(side);
+    }
+
     /// The font's measures in ems: a string of letters, a Float64Array of their advances in order,
     /// and the line height. See `Visualizer::set_letters`.
     #[wasm_bindgen(js_name = setLetters)]
@@ -291,8 +298,8 @@ impl WasmVisualizer {
     /// The Lyric Words shown, as glyph instances: `{ count, stride, data }`, the same object every
     /// call, updated in place. `data` is a Float64Array holding `count` glyphs, `stride` numbers
     /// each, laid out as core/src/glyph.rs's Glyph (letter, word, x, y, angle, scale, pivotX,
-    /// pivotY, color r g b, core r g b, opacity, glow, glowSpread, blur, white, em, then three
-    /// copies of color r g b, dx, opacity); past them it holds leftovers. It is replaced by a longer
+    /// pivotY, color r g b, core r g b, opacity, glow, glowSpread, blur, white, em, glowRadius,
+    /// copyBlur, then three copies of color r g b, dx, dy, opacity); past them it holds leftovers. It is replaced by a longer
     /// one when lyrics with more letters come.
     pub fn glyphs(&mut self) -> Object {
         let glyphs = self.visualizer.glyphs();

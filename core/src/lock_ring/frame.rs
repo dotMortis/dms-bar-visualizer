@@ -85,6 +85,8 @@ pub(crate) struct LockRing {
     /// Seconds since local midnight.
     local_time: f64,
     pub frame: LockRingFrame,
+    /// The Hands' poses, as of the last update: what the Lyric Words on them lie along.
+    pub poses: [HandPose; 3],
 }
 
 impl LockRing {
@@ -109,6 +111,7 @@ impl LockRing {
         out.hand_phases = self.hands.phases;
         out.hand_flash = hand_flash(ages, powers, kick_decay);
         let poses = hand_poses(self.local_time, self.hands.levels, out.hand_flash, hand_waves);
+        self.poses = poses;
         for (i, pose) in poses.iter().enumerate() {
             out.hand_angles[i] = pose.angle * PI / 180.0;
             out.hand_inner[i] = pose.inner;

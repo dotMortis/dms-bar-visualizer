@@ -18,10 +18,13 @@
 
 /* The Lyric Words: a line sung on an 800 x 40 bar, its letters glyph instances. */
 static int lyrics(void) {
-    printf("glyph size %zu x %zu color %zu core %zu opacity %zu em %zu copies %zu copy %zu dx %zu\n",
+    printf("glyph size %zu x %zu color %zu core %zu opacity %zu em %zu glow_radius %zu copy_blur %zu copies %zu "
+           "copy %zu dx %zu dy %zu\n",
            sizeof(VisualizerGlyph), offsetof(VisualizerGlyph, x), offsetof(VisualizerGlyph, color),
            offsetof(VisualizerGlyph, core), offsetof(VisualizerGlyph, opacity), offsetof(VisualizerGlyph, em),
-           offsetof(VisualizerGlyph, copies), sizeof(VisualizerGlyphCopy), offsetof(VisualizerGlyphCopy, dx));
+           offsetof(VisualizerGlyph, glow_radius), offsetof(VisualizerGlyph, copy_blur),
+           offsetof(VisualizerGlyph, copies), sizeof(VisualizerGlyphCopy), offsetof(VisualizerGlyphCopy, dx),
+           offsetof(VisualizerGlyphCopy, dy));
     CHECK(sizeof(VisualizerGlyph) == VISUALIZER_GLYPH_FIELDS * sizeof(double));
 
     size_t count = 7;
@@ -49,6 +52,7 @@ static int lyrics(void) {
     CHECK(fabs(glyphs[1].x - glyphs[0].x - 12.0) < 1e-9);
     CHECK(fabs(glyphs[0].y - 20.0) < 1e-9);
     CHECK(glyphs[0].opacity == 1.0 && glyphs[0].scale == 1.0);
+    CHECK(fabs(glyphs[0].glow_radius - 0.45 * 32.0) < 1e-9 && glyphs[0].copies[0].dy == 0.0);
     CHECK(visualizer_frame(v)->animating);
 
     /* Long after the line: gone. */
@@ -156,6 +160,19 @@ int main(void) {
     CHECK(state->kick_powers[0] == 0.0 && state->kick_ages[0] == 100.0);
     CHECK(state->hour_glows[0] > state->hour_glows[1]);
     CHECK(state->time_hit.glow_scale >= 1.0);
+    /* Its Lyric Words, on a 500 px ring: "ab" around the dial's center, 12 px letters. */
+    visualizer_set_ring_size(ring, 500.0);
+    visualizer_set_letters(ring, "ab", 2, (const double[]){0.5, 0.25}, 2, 1.2);
+    const char *line = "{\"found\": true, \"synced\": [{\"t\": 1, \"e\": 3, \"x\": \"ab\"}]}";
+    visualizer_set_track(ring, "track", 5, 60.0);
+    visualizer_set_lyrics(ring, line, strlen(line));
+    visualizer_set_position(ring, 0.0, 1.0);
+    visualizer_advance(ring, 2.0);
+    size_t count = 0;
+    const VisualizerGlyph *words = visualizer_glyphs(ring, &count);
+    CHECK(count == 2 && words != NULL && words[0].letter == 'a' && words[0].em == 12.0);
+    double from_center = sqrt(words[0].pivot_x * words[0].pivot_x + words[0].pivot_y * words[0].pivot_y);
+    CHECK(from_center > 30.0 && from_center < 250.0);
     visualizer_set_kind(ring, VISUALIZER_KIND_BAR);
     CHECK(visualizer_frame(ring)->intensity == 1.0);
     visualizer_destroy(ring);

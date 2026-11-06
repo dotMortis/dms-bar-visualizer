@@ -288,11 +288,11 @@ impl Visualizer {
         for (age, &at) in self.frame.kick_ages.iter_mut().zip(&self.kick_times) {
             *age = self.clock - at;
         }
-        self.lyrics.advance(self.seconds, &self.frame);
         if self.kind == Kind::LockRing {
             self.lock_ring.step(&self.frame, dt, speed);
         }
         self.update_lock_ring();
+        self.lyrics.advance(self.seconds, &self.frame, &self.lock_ring);
         self.update_animating();
     }
 

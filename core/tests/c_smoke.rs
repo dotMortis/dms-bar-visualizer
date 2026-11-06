@@ -51,16 +51,19 @@ fn a_c_program_drives_the_visualizer_through_the_header() {
     );
     assert_eq!(out.lines().next(), Some(layout.as_str()));
     let glyph = format!(
-        "glyph size {} x {} color {} core {} opacity {} em {} copies {} copy {} dx {}",
+        "glyph size {} x {} color {} core {} opacity {} em {} glow_radius {} copy_blur {} copies {} copy {} dx {} dy {}",
         size_of::<Glyph>(),
         offset_of!(Glyph, x),
         offset_of!(Glyph, color),
         offset_of!(Glyph, core),
         offset_of!(Glyph, opacity),
         offset_of!(Glyph, em),
+        offset_of!(Glyph, glow_radius),
+        offset_of!(Glyph, copy_blur),
         offset_of!(Glyph, copies),
         size_of::<GlyphCopy>(),
-        offset_of!(GlyphCopy, dx)
+        offset_of!(GlyphCopy, dx),
+        offset_of!(GlyphCopy, dy)
     );
     assert_eq!(out.lines().find(|l| l.starts_with("glyph ")), Some(glyph.as_str()));
     use visualizer_core::lock_ring::TimeHit;

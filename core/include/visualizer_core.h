@@ -166,28 +166,30 @@ const VisualizerLockRing *visualizer_lock_ring(const Visualizer *visualizer);
  * come in as data. */
 
 /* One of a word's split copies, drawn behind it as a Shockwave crosses it: its color (r, g, b
- * 0..1), how far it's pushed along the bar in pixels (outward, away from the bar's center) and its
- * opacity, under the glyph's own. */
+ * 0..1), how far it's pushed in pixels (outward: on the bar along it, away from its center; on the
+ * Lock Ring away from the dial's center) and its opacity, under the glyph's own. */
 typedef struct VisualizerGlyphCopy {
     double color[3];
-    double dx;
+    double dx, dy;
     double opacity;
 } VisualizerGlyphCopy;
 
 /* One letter of a Lyric Word shown. Laid out as core/src/glyph.rs's Glyph: change both. Every
  * field is a double (VISUALIZER_GLYPH_FIELDS of them). */
-#define VISUALIZER_GLYPH_FIELDS 35
+#define VISUALIZER_GLYPH_FIELDS 40
 typedef struct VisualizerGlyph {
     /* The letter: its Unicode code point. */
     double letter;
     /* Which word it belongs to, counting the words shown from 0: a word's glyphs come together, in
      * its letters' order, and every letter of a word has the same look. */
     double word;
-    /* Its middle, in pixels from the bar's top left, tilted angle degrees clockwise. */
+    /* Its middle, in pixels, tilted angle degrees clockwise: on the bar from its top left, on the
+     * Lock Ring from the dial's center (y down). */
     double x, y, angle;
     /* The word's size (1 = a settled lead vocal's), scaled around its middle (pivot). */
     double scale, pivot_x, pivot_y;
-    /* Its glow's color, the Ribbon's there (r, g, b 0..1), and its bright core's. */
+    /* Its glow's color (r, g, b 0..1): the Ribbon's there, or on the Lock Ring its Ribbon's or
+     * Hand's, toward a Shockwave's glow as one crosses it; and its bright core's. */
     double color[3];
     double core[3];
     /* Its opacity, 0..1. */
@@ -199,8 +201,11 @@ typedef struct VisualizerGlyph {
     double blur;
     /* How far toward white it flashes, 0..1 (in core already). */
     double white;
-    /* The letters' size in pixels: the glow's radius is 0.45 of it, the copies' blur 0.08. */
+    /* The letters' size in pixels. */
     double em;
+    /* The glow's blur radius and the copies' blur, in pixels (it blurs out by blur of the glow's
+     * radius as its line dissolves). */
+    double glow_radius, copy_blur;
     /* Its split, in the Shockwave's colors. */
     VisualizerGlyphCopy copies[3];
 } VisualizerGlyph;
@@ -220,6 +225,9 @@ void visualizer_set_lyrics(Visualizer *visualizer, const char *json, size_t len)
 void visualizer_set_position(Visualizer *visualizer, double time, double rate);
 /* The bar's size in pixels, which the glyphs are laid out on; no glyphs until it's set. */
 void visualizer_set_bar_size(Visualizer *visualizer, double width, double height);
+/* The Lock Ring's side in pixels (the smaller of its width and height), which its glyphs are laid
+ * out on, around the dial's center; no glyphs on the Lock Ring until it's set. */
+void visualizer_set_ring_size(Visualizer *visualizer, double side);
 /* The font's measures in ems (shares of its pixel size): len bytes of UTF-8 letters, count
  * advances, one per letter in order, and the line height. Measure the lyrics' letters at any size
  * and divide; a letter not given is 0.5 em wide. May allocate. */

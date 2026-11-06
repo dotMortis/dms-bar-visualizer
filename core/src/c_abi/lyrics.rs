@@ -1,6 +1,6 @@
 //! The C ABI of the Lyric Words (bar_lyrics.rs): the Active Player's track, lyrics and playback
 //! position in, glyph instances out. Total like the rest: a null Visualizer or buffer, or text
-//! that isn't UTF-8, is ignored. set_position, set_bar_size and glyphs never allocate.
+//! that isn't UTF-8, is ignored. set_position, set_bar_size, set_ring_size and glyphs never allocate.
 
 use std::ptr;
 
@@ -70,6 +70,17 @@ pub unsafe extern "C" fn visualizer_set_position(visualizer: *mut Visualizer, ti
 pub unsafe extern "C" fn visualizer_set_bar_size(visualizer: *mut Visualizer, width: f64, height: f64) {
     if let Some(visualizer) = visualizer.as_mut() {
         guarded((), || visualizer.set_bar_size(width, height));
+    }
+}
+
+/// The Lock Ring's side in pixels. See `Visualizer::set_ring_size`.
+///
+/// # Safety
+/// `visualizer` is null or live.
+#[no_mangle]
+pub unsafe extern "C" fn visualizer_set_ring_size(visualizer: *mut Visualizer, side: f64) {
+    if let Some(visualizer) = visualizer.as_mut() {
+        guarded((), || visualizer.set_ring_size(side));
     }
 }
 

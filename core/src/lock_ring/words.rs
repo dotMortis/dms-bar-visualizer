@@ -158,7 +158,14 @@ fn ribbon_at(theta: f64, k: usize, scene: &WordScene) -> (f64, f64, f64) {
 /// Lays letters along a path: `point(t)` gives a point (px from the dial's center, y down) at `t`,
 /// `unit` px of the path per unit of t, walking in `read` (+1 or -1) direction. Each letter's center
 /// is its share of the word's advances from the word's middle at t0, turned to the path's tangent.
-fn lay_out(advances: &[f64], t0: f64, unit: f64, read: f64, point: impl Fn(f64) -> (f64, f64), out: &mut [PlacedLetter]) {
+fn lay_out(
+    advances: &[f64],
+    t0: f64,
+    unit: f64,
+    read: f64,
+    point: impl Fn(f64) -> (f64, f64),
+    out: &mut [PlacedLetter],
+) {
     let width = advances.iter().fold(0.0, |sum, a| sum + a);
     let eps = 0.5 / unit;
     let mut before = 0.0;
@@ -166,7 +173,8 @@ fn lay_out(advances: &[f64], t0: f64, unit: f64, read: f64, point: impl Fn(f64) 
         let t = t0 + read * (before + advance / 2.0 - width / 2.0) / unit;
         before += advance;
         let (p, ahead, behind) = (point(t), point(t + read * eps), point(t - read * eps));
-        *letter = PlacedLetter { x: p.0, y: p.1, rotation: libm::atan2(ahead.1 - behind.1, ahead.0 - behind.0) * 180.0 / PI };
+        *letter =
+            PlacedLetter { x: p.0, y: p.1, rotation: libm::atan2(ahead.1 - behind.1, ahead.0 - behind.0) * 180.0 / PI };
     }
 }
 

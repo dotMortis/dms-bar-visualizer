@@ -127,7 +127,7 @@ pub fn hand_look(length: f64, level: f64, flash: f64, strength: f64, push: f64) 
 /// A Hand's pose: its angle (clockwise degrees from 12 o'clock, from the time alone), where it
 /// starts (inner) and ends (length, pushed out by a Kick) and its width, in dial radii, and its
 /// look (hand_look()).
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct HandPose {
     pub angle: f64,
     pub inner: f64,

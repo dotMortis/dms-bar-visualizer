@@ -490,6 +490,11 @@ impl LyricLine {
         }
     }
 
+    /// Whether the words are the Lock Ring's.
+    pub fn ring(&self) -> bool {
+        self.ring
+    }
+
     /// The Active Player's track: an identity and its length in seconds (0: unknown). A new
     /// identity drops the lyrics and clears the words.
     pub fn set_track(&mut self, id: &str, length: f64) {

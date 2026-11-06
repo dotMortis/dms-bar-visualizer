@@ -1,10 +1,16 @@
-//! The Bar Visualizer's Lyric Words, in the Visualizer: the Active Player's track, lyrics and
-//! playback position in, the words shown out, letter by letter as glyph instances (what
-//! lyrics/LyricWordsLayer.qml computed per frame in v0.10.0). Their timing is lyric_line.rs's,
-//! their layout and look bar_words.rs's, the Ribbons they ride ribbons.rs's.
+//! The Lyric Words, in the Visualizer: the Active Player's track, lyrics and playback position in,
+//! the words shown out, letter by letter as glyph instances (what lyrics/LyricWordsLayer.qml and
+//! lock-ring/LockRing.qml computed per frame in v0.10.0). Their timing is lyric_line.rs's; on the
+//! bar their layout and look are bar_words.rs's and the Ribbons they ride ribbons.rs's, on the Lock
+//! Ring both are lock_ring/words.rs's.
 
 use crate::bar_words::{em, lay_word, row_widths, word_look};
 use crate::glyph::{Glyph, GlyphCopy};
+use crate::lock_ring::{
+    shockwave_crossing as ring_crossing, word_look as ring_word_look, word_placement, LockRing, PlacedLetter,
+    WordScene, DIAL_RATIO, TIME_HIT_COLORS, TIME_HIT_GLOW_COLOR, TIME_HIT_SOFTEN, WORD_FONT, WORD_FONT_MIN,
+    WORD_LOOK_CORE, WORD_LOOK_GLOW_RADIUS, WORD_LOOK_GLOW_SPREAD,
+};
 use crate::lyric_line::{LyricLine, LyricWord, Spot};
 use crate::ribbons::{ribbon_color, shockwave_crossing, RibbonInputs};
 use crate::{Frame, Visualizer};
@@ -25,6 +31,9 @@ const CORE_WHITE: f64 = 0.55;
 /// How far a word's glow spreads beyond it per unit of glow above GLOW_SPREAD_FROM.
 const GLOW_SPREAD: f64 = 0.06;
 const GLOW_SPREAD_FROM: f64 = 0.5;
+/// A word's glow's blur radius, and its split copies' blur, in ems.
+const GLOW_RADIUS: f64 = 0.45;
+const COPY_BLUR: f64 = 0.08;
 
 /// The Lyric Words' state in a Visualizer.
 pub(crate) struct BarLyrics {
@@ -37,8 +46,11 @@ pub(crate) struct BarLyrics {
     line_height: f64,
     /// The glyphs, as of the last display frame; room for the most letters the lyrics can show.
     glyphs: Vec<Glyph>,
-    /// A word's letters' advances, in pixels, while it's laid out.
+    /// A word's letters' advances, in pixels, and on the Lock Ring their spots, while it's laid out.
     advances: Vec<f64>,
+    placed: Vec<PlacedLetter>,
+    /// The Lock Ring's side in pixels (0 until set: no glyphs on the ring).
+    side: f64,
 }
 
 /// A letter's advance in `letters`, in ems.
@@ -59,6 +71,8 @@ impl BarLyrics {
             line_height: FALLBACK_LINE_HEIGHT,
             glyphs: Vec::new(),
             advances: Vec::new(),
+            placed: Vec::new(),
+            side: 0.0,
         }
     }
 
@@ -87,13 +101,18 @@ impl BarLyrics {
         let most = self.line.most_letters();
         self.glyphs.reserve_exact(most.saturating_sub(self.glyphs.len()));
         self.advances.reserve_exact(most.saturating_sub(self.advances.len()));
+        self.placed.reserve_exact(most.saturating_sub(self.placed.len()));
     }
 
     /// One display frame, at `now` on the core's clock: the words move on, and their glyphs are
-    /// laid out on the Ribbons as `frame` has them.
-    pub fn advance(&mut self, now: f64, frame: &Frame) {
+    /// laid out on the Ribbons as `frame` has them, or on the Lock Ring as `ring` has it too.
+    pub fn advance(&mut self, now: f64, frame: &Frame, ring: &LockRing) {
         self.line.step(now);
         self.glyphs.clear();
+        if self.line.ring() {
+            self.lay_out_ring(frame, ring);
+            return;
+        }
         if !(self.width > 0.0 && self.height > 0.0) {
             return;
         }
@@ -161,11 +180,105 @@ impl BarLyrics {
                 glyph.blur = look.blur;
                 glyph.white = look.white;
                 glyph.em = em;
-                glyph.copies =
-                    look.copies.map(|c| GlyphCopy { color: c.color, dx: c.offset * em * outward, opacity: c.opacity });
+                glyph.glow_radius = GLOW_RADIUS * em;
+                glyph.copy_blur = COPY_BLUR * em;
+                glyph.copies = look.copies.map(|c| GlyphCopy {
+                    color: c.color,
+                    dx: c.offset * em * outward,
+                    dy: 0.0,
+                    opacity: c.opacity,
+                });
             }
         }
     }
+}
+
+impl BarLyrics {
+    /// The words' glyphs on the Lock Ring, around the dial's center, as LockRing.qml laid them out.
+    fn lay_out_ring(&mut self, frame: &Frame, ring: &LockRing) {
+        if self.side <= 0.0 {
+            return;
+        }
+        let f = frame;
+        let (ages, powers, seeds) = (&f.kick_ages, &f.kick_powers, &f.kick_seeds);
+        let scene = WordScene {
+            dial_radius: self.side * DIAL_RATIO,
+            values: &f.bands,
+            flow: f.flow,
+            time: f.time,
+            treble: f.treble,
+            swell: ring.frame.swell,
+            kick: f.kick,
+            bass_stretch: f.bass_stretch,
+            kick_ages: ages,
+            kick_powers: powers,
+            kick_seeds: seeds,
+            poses: ring.poses,
+            phases: ring.frame.hand_phases,
+        };
+        let glow_color = hex_rgb(TIME_HIT_GLOW_COLOR);
+        let copy_colors = TIME_HIT_COLORS.map(hex_rgb);
+        let letters = &self.letters;
+        for (index, word) in self.line.words().iter().enumerate() {
+            let text = self.line.text(word).0;
+            let count = text.chars().count();
+            if self.glyphs.len() + count > self.glyphs.capacity() || count > self.advances.capacity() {
+                break;
+            }
+            let em = (self.side * WORD_FONT * word.size).max(WORD_FONT_MIN);
+            self.advances.clear();
+            self.advances.extend(text.chars().map(|c| advance_of(letters, c) * em));
+            self.placed.clear();
+            self.placed.resize(count, PlacedLetter::default());
+            let place = word_placement(word.spot, &self.advances, &scene, &mut self.placed);
+            let look = ring_word_look(word, ring_crossing(place.radius, ages, powers, seeds, Some(place.theta)));
+            if look.opacity.is_nan() || look.opacity <= 0.0 {
+                continue;
+            }
+            let hit = look.hit;
+            let tint = hit.glow_opacity * 0.6;
+            let color: [f64; 3] = std::array::from_fn(|c| place.color[c] + (glow_color[c] - place.color[c]) * tint);
+            let whiten = WORD_LOOK_CORE + (1.0 - WORD_LOOK_CORE) * look.white;
+            let out = libm::hypot(place.x, place.y).max(1.0);
+            let (out_x, out_y) = (place.x / out, place.y / out);
+            let copies: [GlyphCopy; 3] = std::array::from_fn(|i| GlyphCopy {
+                color: copy_colors[i],
+                dx: out_x * hit.copy_offsets[i] * em,
+                dy: out_y * hit.copy_offsets[i] * em,
+                opacity: hit.copy_opacity,
+            });
+            for (letter, c) in self.placed.iter().zip(text.chars()) {
+                self.glyphs.push(Glyph {
+                    letter: c as u32 as f64,
+                    word: index as f64,
+                    x: letter.x,
+                    y: letter.y,
+                    angle: letter.rotation,
+                    scale: look.scale,
+                    pivot_x: place.x,
+                    pivot_y: place.y,
+                    color,
+                    core: place.color.map(|c| c + (1.0 - c) * whiten),
+                    opacity: look.opacity.min(1.0),
+                    glow: 1.0,
+                    glow_spread: hit.glow_scale + WORD_LOOK_GLOW_SPREAD,
+                    blur: look.blur,
+                    white: look.white,
+                    em,
+                    glow_radius: WORD_LOOK_GLOW_RADIUS * em,
+                    copy_blur: TIME_HIT_SOFTEN * em,
+                    copies,
+                });
+            }
+        }
+    }
+}
+
+/// A "#rrggbb" color's channels, 0..1.
+fn hex_rgb(hex: &str) -> [f64; 3] {
+    std::array::from_fn(|i| {
+        u8::from_str_radix(hex.get(1 + 2 * i..3 + 2 * i).unwrap_or("0"), 16).unwrap_or(0) as f64 / 255.0
+    })
 }
 
 impl Visualizer {
@@ -196,6 +309,13 @@ impl Visualizer {
     /// One more than a second off from where it ran to is a seek, which clears the words.
     pub fn set_position(&mut self, time: f64, rate: f64) {
         self.lyrics.line.read(time, rate, self.seconds);
+    }
+
+    /// The Lock Ring's side in pixels (the square it's drawn in: the smaller of its width and
+    /// height), which its glyphs are laid out on, around the dial's center; none until it's set (a
+    /// side that isn't above 0 is none, one above MAX_BAR is MAX_BAR).
+    pub fn set_ring_size(&mut self, side: f64) {
+        self.lyrics.side = if side > 0.0 { side.min(MAX_BAR) } else { 0.0 };
     }
 
     /// The bar's size in pixels, which the glyphs are laid out on; none until it's set (a size
