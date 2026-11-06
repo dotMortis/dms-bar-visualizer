@@ -43,19 +43,23 @@ done
 OUT=${OUT:-$(mktemp -d /tmp/bvh-rec.XXXXXX)}
 mkdir -p "$OUT/runs"
 
-# A commit's name in a file name: v0.10.0 stays v0.10.0, HEAD becomes its short sha.
+# A commit's name in a file name: a tag (v0.10.0) stays as it is, anything else (HEAD, a branch, a
+# sha) becomes its short sha.
 label() {
-    if [[ $1 == HEAD* ]]; then git -C "$HARNESS/.." rev-parse --short "$1"; else echo "${1//[^A-Za-z0-9._-]/_}"; fi
+    if git -C "$HARNESS/.." show-ref -q --verify "refs/tags/$1"; then echo "${1//[^A-Za-z0-9._-]/_}"
+    else git -C "$HARNESS/.." rev-parse --short "$1^{commit}"; fi
 }
 A=$(label "${REVS[0]}") B=$(label "${REVS[1]}")
 [[ $A != "$B" ]] || B=$B-b
 
 {
     echo "Screen recordings of the same replayed input (the reference track, harness/run's scenarios)"
-    echo "at two commits: A = ${REVS[0]} ($(git -C "$HARNESS/.." rev-parse "${REVS[0]}")),"
-    echo "B = ${REVS[1]} ($(git -C "$HARNESS/.." rev-parse "${REVS[1]}")). Made by harness/record."
+    echo "at two commits: A = ${REVS[0]} ($(git -C "$HARNESS/.." rev-parse "${REVS[0]}^{commit}")),"
+    echo "B = ${REVS[1]} ($(git -C "$HARNESS/.." rev-parse "${REVS[1]}^{commit}")). Made by harness/record."
     echo "Each starts at the track's first frame and lasts the same whole loops, every setting at its"
     echo "default, on black. music: the track, no Lyric Words; music_lyrics: the same with Lyric Words."
+    echo "The Lock Ring's clock shows the time it was recorded at, so its hands and digits differ between"
+    echo "A and B; the Lyric Words land at random spots, so where they land differs too."
     echo
 } > "$OUT/README.txt"
 
