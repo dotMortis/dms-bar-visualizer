@@ -14,6 +14,8 @@ use settings::Settings;
 
 /// cava's layout: 32 bands from 30 Hz to 14 kHz, bass first.
 pub const BANDS: usize = 32;
+/// Where `Frame::time` wraps (shell.qml's `audio.time % 1200`).
+pub const TIME_WRAP: f64 = 1200.0;
 
 /// Everything to draw, as of the last call. Laid out as C's `VisualizerFrame`
 /// (include/visualizer_core.h): change both together.
@@ -28,6 +30,9 @@ pub struct Frame {
     pub treble: f64,
     /// The Kick level: 1 when a Kick fires, fading at kickDecay per second as display frames pass.
     pub kick: f64,
+    /// The animation clock: display seconds times speed, wrapped at TIME_WRAP s for the shader's
+    /// 32-bit floats.
+    pub time: f64,
     /// The last Kick's power, 0.5..1 by how hard the hit was next to the recent ones; 0 before any.
     pub kick_power: f64,
     /// How many Kicks have fired so far (wrapping): a new one fired when it changes.
@@ -39,6 +44,8 @@ pub struct Frame {
 pub struct Visualizer {
     settings: Settings,
     kicks: KickDetector,
+    /// The animation clock, unwrapped: the Kick slots' ages are counted on it.
+    clock: f64,
     frame: Frame,
 }
 
@@ -69,12 +76,14 @@ impl Visualizer {
         Visualizer {
             kicks: KickDetector::new(kick_settings(&settings)),
             settings,
+            clock: 0.0,
             frame: Frame {
                 bands: [0.0; BANDS],
                 bass: 0.0,
                 mid: 0.0,
                 treble: 0.0,
                 kick: 0.0,
+                time: 0.0,
                 kick_power: 0.0,
                 kick_count: 0,
             },
@@ -117,6 +126,9 @@ impl Visualizer {
     /// infinite one as the longest finite one.
     pub fn advance(&mut self, dt: f64) {
         let dt = if dt > 0.0 { dt.min(f64::MAX) } else { 0.0 };
+        let speed = self.settings.speed;
+        self.clock = (self.clock + dt * speed).min(f64::MAX);
+        self.frame.time = self.clock % TIME_WRAP;
         self.frame.kick *= libm::exp(-dt * self.settings.kick_decay);
     }
 
