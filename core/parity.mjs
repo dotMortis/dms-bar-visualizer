@@ -2,7 +2,8 @@
 // with the same powers, as the native build, on every recorded fixture at both replay configs, so
 // the demo can't drift from what runs on the desktop. The rest of the frame (the clock, flow, Kick
 // level and slots, Silence, animating) must come out the same too, checked on each replay's last
-// frame, which every frame before it feeds.
+// frame, which every frame before it feeds. So must the Lock Ring's state, on the same replays with
+// the Visualizer configured as the Lock Ring.
 //
 //     node core/parity.mjs
 //
@@ -85,15 +86,39 @@ function lastFrame(scenario, settings) {
     return out;
 }
 
+// examples/kicks.rs's last_ring, through the WASM.
+function lastRing(scenario, settings) {
+    const visualizer = new Visualizer();
+    visualizer.setKind("lock-ring");
+    visualizer.configure(settings);
+    visualizer.setPlayer("playing");
+    frames(scenario).forEach(({ time, values }, i) => {
+        visualizer.setLocalTime(36000 + i / 60);
+        visualizer.pushBands(values, time);
+        visualizer.advance(1 / 60);
+    });
+    const f = visualizer.frame(), r = visualizer.lockRing();
+    const out = [f.intensity, f.kickCount, r.swell, r.presence, r.handFlash,
+        ...r.handAngles, ...r.handInner, ...r.handLengths, ...r.handAmplitudes, ...r.handWidths, ...r.handGlows,
+        ...r.handPhases, ...r.handLevels, ...r.kickAges, ...r.kickPowers, ...r.kickSeeds, ...r.hourRadii, ...r.hourGlows,
+        r.timeCrossing, ...r.timeCopyOffsets, r.timeCopyOpacity, r.timeGlowOpacity, r.timeGlowScale, r.timeWhite];
+    visualizer.free();
+    return out;
+}
+
 const scenarios = fs.readdirSync(fixtures).filter(f => f.endsWith(".txt")).map(f => f.slice(0, -4)).sort();
 const covered = new Set(native.map(r => r.scenario));
 const failures = scenarios.filter(s => !covered.has(s)).map(s => `${s}: no native replay`);
 let kicks = 0;
-for (const { scenario, config, settings, kicks: expected, frame } of native) {
+for (const { scenario, config, settings, kicks: expected, frame, ringSettings, ring } of native) {
     const last = lastFrame(scenario, settings);
     const at = last.findIndex((x, i) => !Object.is(x, frame[i]));
     if (last.length !== frame.length || at >= 0)
         failures.push(`${scenario} at ${config}: last frames differ at ${at}: WASM ${last[at]}, native ${frame[at]}`);
+    const lastR = lastRing(scenario, ringSettings);
+    const atR = lastR.findIndex((x, i) => !Object.is(x, ring[i]));
+    if (lastR.length !== ring.length || atR >= 0)
+        failures.push(`${scenario} at ${config}: last Lock Ring states differ at ${atR}: WASM ${lastR[atR]}, native ${ring[atR]}`);
     const got = replay(scenario, settings);
     kicks += expected.length;
     const first = got.findIndex((k, i) => !expected[i] || !Object.is(k[0], expected[i][0]) || !Object.is(k[1], expected[i][1]));
@@ -107,4 +132,4 @@ if (failures.length || !native.length) {
     console.error(`parity: WASM and native Kicks differ\n${failures.join("\n") || "no native replays"}`);
     process.exit(1);
 }
-console.log(`parity: ok, ${kicks} Kicks and the last frames identical in WASM and native over ${native.length} replays (${scenarios.length} fixtures x ${native.length / scenarios.length} configs)`);
+console.log(`parity: ok, ${kicks} Kicks, the last frames and the last Lock Ring states identical in WASM and native over ${native.length} replays (${scenarios.length} fixtures x ${native.length / scenarios.length} configs)`);
