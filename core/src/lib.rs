@@ -7,7 +7,7 @@ pub mod bar_words;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod c_abi;
 mod kick;
-mod lyric_line;
+pub mod lyric_line;
 pub mod ribbons;
 mod settings;
 #[cfg(target_arch = "wasm32")]
