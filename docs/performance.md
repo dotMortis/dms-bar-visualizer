@@ -39,14 +39,23 @@ harness/run --commit v0.10.0 --cpu-only --host lock --out $RUNS/v0.10.0/cpu/lock
 harness/run --commit v0.10.0 --host lock --out $RUNS/v0.10.0/full/lock-music-1 music              # every measure
 ```
 
-A step's row is every scenario on both hosts: at least 3 `--cpu-only` runs a cell (6 or more for `music_lyrics`) and at least 1 run with every measure (3 for `music_lyrics`), taken in turn. That is about 30 minutes. Then:
+A step's row is every scenario on both hosts, taken by `harness/row`, the driver the v0.10.0 row was taken with:
+
+```sh
+harness/row --commit v0.10.0 --out $RUNS/v0.10.0    # a step's row: 60 runs, about 30 minutes
+harness/row --out $RUNS/my-step                     # the same for this working tree
+```
+
+It makes 4 `--cpu-only` runs a cell (7 for `music_lyrics`) and 1 run with every measure (3 for `music_lyrics`), in this order: `--cpu-only` rounds 1 and 2 (each round every host and scenario in turn), the round with every measure, `--cpu-only` rounds 3 and 4, then `music_lyrics`' extra runs, each host in turn. A run that started at a 1-minute load average over 2 (`--max-load`) is set aside and run again, and so is a run `harness/run` failed (a music run that drew nothing, a capture or stand-in player gone); a locked screen stops it, and the same command resumes, skipping the runs it has. `harness/row --help` has the details. Then:
 
 ```sh
 node harness/table.mjs --runs $RUNS                 # every run with its load average, CPU and kind
 node harness/table.mjs --max-load 2 $RUNS           # the tables below, runs under a load spike left out
 ```
 
-`harness/table.mjs` reads every `result.json` under the dirs it's given, takes a row per commit, and prints the tables in the form below. Paste the new step's row into each table and name the step.
+`harness/table.mjs` reads every `result.json` under the dirs it's given, takes a row per commit (a dirty working tree's runs in a row of their own, `<sha>+dirty`), and prints the tables in the form below. Paste the new step's row into each table and name the step.
+
+The v0.10.0 row was taken with the harness of 9eab625, by the script `harness/row` was made from (the same counts, order and load rule; it also set aside any run with every measure that rendered no frame, which `harness/run` now fails itself for music). The harness's later changes can't change a number it reports: a8eaae4 and e984558 only make it refuse or fail a run (a locked screen, a music run that drew nothing), the rest add `--record`, the floor hosts and `harness/row`, move code into files of their own, build `result.json` with proper JSON escaping (adding `dirty`, and naming `frames_idle` `frames_gaps`), read `qs.log`'s times at the run's UTC offset (the same times on this machine, which logs and reads in one zone) and keep a dirty tree's runs apart in the tables. A run either harness accepts measures the same.
 
 ## Results
 
@@ -125,7 +134,16 @@ What it says, part by part:
 
 Measured on 2026-11-06, 16:47 to 16:55, on the same machine (1-minute load average 0.2 to 1.2), to see what's left once the hot path is native. Neither can be read off the v0.10.0 profiles.
 
-**Quickshell's floor.** A throwaway variant of `shell.qml` (never merged, measured with `harness/run --commit` on the `music` scenario, so with the same window, stand-ins and settings): the same window and the same `viz.frag`, redrawn at 60 fps, with no script per frame: its time and wave phase run on two `NumberAnimation`s (native), the bands are constants, and there's no Kick detector, no Lyric Words and no sink probe. The stand-in capture runs in all three; they differ only in what qs does with its lines:
+**Quickshell's floor.** A variant of `shell.qml` that's only a harness host, `harness/floor/shell.qml`, measured on the `music` scenario, so with the same window, stand-ins and settings: the same window and v0.10.0's `viz.frag`, redrawn at 60 fps, with no script per frame: its time and wave phase run on two `NumberAnimation`s (native), the bands are constants, and there's no Kick detector, no Lyric Words and no sink probe. The stand-in capture runs in all three; they differ only in what qs does with its lines (the host, which sets `BVH_FLOOR_MODE`). It was measured from a branch with it in place of `shell.qml` (`BVH_FLOOR_MODE=floor|pipe|parse harness/run --commit tmp/50-floor ...`, the branch since deleted); the same runs now:
+
+```sh
+harness/run --commit v0.10.0 --host floor --cpu-only music         # floor, 3 runs each, taken in turn
+harness/run --commit v0.10.0 --host floor-pipe --cpu-only music    # pipe
+harness/run --commit v0.10.0 --host floor-parse --cpu-only music   # parse
+harness/run --commit v0.10.0 --host floor music                    # with every measure, 1 run each
+harness/run --commit v0.10.0 --host floor-parse music
+```
+
 
 | Variant | CPU, `--cpu-only` (3 runs) | CPU with every measure on (1 run) |
 | --- | --- | --- |
@@ -136,7 +154,13 @@ Measured on 2026-11-06, 16:47 to 16:55, on the same machine (1-minute load avera
 
 The floor's GPU frame time (0.095 ms) is lower than `bar music`'s (0.91 ms): the shader's cost depends on the bands and Kicks it gets, so the floor isn't a GPU floor.
 
-**Real cava.** cava 1.0.0 with v0.10.0's settings (32 bands, 60 fps, `autosens`, `noise_reduction=8`), its own process's CPU over the same 24.05 s window after 5 s, its lines read and dropped:
+**Real cava.** cava 1.0.0 with v0.10.0's settings (32 bands, 60 fps, `autosens`, `noise_reduction=8`), its own process's CPU over the same 24.05 s window after 5 s, its lines read and dropped, by `harness/cava-cost`:
+
+```sh
+harness/cava-cost fifo                                                   # the reference track through a fifo, 3 runs
+harness/cava-cost pulse alsa_output.pci-0000_04_00.0.hdmi-stereo.monitor # an idle sink's monitor (this machine's)
+```
+
 
 | Input | cava's CPU: % of one core |
 | --- | --- |

@@ -35,9 +35,11 @@ git archive "$COMMIT" | tar -x -C "$E/tree"
 sed -n '/^<!-- brief: begin -->$/,/^<!-- brief: end -->$/{//!p}' docs/council.md > "$E/BRIEF.md"
 ```
 
-Then the results: a step's row for `--commit $COMMIT` and one for `--commit v0.10.0`, made back to back and taken in turn as [performance.md](performance.md#re-running) says, with `--out "$E/results/<commit>/<kind>/<host>-<scenario>-<n>"`. Then the tables and the recordings:
+Then the results: a step's row for the commit and one for v0.10.0, made back to back with `harness/row` ([performance.md](performance.md#re-running)), then the tables and the recordings:
 
 ```sh
+harness/row --commit "$COMMIT" --out "$E/results/$COMMIT"
+harness/row --commit v0.10.0 --out "$E/results/v0.10.0"
 node harness/table.mjs --max-load 2 "$E/results" > "$E/results/tables.md"
 harness/record --out "$E/recordings" v0.10.0 "$COMMIT"
 ```
