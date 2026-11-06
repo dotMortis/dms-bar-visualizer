@@ -63,6 +63,17 @@ describe("audio pipeline", () => {
             assert.ok(!source.includes(word), `mentions ${word}`);
     });
 
+    test("runs a replaceable capture command and parses its lines only with the shared parser", () => {
+        const source = read(PIPELINE);
+        // The command is one property, so a host can swap the capture and keep everything after it.
+        assert.match(source, /^\s*property var captureCommand:/m);
+        assert.match(source, /^\s*command: root\.captureCommand$/m);
+        assert.equal(source.match(/exec cava /g)?.length, 1, "cava is launched outside captureCommand");
+        // Its lines become bands through docs/kick.mjs, as the replay tests parse the fixtures.
+        assert.match(source, /Kick\.parseBands\(/);
+        assert.ok(!source.includes("parseInt"), "the pipeline parses cava's lines itself");
+    });
+
     test("is what the Bar Visualizer captures audio with", () => {
         assert.ok(importGraph("shell.qml").files.includes(PIPELINE));
         // The capture itself lives only in the component.

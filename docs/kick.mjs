@@ -88,6 +88,20 @@ export function bandAt(hz) {
     return best;
 }
 
+// One line of cava's raw ascii output (BANDS integers 0..1000, each followed by ";") as the bands
+// in 0..1, bass first; null for a line with fewer bands. The capture's lines are parsed only here,
+// whatever runs as the capture.
+export function parseBands(line) {
+    const parts = line.split(";");
+    // The ";" after the last band leaves an empty part, so a line one band short still has BANDS.
+    if (parts.length < BANDS || parts[BANDS - 1] === "")
+        return null;
+    const bands = new Array(BANDS);
+    for (let i = 0; i < BANDS; i++)
+        bands[i] = parseInt(parts[i], 10) / 1000;
+    return bands;
+}
+
 // A detector for config.json's kickThreshold, kickLowHz, kickHighHz and kickCooldown, and speed (1 if
 // left out), which scales kickCooldown. push(values, time) every frame, at any frame rate: the 32 bands
 // in 0..1 and when they came, in real seconds (the wall clock in the visualizer, the page clock in the

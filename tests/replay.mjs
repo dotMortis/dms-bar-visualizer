@@ -3,7 +3,7 @@
 // reporting or checking the result against a budget.
 import fs from "node:fs";
 
-import { BANDS, createKickDetector } from "../docs/kick.mjs";
+import { createKickDetector, parseBands } from "../docs/kick.mjs";
 
 // The settings the replay tests hold the detector to: the defaults, and a sensitive config.
 export const CONFIGS = {
@@ -18,17 +18,16 @@ export const FIXTURES = Object.fromEntries(SCENARIOS.map(s => [s, readFixture(s)
 export const TRACKS = SCENARIOS.filter(s => FIXTURES[s].onsets.length);
 
 // A fixture recorded by fixtures/record.py: its JSON header (scenario, about, cava, onsets, ...)
-// plus frames, [{ time, values }], parsed the way audio/AudioPipeline.qml parses cava's lines.
+// plus frames, [{ time, values }], parsed as audio/AudioPipeline.qml parses cava's lines (parseBands).
 function readFixture(scenario) {
     const text = fs.readFileSync(new URL(`fixtures/${scenario}.txt`, import.meta.url), "utf8");
     const [header, ...lines] = text.trimEnd().split("\n");
     const frames = [];
     for (const line of lines) {
         const [time, raw] = line.split(" ");
-        const parts = raw.split(";");
-        if (parts.length < BANDS)
-            continue;
-        frames.push({ time: Number(time), values: parts.slice(0, BANDS).map(p => parseInt(p, 10) / 1000) });
+        const values = parseBands(raw);
+        if (values)
+            frames.push({ time: Number(time), values });
     }
     return { ...JSON.parse(header), frames };
 }

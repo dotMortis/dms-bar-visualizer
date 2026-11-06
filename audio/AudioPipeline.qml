@@ -173,11 +173,11 @@ Scope {
         }
     }
 
-    // Light smoothing on purpose: transients should punch, not glide.
-    Process {
-        id: cava
-        running: true
-        command: ["sh", "-c", `cat <<'CAVACONF' > ${root.confPath}
+    // The capture: a command that prints one line of bands per frame, as cava's raw ascii output
+    // (docs/kick.mjs parseBands). cava, writing its config to confPath first and reading the source
+    // above; restarted whenever the source changes. Light smoothing on purpose: transients should
+    // punch, not glide.
+    property var captureCommand: ["sh", "-c", `cat <<'CAVACONF' > ${root.confPath}
 [general]
 framerate=60
 bars=${root.bandCount}
@@ -203,15 +203,16 @@ noise_reduction=8
 CAVACONF
 exec cava -p ${root.confPath} < /dev/null`]
 
+    Process {
+        id: cava
+        running: true
+        command: root.captureCommand
+
         stdout: SplitParser {
             onRead: data => {
-                const parts = data.split(";");
-                if (parts.length < root.bandCount)
-                    return;
-                const next = new Array(root.bandCount);
-                for (let i = 0; i < root.bandCount; i++)
-                    next[i] = parseInt(parts[i], 10) / 1000;
-                root.values = next;
+                const bands = Kick.parseBands(data);
+                if (bands)
+                    root.values = bands;
             }
         }
     }
