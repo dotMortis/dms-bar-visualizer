@@ -6,6 +6,7 @@ mod frame;
 mod hands;
 mod kicks;
 mod ring;
+mod words;
 
 pub use clock::*;
 pub(crate) use frame::LockRing;
@@ -13,3 +14,4 @@ pub use frame::{LockRingFrame, AT_REST};
 pub use hands::*;
 pub use kicks::*;
 pub use ring::*;
+pub use words::*;

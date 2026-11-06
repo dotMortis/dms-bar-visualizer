@@ -205,3 +205,81 @@ fn ring_frag_spells_out_no_other_copy_of_the_dial_ratio() {
         code.match_indices("0.34").filter(|(i, _)| !code[i + 4..].starts_with(|c: char| c.is_ascii_digit())).count();
     assert_eq!(copies, 1, "only in DIAL_RATIO");
 }
+
+// The Lock Ring's Lyric Words (lock_ring::word_placement) lay words on the strands and Hands as
+// ring.frag draws them, and color them as ring.frag does. ring.frag spells some of those numbers
+// out inline; these are its lines.
+mod the_lyric_words_ride_and_glow_like_ring_frags_strands_and_hands {
+    use super::*;
+    use visualizer_core::lyric_line::{HAND_COUNT, RIBBONS};
+
+    fn main() -> String {
+        let code = code();
+        code[code.find("void main()").unwrap()..].to_owned()
+    }
+
+    #[test]
+    fn the_ribbons_are_the_strands_ring_frag_draws_and_the_hands_its_hands() {
+        let main = main();
+        let ribbon = &main[main.find("vec3 ribbon = vec3(0.0);").expect("ring.frag's ribbon")..];
+        assert!(ribbon.contains(&format!("for (int k = 0; k < {RIBBONS}; k++)")), "{RIBBONS} strands");
+        assert_eq!(HAND_COUNT, HANDS.len());
+    }
+
+    #[test]
+    fn catppuccins_colors_are_ring_frags() {
+        let code = code();
+        for (name, color) in [("LAVENDER", RING_LAVENDER), ("MAUVE", RING_MAUVE), ("PINK", RING_PINK), ("BLUE", RING_BLUE)] {
+            let line = code
+                .lines()
+                .find(|l| l.split_whitespace().take(3).eq(["const", "vec3", name]))
+                .unwrap_or_else(|| panic!("{name}"));
+            let values = &line[line.find('(').unwrap() + 1..line.find(')').unwrap()];
+            for (v, c) in values.split(',').zip(color) {
+                let v: f64 = v.trim().parse().unwrap();
+                assert!((v - c as f64 / 255.0).abs() < 0.002, "{name}: {v} vs {c}");
+            }
+        }
+    }
+
+    #[test]
+    fn palette_cycles_through_ring_palette_and_the_strands_and_hands_deepen_it_by_saturation() {
+        let code = code();
+        let name = |c: [u8; 3]| match c {
+            RING_LAVENDER => "LAVENDER",
+            RING_MAUVE => "MAUVE",
+            RING_PINK => "PINK",
+            RING_BLUE => "BLUE",
+            _ => panic!("{c:?}"),
+        };
+        let cycle: Vec<&str> = RING_PALETTE.iter().map(|&c| name(c)).collect();
+        assert!(code.contains(&format!("vec3 c[7] = vec3[7]({});", cycle.join(", "))));
+        assert!(main().contains(&format!("+ level * {RIBBON_HUE_LEVEL}, {SATURATION}, 1.0);")));
+        assert!(code.contains(&format!("pow(color, vec3(1.0 + 1.5 * {SATURATION}))")));
+    }
+
+    #[test]
+    fn a_ribbons_level_and_hue() {
+        let main = main();
+        assert!(main.contains(&format!(
+            "float music = {RIBBON_MUSIC_GAIN} * ribbonSpectrum(s) * (1.0 + {RIBBON_MUSIC_KICK} * ubuf.kick);"
+        )));
+        assert!(main.contains(&format!("float hueBase = t * {RIBBON_HUE_TIME} + s * {RIBBON_HUE_SPECTRUM};")));
+        assert!(main.contains(&format!(
+            "pal(hueBase + fk * {RIBBON_HUE_RIBBON} + s * {RIBBON_HUE_ALONG} + level * {RIBBON_HUE_LEVEL}, "
+        )));
+    }
+
+    #[test]
+    fn each_hands_color_and_its_main_strands_phase() {
+        let (main, code) = (main(), code());
+        let names = ["LAVENDER", "MAUVE", "PINK"];
+        for (i, axis) in ["x", "y", "z"].iter().enumerate() {
+            assert_eq!(HAND_COLORS[i], [RING_LAVENDER, RING_MAUVE, RING_PINK][i]);
+            let call = format!("hand(q, {i}.0, ubuf.handAngle.{axis},");
+            let line = main[main.find(&call).unwrap_or_else(|| panic!("{call}"))..].lines().next().unwrap().to_owned();
+            assert!(line.ends_with(&format!(", {});", names[i])), "{line}");
+        }
+        assert!(code.contains(&format!("float phase = wave * (1.0 + 0.5 * fk) + fk * 2.1 + index * {HAND_PHASE};")));
+    }
+}
