@@ -1,8 +1,8 @@
 /* The core's C ABI (core/src/c_abi.rs): one Visualizer per visualizer instance.
  *
  * Every call is total: a null Visualizer, a null or short buffer, or settings that aren't UTF-8
- * JSON are ignored. No call unwinds into the caller. visualizer_push_bands, visualizer_advance and
- * visualizer_frame never allocate.
+ * JSON are ignored. No call unwinds into the caller. visualizer_push_bands, visualizer_advance,
+ * visualizer_set_player and visualizer_frame never allocate.
  *
  * Link against libvisualizer_core.a (or .so) from `cargo build --release` in core/; the static
  * library also needs -lpthread -ldl -lm on Linux. */

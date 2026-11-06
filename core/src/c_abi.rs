@@ -3,7 +3,7 @@
 //!
 //! Every call is total. A null Visualizer, a null or short buffer, or text that isn't UTF-8 is
 //! ignored, and a panic, should one ever happen, is caught here instead of unwinding into the
-//! caller (which would abort DMS). push_bands, advance and frame never allocate.
+//! caller (which would abort DMS). push_bands, advance, set_player and frame never allocate.
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr;
