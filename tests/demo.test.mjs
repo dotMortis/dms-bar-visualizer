@@ -5,7 +5,8 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import { DEFAULTS, parseConfig } from "../docs/config.mjs";
-import { defaults, ringSide, setValueAt, slidersFor, valueAt, viewFromHash } from "../docs/demo.mjs";
+import { BANDS, HIGH_HZ, LOW_HZ, coreSettings, defaults, ringSide, setValueAt, slidersFor, valueAt, viewFromHash }
+    from "../docs/demo.mjs";
 
 const keys = view => slidersFor(view).map(s => s.key);
 
@@ -81,5 +82,31 @@ describe("ring size in the demo", () => {
 
     test("and stays inside a narrow page", () => {
         assert.equal(ringSide(0.8, 400, 1080), 376);
+    });
+});
+
+// The page hands the core (docs/wasm/, src/wasm.rs) config.json's text for the view it shows.
+describe("the core's settings in the demo", () => {
+    test("the bar view runs on the sliders' values as they are", () => {
+        const values = defaults();
+        setValueAt(values, "kickThreshold", 0.3);
+        assert.deepEqual(JSON.parse(coreSettings(values, "bar")), values);
+    });
+
+    test("the ring view runs on them with the Lock Ring's percentages applied", () => {
+        const values = defaults();
+        setValueAt(values, "lockRing.kickThresholdPercent", 50);
+        setValueAt(values, "lockRing.kickHighHzPercent", 200);
+        const ring = JSON.parse(coreSettings(values, "ring"));
+        assert.equal(ring.kickThreshold, 0.2);
+        assert.equal(ring.kickHighHz, 180);
+        assert.equal(ring.kickLowHz, 20);
+        assert.equal(ring.kickDecay, 6);
+    });
+});
+
+describe("the demo's bands", () => {
+    test("are laid out as cava's: 32 from 30 Hz to 14 kHz", () => {
+        assert.deepEqual({ BANDS, LOW_HZ, HIGH_HZ }, { BANDS: 32, LOW_HZ: 30, HIGH_HZ: 14000 });
     });
 });
