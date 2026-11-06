@@ -3,12 +3,16 @@
 //!
 //! Every call is total. A null Visualizer, a null or short buffer, or text that isn't UTF-8 is
 //! ignored, and a panic, should one ever happen, is caught here instead of unwinding into the
-//! caller (which would abort DMS). push_bands, advance, set_player and frame never allocate.
+//! caller (which would abort DMS). push_bands, advance, set_player and frame never allocate, nor do
+//! the Lyric Words' set_position, set_bar_size and glyphs (c_abi/lyrics.rs).
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr;
 
 use crate::{Frame, Player, Visualizer};
+
+mod lyrics;
+pub use lyrics::*;
 
 /// Runs `body`, or gives `fallback` if it panics.
 fn guarded<T>(fallback: T, body: impl FnOnce() -> T) -> T {

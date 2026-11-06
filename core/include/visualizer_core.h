@@ -2,7 +2,8 @@
  *
  * Every call is total: a null Visualizer, a null or short buffer, or settings that aren't UTF-8
  * JSON are ignored. No call unwinds into the caller. visualizer_push_bands, visualizer_advance,
- * visualizer_set_player and visualizer_frame never allocate.
+ * visualizer_set_player, visualizer_frame, visualizer_set_position, visualizer_set_bar_size and
+ * visualizer_glyphs never allocate.
  *
  * Link against libvisualizer_core.a (or .so) from `cargo build --release` in core/; the static
  * library also needs -lpthread -ldl -lm on Linux. */
@@ -89,6 +90,76 @@ void visualizer_set_player(Visualizer *visualizer, uint32_t player);
 /* Everything to draw, owned by the Visualizer: valid until the next call on it. Null for a null
  * Visualizer. */
 const VisualizerFrame *visualizer_frame(const Visualizer *visualizer);
+
+/* ---- Lyric Words (core/src/bar_lyrics.rs, core/src/c_abi/lyrics.rs) ---------------------------
+ * The Active Player's track, timed lyrics and playback position in; the Lyric Words shown out, as
+ * glyph instances, one per letter, laid out on the bar. The core loads no fonts: letter advances
+ * come in as data. */
+
+/* One of a word's split copies, drawn behind it as a Shockwave crosses it: its color (r, g, b
+ * 0..1), how far it's pushed along the bar in pixels (outward, away from the bar's center) and its
+ * opacity, under the glyph's own. */
+typedef struct VisualizerGlyphCopy {
+    double color[3];
+    double dx;
+    double opacity;
+} VisualizerGlyphCopy;
+
+/* One letter of a Lyric Word shown. Laid out as core/src/glyph.rs's Glyph: change both. Every
+ * field is a double (VISUALIZER_GLYPH_FIELDS of them). */
+#define VISUALIZER_GLYPH_FIELDS 35
+typedef struct VisualizerGlyph {
+    /* The letter: its Unicode code point. */
+    double letter;
+    /* Which word it belongs to, counting the words shown from 0: a word's glyphs come together, in
+     * its letters' order, and every letter of a word has the same look. */
+    double word;
+    /* Its middle, in pixels from the bar's top left, tilted angle degrees clockwise. */
+    double x, y, angle;
+    /* The word's size (1 = a settled lead vocal's), scaled around its middle (pivot). */
+    double scale, pivot_x, pivot_y;
+    /* Its glow's color, the Ribbon's there (r, g, b 0..1), and its bright core's. */
+    double color[3];
+    double core[3];
+    /* Its opacity, 0..1. */
+    double opacity;
+    /* Its glow's strength (take at most 1 as its opacity) and how far it spreads beyond the
+     * letter (a scale, 1 = the letter's own size). */
+    double glow, glow_spread;
+    /* How far it has blurred out as its line dissolves, 0..1 of the glow's radius. */
+    double blur;
+    /* How far toward white it flashes, 0..1 (in core already). */
+    double white;
+    /* The letters' size in pixels: the glow's radius is 0.45 of it, the copies' blur 0.08. */
+    double em;
+    /* Its split, in the Shockwave's colors. */
+    VisualizerGlyphCopy copies[3];
+} VisualizerGlyph;
+
+/* Seeds where the Lyric Words land, for repeatable placement (the default is 1). */
+void visualizer_set_seed(Visualizer *visualizer, uint32_t seed);
+/* The Active Player's track: len bytes of UTF-8, any identity, and its length in seconds (0:
+ * unknown). A new identity drops the lyrics and clears the words. */
+void visualizer_set_track(Visualizer *visualizer, const char *id, size_t len, double length);
+/* The track's lyrics: len bytes of UTF-8 JSON, DMS's lyrics.get result ({found, synced, plain,
+ * instrumental}), its lyrics controller's {state, synced}, or the synced lines alone. Only synced
+ * lyrics show. The same Lyric Lines again keep the words shown. May allocate. */
+void visualizer_set_lyrics(Visualizer *visualizer, const char *json, size_t len);
+/* A playback position reading, now: the song time in seconds and the playback rate (1 = normal).
+ * It runs on from there at that rate on the display frames' clock while the player plays
+ * (visualizer_set_player); a reading more than a second off is a seek, which clears the words. */
+void visualizer_set_position(Visualizer *visualizer, double time, double rate);
+/* The bar's size in pixels, which the glyphs are laid out on; no glyphs until it's set. */
+void visualizer_set_bar_size(Visualizer *visualizer, double width, double height);
+/* The font's measures in ems (shares of its pixel size): len bytes of UTF-8 letters, count
+ * advances, one per letter in order, and the line height. Measure the lyrics' letters at any size
+ * and divide; a letter not given is 0.5 em wide. May allocate. */
+void visualizer_set_letters(Visualizer *visualizer, const char *letters, size_t len, const double *advances,
+                            size_t count, double line_height);
+/* The Lyric Words shown, as glyph instances, as of the last visualizer_advance: *count of them,
+ * owned by the Visualizer, valid until the next call on it. Null (and *count 0) when there are
+ * none; null for a null Visualizer or count. */
+const VisualizerGlyph *visualizer_glyphs(const Visualizer *visualizer, size_t *count);
 
 #ifdef __cplusplus
 }

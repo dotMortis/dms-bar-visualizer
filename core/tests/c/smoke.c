@@ -1,5 +1,5 @@
 /* The C ABI end to end, from C: a Kick fires on a bass hit, lands in its slot and fades as display
- * frames pass; the player and the Silence case.
+ * frames pass; the player and the Silence case; a line of Lyric Words as glyph instances.
  * Built and run by tests/c_smoke.rs; prints the frame's layout for it to check against Rust's. */
 #include <math.h>
 #include <stddef.h>
@@ -15,6 +15,48 @@
             return 1;                                                          \
         }                                                                      \
     } while (0)
+
+/* The Lyric Words: a line sung on an 800 x 40 bar, its letters glyph instances. */
+static int lyrics(void) {
+    printf("glyph size %zu x %zu color %zu core %zu opacity %zu em %zu copies %zu copy %zu dx %zu\n",
+           sizeof(VisualizerGlyph), offsetof(VisualizerGlyph, x), offsetof(VisualizerGlyph, color),
+           offsetof(VisualizerGlyph, core), offsetof(VisualizerGlyph, opacity), offsetof(VisualizerGlyph, em),
+           offsetof(VisualizerGlyph, copies), sizeof(VisualizerGlyphCopy), offsetof(VisualizerGlyphCopy, dx));
+    CHECK(sizeof(VisualizerGlyph) == VISUALIZER_GLYPH_FIELDS * sizeof(double));
+
+    size_t count = 7;
+    CHECK(visualizer_glyphs(NULL, &count) == NULL && count == 0);
+
+    Visualizer *v = visualizer_create();
+    visualizer_set_bar_size(v, 800.0, 40.0);
+    const double advances[] = {0.5, 0.25};
+    visualizer_set_letters(v, "ab", 2, advances, 2, 1.2);
+    visualizer_set_seed(v, 3);
+    visualizer_set_track(v, "track", 5, 60.0);
+    const char *song = "{\"found\": true, \"synced\": [{\"t\": 1, \"e\": 3, \"x\": \"ab ba\"}]}";
+    visualizer_set_lyrics(v, song, strlen(song));
+    visualizer_set_player(v, VISUALIZER_PLAYER_PLAYING);
+    visualizer_set_position(v, 0.0, 1.0);
+
+    /* At 2 s "ab" has popped in; "ba" has only just started, not visible yet. */
+    visualizer_advance(v, 2.0);
+    const VisualizerGlyph *glyphs = visualizer_glyphs(v, &count);
+    CHECK(count == 2 && glyphs != NULL);
+    CHECK(glyphs[0].letter == 'a' && glyphs[1].letter == 'b');
+    CHECK(glyphs[0].word == 0.0 && glyphs[1].word == 0.0);
+    CHECK(glyphs[0].em == 32.0);
+    /* Side by side, the letters 16 and 8 px wide, along the middle of a quiet bar. */
+    CHECK(fabs(glyphs[1].x - glyphs[0].x - 12.0) < 1e-9);
+    CHECK(fabs(glyphs[0].y - 20.0) < 1e-9);
+    CHECK(glyphs[0].opacity == 1.0 && glyphs[0].scale == 1.0);
+    CHECK(visualizer_frame(v)->animating);
+
+    /* Long after the line: gone. */
+    visualizer_advance(v, 10.0);
+    CHECK(visualizer_glyphs(v, &count) == NULL && count == 0);
+    visualizer_destroy(v);
+    return 0;
+}
 
 int main(void) {
     printf("size %zu time %zu flow %zu kick_ages %zu kick_powers %zu kick_seeds %zu intensity %zu "
@@ -78,6 +120,7 @@ int main(void) {
     CHECK(visualizer_frame(v)->bass == 0.0);
 
     visualizer_destroy(v);
+    if (lyrics() != 0) return 1;
     puts("ok");
     return 0;
 }

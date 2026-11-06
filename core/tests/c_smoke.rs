@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use visualizer_core::Frame;
+use visualizer_core::{Frame, Glyph, GlyphCopy};
 
 /// Where cargo put this build's libraries, built with the rlib this test links: next to the test
 /// binary, in <target>/<profile>/deps.
@@ -50,5 +50,18 @@ fn a_c_program_drives_the_visualizer_through_the_header() {
         offset_of!(Frame, animating)
     );
     assert_eq!(out.lines().next(), Some(layout.as_str()));
+    let glyph = format!(
+        "glyph size {} x {} color {} core {} opacity {} em {} copies {} copy {} dx {}",
+        size_of::<Glyph>(),
+        offset_of!(Glyph, x),
+        offset_of!(Glyph, color),
+        offset_of!(Glyph, core),
+        offset_of!(Glyph, opacity),
+        offset_of!(Glyph, em),
+        offset_of!(Glyph, copies),
+        size_of::<GlyphCopy>(),
+        offset_of!(GlyphCopy, dx)
+    );
+    assert_eq!(out.lines().find(|l| l.starts_with("glyph ")), Some(glyph.as_str()));
     assert_eq!(out.lines().last(), Some("ok"));
 }

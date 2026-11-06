@@ -350,6 +350,34 @@ mod c_abi {
     }
 
     #[test]
+    fn the_lyric_words_never_allocate_after_set_lyrics() {
+        let frames = &fixture("zoo1").frames;
+        let (song, letters) = (super::song(), "abcdefghijklmnopqrstuvwxyz");
+        unsafe {
+            let visualizer = visualizer_create();
+            visualizer_set_letters(visualizer, letters.as_ptr(), letters.len(), [0.5; 26].as_ptr(), 26, 1.2);
+            visualizer_set_track(visualizer, "song".as_ptr(), 4, 45.0);
+            visualizer_set_lyrics(visualizer, song.as_ptr(), song.len());
+            let mut most = 0;
+            let n = allocations(|| {
+                visualizer_set_bar_size(visualizer, 800.0, 40.0);
+                visualizer_set_player(visualizer, 2);
+                visualizer_set_position(visualizer, 28.0, 1.0);
+                for f in frames {
+                    visualizer_push_bands(visualizer, f.values.as_ptr(), f.values.len(), f.time);
+                    visualizer_advance(visualizer, 1.0 / 60.0);
+                    let mut count = 0;
+                    std::hint::black_box(visualizer_glyphs(visualizer, &mut count));
+                    most = most.max(count);
+                }
+            });
+            visualizer_destroy(visualizer);
+            assert_eq!(n, 0, "allocations per {} frames", frames.len());
+            assert!(most > 100, "the words did show: {most} glyphs");
+        }
+    }
+
+    #[test]
     fn null_pointers_short_buffers_and_broken_text_are_ignored() {
         let bands = [0.5; BANDS];
         unsafe {
