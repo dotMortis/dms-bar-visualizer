@@ -78,6 +78,9 @@ typedef struct VisualizerFrame {
 #define VISUALIZER_KIND_BAR 0
 #define VISUALIZER_KIND_LOCK_RING 1
 
+/* How often to draw the Lock Ring while its VisualizerLockRing says slow, frames per second. */
+#define VISUALIZER_SILENCE_FPS 10
+
 /* How many Hour Points ride the Lock Ring's ribbon: one every 30 degrees from 12 o'clock. */
 #define VISUALIZER_HOUR_POINTS 12
 
@@ -128,6 +131,12 @@ typedef struct VisualizerLockRing {
     /* How brightly a Shockwave's front is crossing the Digital Time, 0..1, and its look. */
     double time_crossing;
     VisualizerTimeHit time_hit;
+    /* Whether to draw the Lock Ring at VISUALIZER_SILENCE_FPS rather than every frame: in Silence,
+     * once the music has played out on it (the Ribbons faded, the Dial no longer swollen, the Kick
+     * level faded, every Shockwave played out, no Lyric Word popping in or dissolving while the
+     * song plays). Meanwhile the frame is the music at rest: no bands, no Kicks, its flow held;
+     * the clock and the Hands run on. The first sound, or a Kick, ends it at once. */
+    bool slow;
 } VisualizerLockRing;
 
 /* A new Visualizer on the default settings, for visualizer_destroy; null only if it couldn't be

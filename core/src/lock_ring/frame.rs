@@ -7,8 +7,13 @@ use super::*;
 use crate::{Frame, KICK_SLOTS};
 
 /// How close to nothing the ring's swell and presence have to be for the ring to have settled
-/// (lock-ring/pace.mjs AT_REST): until then the Lock Ring is still animating.
+/// (lock-ring/pace.mjs AT_REST): until then the Lock Ring is still animating. For it to draw slowly
+/// in Silence, the Kick level too.
 pub const AT_REST: f64 = 0.01;
+/// How often the Lock Ring draws in Silence once the music has played out on it
+/// (`LockRingFrame::slow`), frames per second. Its calm wave drifts and breathes slowly (IDLE_*), so
+/// this still looks smooth; the second Hand steps by 0.6 degrees a frame.
+pub const SILENCE_FPS: f64 = 10.0;
 
 /// The Lock Ring's state, as of the last call. Laid out as C's `VisualizerLockRing`
 /// (include/visualizer_core.h): change both together. The Hands are in HANDS' order (hour, minute,
@@ -50,6 +55,12 @@ pub struct LockRingFrame {
     /// 0..1, and the look that gives it.
     pub time_crossing: f64,
     pub time_hit: TimeHit,
+    /// Whether the Lock Ring draws at SILENCE_FPS rather than every frame: in Silence, once the
+    /// music has played out on it (the Ribbons faded, the Dial no longer swollen, the Kick level
+    /// faded, every Shockwave played out, no Lyric Word popping in or dissolving while the song
+    /// plays). Meanwhile the frame is the music at rest: no bands, no Kicks, the wave's phase
+    /// (flow) held; the clock and the Hands run on. The first sound ends it at once, as does a Kick.
+    pub slow: bool,
 }
 
 impl Default for LockRingFrame {
@@ -73,6 +84,7 @@ impl Default for LockRingFrame {
             hour_glows: [0.0; HOUR_POINTS],
             time_crossing: 0.0,
             time_hit: time_hit(0.0),
+            slow: false,
         }
     }
 }
@@ -142,6 +154,12 @@ impl LockRing {
         }
         out.time_crossing = shockwave_crossing(TIME_RADIUS, ages, powers, seeds, Some(PI));
         out.time_hit = time_hit(out.time_crossing);
+    }
+
+    /// Whether the music has played out on the ring, as of the last update: the Ribbons faded, the
+    /// Dial no longer swollen, the Kick level (`kick`) below AT_REST and every Shockwave played out.
+    pub fn at_rest(&self, kick: f64) -> bool {
+        !self.settling() && kick < AT_REST && self.frame.kick_powers.iter().all(|&p| p == 0.0)
     }
 
     /// Whether the ring itself still moves without sound: its swell or presence not yet settled.

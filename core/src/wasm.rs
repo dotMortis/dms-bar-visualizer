@@ -29,8 +29,11 @@
 //! const { swell, presence, handFlash, handAngles, handInner, handLengths, handAmplitudes,
 //!         handWidths, handGlows, handPhases, handLevels, kickAges, kickPowers, kickSeeds,
 //!         hourRadii, hourGlows, timeCrossing, timeCopyOffsets, timeCopyOpacity, timeGlowOpacity,
-//!         timeGlowScale, timeWhite } = visualizer.lockRing();
+//!         timeGlowScale, timeWhite, slow } = visualizer.lockRing();
 //! ```
+//!
+//! `slow` (a boolean): in Silence, once the music has played out on the Lock Ring, draw it at
+//! `Visualizer.silenceFps()` frames a second rather than every frame (Visualizer::lock_ring).
 //!
 //! `lockRing()`, like `frame()`, hands out the same object every call, updated in place.
 //!
@@ -44,7 +47,7 @@
 use js_sys::{Float64Array, Object, Reflect};
 use wasm_bindgen::prelude::*;
 
-use crate::lock_ring::HOUR_POINTS;
+use crate::lock_ring::{HOUR_POINTS, SILENCE_FPS};
 use crate::{Frame, Kind, LockRingFrame, Player, Visualizer, BANDS, GLYPH_FIELDS, KICK_SLOTS};
 
 /// The frame's number fields, in the order `numbers()` gives them.
@@ -152,6 +155,7 @@ struct LockRingObject {
     object: Object,
     arrays: [Float64Array; RING_ARRAYS.len()],
     keys: [JsValue; RING_NUMBERS.len()],
+    slow_key: JsValue,
 }
 
 impl LockRingObject {
@@ -161,6 +165,7 @@ impl LockRingObject {
             arrays: RING_ARRAYS.map(|(key, length)| array(&object, key, length)),
             object,
             keys: RING_NUMBERS.map(JsValue::from_str),
+            slow_key: JsValue::from_str("slow"),
         }
     }
 
@@ -190,6 +195,7 @@ impl LockRingObject {
         for (array, values) in self.arrays.iter().zip(arrays) {
             array.copy_from(values);
         }
+        let _ = Reflect::set(&self.object, &self.slow_key, &JsValue::from_bool(r.slow));
         self.object.clone()
     }
 }
@@ -259,6 +265,12 @@ impl WasmVisualizer {
     #[wasm_bindgen(js_name = setLocalTime)]
     pub fn set_local_time(&mut self, seconds: f64) {
         self.visualizer.set_local_time(seconds);
+    }
+
+    /// How often the Lock Ring draws while its state says `slow`, frames per second (SILENCE_FPS).
+    #[wasm_bindgen(js_name = silenceFps)]
+    pub fn silence_fps() -> f64 {
+        SILENCE_FPS
     }
 
     /// The Lock Ring's state: the same object every call, updated in place. See

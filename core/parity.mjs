@@ -98,11 +98,23 @@ function lastRing(scenario, settings) {
         visualizer.pushBands(values, time);
         visualizer.advance(1 / 60);
     });
-    const f = visualizer.frame(), r = visualizer.lockRing();
-    const out = [f.intensity, f.kickCount, r.swell, r.presence, r.handFlash,
-        ...r.handAngles, ...r.handInner, ...r.handLengths, ...r.handAmplitudes, ...r.handWidths, ...r.handGlows,
-        ...r.handPhases, ...r.handLevels, ...r.kickAges, ...r.kickPowers, ...r.kickSeeds, ...r.hourRadii, ...r.hourGlows,
-        r.timeCrossing, ...r.timeCopyOffsets, r.timeCopyOpacity, r.timeGlowOpacity, r.timeGlowScale, r.timeWhite];
+    const state = () => {
+        const f = visualizer.frame(), r = visualizer.lockRing();
+        return [f.intensity, f.kickCount, r.swell, r.presence, r.handFlash,
+            ...r.handAngles, ...r.handInner, ...r.handLengths, ...r.handAmplitudes, ...r.handWidths, ...r.handGlows,
+            ...r.handPhases, ...r.handLevels, ...r.kickAges, ...r.kickPowers, ...r.kickSeeds, ...r.hourRadii,
+            ...r.hourGlows, r.timeCrossing, ...r.timeCopyOffsets, r.timeCopyOpacity, r.timeGlowOpacity,
+            r.timeGlowScale, r.timeWhite, r.slow ? 1 : 0];
+    };
+    const out = state();
+    // Then paused for 4 s: by then it draws slowly, the frame the music at rest.
+    visualizer.setPlayer("paused");
+    for (let i = 0; i < 240; i++) {
+        visualizer.setLocalTime(37000 + i / 60);
+        visualizer.advance(1 / 60);
+    }
+    const f = visualizer.frame();
+    out.push(...state(), f.time, f.flow, f.kick, f.bass);
     visualizer.free();
     return out;
 }
@@ -179,4 +191,4 @@ if (failures.length || !native.length) {
     console.error(`parity: WASM and native Kicks differ\n${failures.join("\n") || "no native replays"}`);
     process.exit(1);
 }
-console.log(`parity: ok, ${kicks} Kicks, the last frames and the last Lock Ring states, and ${glyphs.bar} bar and ${glyphs["lock-ring"]} Lock Ring glyphs over ${snapshots.bar} snapshots each, identical in WASM and native over ${native.length} replays (${scenarios.length} fixtures x ${native.length / scenarios.length} configs)`);
+console.log(`parity: ok, ${kicks} Kicks, the last frames and the last Lock Ring states (playing, then slow after 4 s paused), and ${glyphs.bar} bar and ${glyphs["lock-ring"]} Lock Ring glyphs over ${snapshots.bar} snapshots each, identical in WASM and native over ${native.length} replays (${scenarios.length} fixtures x ${native.length / scenarios.length} configs)`);

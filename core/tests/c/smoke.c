@@ -128,12 +128,12 @@ int main(void) {
 
     /* The Lock Ring kind: its percentages, its Hands on the local time, its state after a Kick. */
     printf("lock_ring size %zu hand_flash %zu hand_angles %zu hand_levels %zu kick_ages %zu hour_radii %zu "
-           "hour_glows %zu time_crossing %zu time_hit %zu white %zu\n",
+           "hour_glows %zu time_crossing %zu time_hit %zu white %zu slow %zu\n",
            sizeof(VisualizerLockRing), offsetof(VisualizerLockRing, hand_flash),
            offsetof(VisualizerLockRing, hand_angles), offsetof(VisualizerLockRing, hand_levels),
            offsetof(VisualizerLockRing, kick_ages), offsetof(VisualizerLockRing, hour_radii),
            offsetof(VisualizerLockRing, hour_glows), offsetof(VisualizerLockRing, time_crossing),
-           offsetof(VisualizerLockRing, time_hit), offsetof(VisualizerLockRing, time_hit.white));
+           offsetof(VisualizerLockRing, time_hit), offsetof(VisualizerLockRing, time_hit.white), offsetof(VisualizerLockRing, slow));
     CHECK(visualizer_lock_ring(NULL) == NULL);
     Visualizer *ring = visualizer_create();
     const char *ring_settings = "{\"lockRing\": {\"intensityPercent\": 150}}";

@@ -54,6 +54,7 @@ fn ring_flat(intensity: f64, kick_count: u32, r: &LockRingFrame) -> Vec<f64> {
     let h = &r.time_hit;
     out.extend(h.copy_offsets);
     out.extend([h.copy_opacity, h.glow_opacity, h.glow_scale, h.white]);
+    out.push(r.slow as u8 as f64);
     out
 }
 
@@ -71,7 +72,17 @@ fn last_ring(frames: &[Bands], settings: &str) -> Vec<f64> {
         visualizer.advance(1.0 / 60.0);
     }
     let f = visualizer.frame();
-    ring_flat(f.intensity, f.kick_count, &visualizer.lock_ring())
+    let mut out = ring_flat(f.intensity, f.kick_count, &visualizer.lock_ring());
+    // Then paused for 4 s: by then it draws slowly, the frame the music at rest.
+    visualizer.set_player(Player::Paused);
+    for i in 0..240 {
+        visualizer.set_local_time(37000.0 + i as f64 / 60.0);
+        visualizer.advance(1.0 / 60.0);
+    }
+    let f = visualizer.frame();
+    out.extend(ring_flat(f.intensity, f.kick_count, &visualizer.lock_ring()));
+    out.extend([f.time, f.flow, f.kick, f.bass]);
+    out
 }
 
 fn numbers(xs: &[f64]) -> String {

@@ -224,6 +224,7 @@ impl Visualizer {
     /// that kind on the settings last configured; the running state carries over.
     pub fn set_kind(&mut self, kind: Kind) {
         self.kind = kind;
+        self.lock_ring.frame.slow = false;
         self.lyrics.set_kind(kind);
         self.apply_settings();
     }
@@ -271,7 +272,11 @@ impl Visualizer {
             self.frame.kick_seeds[slot] = self.kick_seed as f64;
             self.frame.kick_ages[slot] = 0.0;
             self.lyrics.kick(power, self.seconds);
+            self.lock_ring.frame.slow = false;
             self.update_animating();
+        }
+        if self.lock_ring.frame.slow {
+            self.rest_music();
         }
         self.update_lock_ring();
     }
@@ -297,7 +302,39 @@ impl Visualizer {
         }
         self.update_lock_ring();
         self.lyrics.advance(self.seconds, &self.frame, &self.lock_ring);
+        self.update_pace();
         self.update_animating();
+    }
+
+    /// Whether the Lock Ring draws slowly from here (lock-ring/pace.mjs): in Silence, once the music
+    /// has played out on it. Paused or without a player, the words stand still with the song, so
+    /// shown ones don't hold it then. While it does, the frame is the music at rest.
+    fn update_pace(&mut self) {
+        if self.kind != Kind::LockRing {
+            return;
+        }
+        let silence = self.frame.silence;
+        let song_stopped = matches!(silence, Silence::Paused | Silence::NoPlayer);
+        let words_moving = !song_stopped && self.lyrics.moving();
+        let rested = self.lock_ring.at_rest(self.frame.kick) && !words_moving;
+        self.lock_ring.frame.slow = silence != Silence::None && rested;
+        if self.lock_ring.frame.slow {
+            self.rest_music();
+            self.update_lock_ring();
+        }
+    }
+
+    /// The music at rest, in place of what the capture still gives below the Silence threshold:
+    /// no bands, no Kick level, no Kicks (every one has played out by then), and, as bass, mid
+    /// and the Kick level are 0, the wave's phase held.
+    fn rest_music(&mut self) {
+        let f = &mut self.frame;
+        f.bands = [0.0; BANDS];
+        (f.bass, f.mid, f.treble, f.kick) = (0.0, 0.0, 0.0, 0.0);
+        self.kick_times = [EMPTY_SLOT; KICK_SLOTS];
+        f.kick_ages = [self.clock - EMPTY_SLOT; KICK_SLOTS];
+        f.kick_powers = [0.0; KICK_SLOTS];
+        f.kick_seeds = [0.0; KICK_SLOTS];
     }
 
     /// The Active Player: none, paused or playing. While it doesn't play, nothing is captured (as
@@ -348,6 +385,9 @@ impl Visualizer {
             Player::Playing if self.seconds - self.sound_at >= SILENCE_HOLD => Silence::Silent,
             Player::Playing => Silence::None,
         };
+        if self.frame.silence == Silence::None {
+            self.lock_ring.frame.slow = false;
+        }
     }
 
     /// Everything to draw.
@@ -361,7 +401,8 @@ impl Visualizer {
     }
 
     /// The Lock Ring's own state, on top of the frame: its motion (the Dial's swell, the Ribbons'
-    /// presence), Hands, Hour Points, Digital Time and the shader's Kick slots. Kept only while the kind is the Lock Ring.
+    /// presence), Hands, Hour Points, Digital Time, the shader's Kick slots, and whether to draw it
+    /// slowly (`slow`, at lock_ring::SILENCE_FPS) in Silence. Kept only while the kind is the Lock Ring.
     pub fn lock_ring(&self) -> LockRingFrame {
         self.lock_ring.frame
     }

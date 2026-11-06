@@ -140,6 +140,11 @@ impl LyricWords {
         self.line.animating(now)
     }
 
+    /// Whether a shown word still moves on its own: popping in, or its line dissolving.
+    pub fn moving(&self) -> bool {
+        self.line.words().iter().any(|w| w.pop_in < 1.0 || w.dissolve > 0.0)
+    }
+
     /// Room for the most letters the lyrics can show at once, in either kind.
     fn make_room(&mut self) {
         let most = self.line.most_letters();
