@@ -1,0 +1,87 @@
+// The parity check (spec #41): the WASM build must fire exactly the same Kicks, at the same times
+// with the same powers, as the native build, on every recorded fixture at both replay configs, so
+// the demo can't drift from what runs on the desktop.
+//
+//     node core/parity.mjs
+//
+// Builds the WASM (core/build-wasm.sh, into core/target/wasm-web) and the native replay
+// (examples/kicks.rs), replays tests/fixtures through both and compares bit for bit. Needs the
+// wasm32-unknown-unknown target and the matching wasm-bindgen CLI (see core/build-wasm.sh).
+import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const core = path.dirname(fileURLToPath(import.meta.url));
+const fixtures = path.join(core, "../tests/fixtures");
+const pkg = path.join(core, "target/wasm-web");
+const BANDS = 32;
+
+function run(cmd, args) {
+    try {
+        return execFileSync(cmd, args, { cwd: core, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"], maxBuffer: 1 << 28 });
+    } catch (e) {
+        console.error(`parity: ${path.basename(cmd)} ${args.join(" ")} failed (${e.status ?? e.code})`);
+        process.exit(2);
+    }
+}
+
+run(path.join(core, "build-wasm.sh"), [pkg]);
+// One line per scenario and config: {scenario, config, settings, kicks: [[time, power], ...]}.
+const native = run("cargo", ["run", "--quiet", "--release", "--example", "kicks"])
+    .trimEnd().split("\n").map(line => JSON.parse(line));
+
+const { initSync, Visualizer } = await import(path.join(pkg, "visualizer_core.js"));
+initSync({ module: fs.readFileSync(path.join(pkg, "visualizer_core_bg.wasm")) });
+
+// A recording's frames as the core's tests read them (core/tests/common/mod.rs): "<time> <cava
+// raw line>", a line with fewer than BANDS bands dropped.
+function frames(scenario) {
+    const [, ...lines] = fs.readFileSync(path.join(fixtures, `${scenario}.txt`), "utf8").trimEnd().split("\n");
+    const out = [];
+    for (const line of lines) {
+        const [time, raw] = line.split(" ");
+        const parts = raw.split(";");
+        if (parts.length < BANDS || parts[BANDS - 1] === "")
+            continue;
+        out.push({ time: Number(time), values: Float64Array.from(parts.slice(0, BANDS), p => Number(p) / 1000) });
+    }
+    return out;
+}
+
+function replay(scenario, settings) {
+    const visualizer = new Visualizer();
+    visualizer.configure(settings);
+    let count = visualizer.frame().kickCount;
+    const kicks = [];
+    for (const { time, values } of frames(scenario)) {
+        visualizer.pushBands(values, time);
+        const frame = visualizer.frame();
+        if (frame.kickCount !== count) {
+            count = frame.kickCount;
+            kicks.push([time, frame.kickPower]);
+        }
+    }
+    visualizer.free();
+    return kicks;
+}
+
+const scenarios = fs.readdirSync(fixtures).filter(f => f.endsWith(".txt")).map(f => f.slice(0, -4)).sort();
+const covered = new Set(native.map(r => r.scenario));
+const failures = scenarios.filter(s => !covered.has(s)).map(s => `${s}: no native replay`);
+let kicks = 0;
+for (const { scenario, config, settings, kicks: expected } of native) {
+    const got = replay(scenario, settings);
+    kicks += expected.length;
+    const first = got.findIndex((k, i) => !expected[i] || !Object.is(k[0], expected[i][0]) || !Object.is(k[1], expected[i][1]));
+    if (got.length !== expected.length || first >= 0) {
+        const i = first >= 0 ? first : Math.min(got.length, expected.length);
+        failures.push(`${scenario} at ${config}: ${got.length} Kicks in WASM, ${expected.length} native; ` +
+            `first difference at Kick ${i}: WASM ${JSON.stringify(got[i])}, native ${JSON.stringify(expected[i])}`);
+    }
+}
+if (failures.length || !native.length) {
+    console.error(`parity: WASM and native Kicks differ\n${failures.join("\n") || "no native replays"}`);
+    process.exit(1);
+}
+console.log(`parity: ok, ${kicks} Kicks identical in WASM and native over ${native.length} replays (${scenarios.length} fixtures x ${native.length / scenarios.length} configs)`);

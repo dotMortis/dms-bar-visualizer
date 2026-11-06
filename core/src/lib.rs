@@ -1,9 +1,13 @@
 //! The per-frame logic of both visualizers, built natively and to WASM (ADR 0007).
 //! [`Visualizer`] is the one seam: everything goes in through it and comes out of its [`Frame`].
 
+// The C ABI is the native boundary; in WASM, wasm-bindgen's exports would clash with its names.
+#[cfg(not(target_arch = "wasm32"))]
 pub mod c_abi;
 mod kick;
 mod settings;
+#[cfg(target_arch = "wasm32")]
+mod wasm;
 
 use kick::{KickDetector, KickSettings};
 use settings::Settings;
@@ -113,7 +117,7 @@ impl Visualizer {
     /// infinite one as the longest finite one.
     pub fn advance(&mut self, dt: f64) {
         let dt = if dt > 0.0 { dt.min(f64::MAX) } else { 0.0 };
-        self.frame.kick *= (-dt * self.settings.kick_decay).exp();
+        self.frame.kick *= libm::exp(-dt * self.settings.kick_decay);
     }
 
     /// Everything to draw.
