@@ -2,13 +2,18 @@
 // doesn't follow symlinks. So every file the page loads has to be a real file inside docs/. The
 // Lock Ring's look and settings live there too (docs/lock-ring/), and the plugin reaches them
 // through relative symlinks, as it does docs/kick.mjs: one copy, loaded by the page and the plugin.
+// The core's WASM build (docs/wasm/) is the exception: the Pages Action builds it, it's never
+// committed.
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { describe, test } from "node:test";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const DOCS = path.join(ROOT, "docs");
+// Where core/build-wasm.sh puts the core's WASM build for the page, relative to docs/.
+const WASM = "wasm";
 
 // Every file the page loads, relative to docs/: the module script's imports, the modules they
 // import in turn, and the files it fetches by a quoted "./..." path.
@@ -36,15 +41,30 @@ function pageFiles() {
 describe("demo publishing", () => {
     test("the page loads the Lock Ring's modules and shader, and both views' Lyric Words", () => {
         const files = pageFiles();
-        for (const f of ["kick.mjs", "config.mjs", "lock-ring/ring.mjs", "lock-ring/kicks.mjs", "lock-ring/hands.mjs",
+        for (const f of [`${WASM}/visualizer_core.js`, "config.mjs", "lock-ring/ring.mjs", "lock-ring/kicks.mjs", "lock-ring/hands.mjs",
                          "lock-ring/clock.mjs", "lock-ring/ring.frag", "lyric-words.mjs", "lock-ring/lyrics.mjs",
                          "demo-lyrics.mjs", "bar-ribbons.mjs", "bar-words.mjs"])
             assert.ok(files.includes(f), `the page loads ${f} (got ${files.join(", ")})`);
     });
 
+    test("the page runs the core's Kicks, not the JS Kick detector", () => {
+        assert.ok(!pageFiles().includes("kick.mjs"), "the page doesn't load kick.mjs");
+    });
+
+    test("the core's WASM build is gitignored, and the Pages Action builds it where the page loads it", () => {
+        const build = [`docs/${WASM}/visualizer_core.js`, `docs/${WASM}/visualizer_core_bg.wasm`];
+        const ignored = execFileSync("git", ["check-ignore", "--no-index", ...build], { cwd: ROOT, encoding: "utf8" });
+        assert.deepEqual(ignored.trim().split("\n"), build);
+        const workflow = fs.readFileSync(path.join(ROOT, ".github/workflows/pages.yml"), "utf8");
+        assert.match(workflow, new RegExp(`core/build-wasm\\.sh docs/${WASM}\\b`), "it builds into docs/wasm/");
+        assert.match(workflow, /^\s*path: docs\/?\s*$/m, "it publishes docs/");
+    });
+
     test("everything the page loads is a real file inside docs/, not a symlink", () => {
         for (const f of pageFiles()) {
             assert.ok(!f.startsWith(".."), `${f} is outside docs/`);
+            if (f.startsWith(`${WASM}/`))
+                continue;   // built by the Pages Action (see above)
             const full = path.join(DOCS, f);
             assert.ok(fs.existsSync(full), `${f} doesn't exist`);
             assert.ok(!fs.lstatSync(full).isSymbolicLink(), `${f} is a symlink, which Pages doesn't follow`);
