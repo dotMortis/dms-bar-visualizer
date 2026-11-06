@@ -39,11 +39,10 @@ function pageFiles() {
 }
 
 describe("demo publishing", () => {
-    test("the page loads the Lock Ring's modules and shader, and both views' Lyric Words", () => {
+    test("the page loads the Lock Ring's modules and shader, and the demo song", () => {
         const files = pageFiles();
-        for (const f of [`${WASM}/visualizer_core.js`, "config.mjs", "lock-ring/ring.mjs", "lock-ring/kicks.mjs", "lock-ring/hands.mjs",
-                         "lock-ring/clock.mjs", "lock-ring/ring.frag", "lyric-words.mjs", "lock-ring/lyrics.mjs",
-                         "demo-lyrics.mjs", "demo.mjs"])
+        for (const f of [`${WASM}/visualizer_core.js`, "config.mjs", "lock-ring/ring.mjs",
+                         "lock-ring/clock.mjs", "lock-ring/ring.frag", "demo-lyrics.mjs", "demo.mjs"])
             assert.ok(files.includes(f), `the page loads ${f} (got ${files.join(", ")})`);
     });
 
@@ -51,11 +50,13 @@ describe("demo publishing", () => {
         assert.ok(!pageFiles().includes("kick.mjs"), "the page doesn't load kick.mjs");
     });
 
-    test("the page's bar view runs the core's Lyric Words, not the JS layout", () => {
+    test("both of the page's views run the core's Lyric Words, not the JS timing or layout", () => {
         const page = fs.readFileSync(path.join(DOCS, "index.html"), "utf8");
-        for (const f of ["bar-ribbons.mjs", "bar-words.mjs", "lyric-words.mjs"])
+        for (const f of ["bar-ribbons.mjs", "bar-words.mjs", "lyric-words.mjs", "lock-ring/lyrics.mjs"])
             assert.ok(!page.includes(`./${f}`), `index.html doesn't import ${f}`);
+        assert.doesNotMatch(page, /createDemoLyrics|wordPlacement|wordLook/, "no JS Lyric Words of its own");
         assert.match(page, /core\.glyphs\(\)/, "it draws the core's glyphs");
+        assert.match(page, /core\.setRingSize\(/, "it lays the Lock Ring's out on the ring it shows");
     });
 
     test("the core's WASM build is gitignored, and the Pages Action builds it where the page loads it", () => {
