@@ -66,7 +66,7 @@ mod a_lyric_word_on_the_bar {
     fn a_rows_words_stand_look_space_ems_apart_wider_than_a_space() {
         // Letters 10 px wide, a 20 px em: "ab cd" is two 20 px words and one gap.
         let row = row_widths("ab cd", "ab ", |_| 10.0, 20.0);
-        assert!(LOOK_SPACE * 20.0 > 10.0, "wider than the font's space");
+        const { assert!(LOOK_SPACE * 20.0 > 10.0, "wider than the font's space") };
         assert_eq!(row, RowWidths { width: 40.0 + LOOK_SPACE * 20.0, before: 20.0 + LOOK_SPACE * 20.0 });
     }
 
@@ -92,7 +92,7 @@ mod a_lyric_word_on_the_bar {
 
     #[test]
     fn follows_its_ribbons_wave_part_way_tilted_with_it_but_less() {
-        assert!(LOOK_FOLLOW > 0.0 && LOOK_FOLLOW < 1.0, "{LOOK_FOLLOW}");
+        const { assert!(LOOK_FOLLOW > 0.0 && LOOK_FOLLOW < 1.0) };
         let loud = loud();
         let glyphs = lay(0, 0.52, &loud, 0.0);
         let within: Vec<_> = glyphs.iter().filter(|g| (g.y - 20.0).abs() < LOOK_REACH * 40.0 - 1e-6).collect();
@@ -128,7 +128,7 @@ mod a_lyric_word_on_the_bar {
 
     #[test]
     fn strays_at_most_look_reach_of_the_bars_height_from_its_middle_even_on_a_crest() {
-        assert!(LOOK_REACH > 0.0 && LOOK_REACH < 0.5, "{LOOK_REACH}");
+        const { assert!(LOOK_REACH > 0.0 && LOOK_REACH < 0.5) };
         let mut farthest: f64 = 0.0;
         for i in 0..=20 {
             for ribbon in 0..3 {

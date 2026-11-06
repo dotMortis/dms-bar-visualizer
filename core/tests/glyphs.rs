@@ -107,9 +107,9 @@ fn each_glyph_carries_its_words_look_color_and_pivot() {
     near(first.white, look.white, "white");
     // The bright core: the Ribbon's color, most of the way to white, all the way in a flash.
     let whiten = 0.55 + 0.45 * look.white;
-    for c in 0..3 {
-        near(first.color[c], color[c], "color");
-        near(first.core[c], color[c] + (1.0 - color[c]) * whiten, "core");
+    for (c, &rgb) in color.iter().enumerate() {
+        near(first.color[c], rgb, "color");
+        near(first.core[c], rgb + (1.0 - rgb) * whiten, "core");
     }
     assert!(look.white > 0.0, "still popping in");
     assert_eq!(glyphs[1].scale, first.scale, "every letter of a word looks the same");

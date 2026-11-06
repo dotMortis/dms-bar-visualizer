@@ -135,7 +135,7 @@ impl BarLyrics {
             let middle = (laid[0].x + laid[laid.len() - 1].x) / 2.0;
             let middle_y = laid.iter().map(|g| g.y).sum::<f64>() / laid.len() as f64;
             let look = word_look(word, shockwave_crossing(middle, &inputs));
-            if !(look.opacity > 0.0) {
+            if look.opacity.is_nan() || look.opacity <= 0.0 {
                 self.glyphs.truncate(start);
                 continue;
             }

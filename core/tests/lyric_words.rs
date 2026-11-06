@@ -215,7 +215,7 @@ mod the_end_of_a_lyric_line_on_the_bar {
 
     #[test]
     fn its_rows_stay_whole_linger_hold_seconds_while_the_next_lines_words_come() {
-        assert!(LINGER_HOLD > 0.3, "{LINGER_HOLD}");
+        const { assert!(LINGER_HOLD > 0.3) };
         let mut song = playing(close());
         let during: Vec<_> =
             song.at(13.0 + LINGER_HOLD - 0.01).into_iter().map(|w| (w.text, w.word.dissolve)).collect();
@@ -224,7 +224,7 @@ mod the_end_of_a_lyric_line_on_the_bar {
 
     #[test]
     fn then_dissolve_slowly_over_linger_dissolve_seconds_and_are_gone() {
-        assert!(LINGER_DISSOLVE > 1.0, "{LINGER_DISSOLVE}");
+        const { assert!(LINGER_DISSOLVE > 1.0) };
         let mut song = playing(close());
         let fade = 13.0 + LINGER_HOLD;
         let half = song.at(fade + LINGER_DISSOLVE / 2.0).into_iter().find(|w| w.text == "first").unwrap();
