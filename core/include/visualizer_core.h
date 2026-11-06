@@ -83,6 +83,9 @@ void visualizer_configure(Visualizer *visualizer, const char *json, size_t len);
 void visualizer_push_bands(Visualizer *visualizer, const double *bands, size_t count, double time);
 /* One display frame, dt seconds after the last. */
 void visualizer_advance(Visualizer *visualizer, double dt);
+/* The Active Player: a VISUALIZER_PLAYER_* value (another is ignored). While it doesn't play,
+ * nothing is captured, so the bands read as 0 until the next push. */
+void visualizer_set_player(Visualizer *visualizer, uint32_t player);
 /* Everything to draw, owned by the Visualizer: valid until the next call on it. Null for a null
  * Visualizer. */
 const VisualizerFrame *visualizer_frame(const Visualizer *visualizer);

@@ -37,3 +37,24 @@ fn the_c_abi_fires_the_same_kicks_as_the_rust_api() {
         }
     }
 }
+
+#[test]
+fn the_c_abi_tells_the_visualizer_the_active_player_and_ignores_values_it_doesnt_know() {
+    use visualizer_core::Silence;
+    unsafe {
+        let visualizer = visualizer_create();
+        let silence = || (*visualizer_frame(visualizer)).silence;
+        assert_eq!(silence(), Silence::NoPlayer);
+        visualizer_set_player(visualizer, 2);
+        assert_eq!(silence(), Silence::None);
+        visualizer_set_player(visualizer, 1);
+        assert_eq!(silence(), Silence::Paused);
+        visualizer_set_player(visualizer, 3);
+        visualizer_set_player(visualizer, u32::MAX);
+        assert_eq!(silence(), Silence::Paused);
+        visualizer_set_player(visualizer, 0);
+        assert_eq!(silence(), Silence::NoPlayer);
+        visualizer_set_player(std::ptr::null_mut(), 2);
+        visualizer_destroy(visualizer);
+    }
+}

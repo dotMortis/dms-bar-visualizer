@@ -6,7 +6,7 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 
 use common::*;
-use visualizer_core::{Frame, Visualizer, BANDS};
+use visualizer_core::{Frame, Player, Silence, Visualizer, BANDS, FLOW_WRAP, TIME_WRAP};
 
 /// The system allocator, counting the allocations on threads that asked it to.
 struct Counting;
@@ -68,10 +68,15 @@ fn push_bands_advance_and_frame_never_allocate_after_configure() {
             visualizer.configure(&settings.json());
             let mut sum = 0.0;
             let n = allocations(|| {
-                for f in frames {
+                visualizer.set_player(Player::Playing);
+                for (i, f) in frames.iter().enumerate() {
                     visualizer.push_bands(&f.values, f.time);
                     visualizer.advance(1.0 / 144.0);
-                    sum += std::hint::black_box(visualizer.frame()).kick;
+                    if i % 500 == 499 {
+                        visualizer.set_player([Player::Paused, Player::None, Player::Playing][i / 500 % 3]);
+                    }
+                    let frame = std::hint::black_box(visualizer.frame());
+                    sum += frame.kick + frame.flow + frame.kick_ages[0] + frame.animating as u8 as f64;
                 }
             });
             assert_eq!(n, 0, "{scenario} at {config}: allocations per {} frames (kick sum {sum})", frames.len());
@@ -88,6 +93,8 @@ fn bad_input_doesnt_allocate_either() {
         visualizer.push_bands(&[0.5; 7], 2.0);
         visualizer.push_bands(&[0.5; BANDS], f64::NAN);
         visualizer.advance(f64::INFINITY);
+        visualizer.set_player(Player::Playing);
+        visualizer.set_player(Player::None);
         std::hint::black_box(visualizer.frame());
     });
     assert_eq!(n, 0);
@@ -105,6 +112,17 @@ fn assert_sane(frame: Frame, after: &str) {
         "kick_power {} after {after}",
         frame.kick_power
     );
+    assert!((0.0..TIME_WRAP).contains(&frame.time), "time {} after {after}", frame.time);
+    assert!((0.0..FLOW_WRAP).contains(&frame.flow), "flow {} after {after}", frame.flow);
+    for slot in 0..frame.kick_ages.len() {
+        let (age, power, seed) = (frame.kick_ages[slot], frame.kick_powers[slot], frame.kick_seeds[slot]);
+        assert!(age.is_finite() && age >= 0.0, "slot {slot}'s age {age} after {after}");
+        assert!(power == 0.0 || (0.5..=1.0).contains(&power), "slot {slot}'s power {power} after {after}");
+        assert!(seed.fract() == 0.0 && (0.0..1000.0).contains(&seed), "slot {slot}'s seed {seed} after {after}");
+    }
+    assert!(frame.intensity.is_finite() && frame.bass_stretch.is_finite(), "settings after {after}");
+    // silence and animating are a Silence and a bool by their types.
+    let _: (Silence, bool) = (frame.silence, frame.animating);
 }
 
 const BAD_SETTINGS: [&str; 12] = [
@@ -149,6 +167,9 @@ fn bad_input_never_panics_and_frame_stays_drawable() {
             // Negative, huge and not real display frame times.
             let dt = [1.0 / 60.0, -1.0, 0.0, 1e308, f64::INFINITY, f64::NAN, f64::NEG_INFINITY, 1e-320][n % 8];
             visualizer.advance(dt);
+            if n % 7 == 0 {
+                visualizer.set_player([Player::Playing, Player::Paused, Player::None][n / 7 % 3]);
+            }
             assert_sane(visualizer.frame(), &format!("frame {n} at settings {settings:?}, dt {dt}"));
             visualizer.configure(settings);
         }
@@ -193,6 +214,7 @@ mod c_abi {
             visualizer_configure(visualizer, settings.as_ptr(), settings.len());
             let mut sum = 0.0;
             let n = allocations(|| {
+                visualizer_set_player(visualizer, 2);
                 for f in frames {
                     visualizer_push_bands(visualizer, f.values.as_ptr(), f.values.len(), f.time);
                     visualizer_advance(visualizer, 1.0 / 144.0);
@@ -222,6 +244,8 @@ mod c_abi {
                 visualizer_push_bands(visualizer, bands.as_ptr(), BANDS - 1, 1.0);
                 visualizer_push_bands(visualizer, bands.as_ptr(), 0, 1.0);
                 visualizer_advance(visualizer, f64::NAN);
+                visualizer_set_player(visualizer, 7);
+                visualizer_set_player(ptr::null_mut(), 2);
             });
             assert_eq!(n, 0);
             assert_eq!(*visualizer_frame(visualizer), before);

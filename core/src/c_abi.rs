@@ -8,7 +8,7 @@
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr;
 
-use crate::{Frame, Visualizer};
+use crate::{Frame, Player, Visualizer};
 
 /// Runs `body`, or gives `fallback` if it panics.
 fn guarded<T>(fallback: T, body: impl FnOnce() -> T) -> T {
@@ -72,6 +72,24 @@ pub unsafe extern "C" fn visualizer_push_bands(
 pub unsafe extern "C" fn visualizer_advance(visualizer: *mut Visualizer, dt: f64) {
     if let Some(visualizer) = visualizer.as_mut() {
         guarded((), || visualizer.advance(dt));
+    }
+}
+
+/// The Active Player: 0 none, 1 paused, 2 playing (VISUALIZER_PLAYER_*); any other value is
+/// ignored. See `Visualizer::set_player`.
+///
+/// # Safety
+/// `visualizer` is null or live.
+#[no_mangle]
+pub unsafe extern "C" fn visualizer_set_player(visualizer: *mut Visualizer, player: u32) {
+    let player = match player {
+        0 => Player::None,
+        1 => Player::Paused,
+        2 => Player::Playing,
+        _ => return,
+    };
+    if let Some(visualizer) = visualizer.as_mut() {
+        guarded((), || visualizer.set_player(player));
     }
 }
 

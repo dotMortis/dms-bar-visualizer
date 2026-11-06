@@ -32,11 +32,22 @@ fn a_c_program_drives_the_visualizer_through_the_header() {
     let ran = Command::new(&program).output().unwrap();
     let out = String::from_utf8_lossy(&ran.stdout);
     assert!(ran.status.success(), "{out}{}", String::from_utf8_lossy(&ran.stderr));
+    use std::mem::offset_of;
     let layout = format!(
-        "size {} kick_power {} kick_count {}",
+        "size {} time {} flow {} kick_ages {} kick_powers {} kick_seeds {} intensity {} bass_stretch {} \
+         kick_power {} kick_count {} silence {} animating {}",
         size_of::<Frame>(),
-        std::mem::offset_of!(Frame, kick_power),
-        std::mem::offset_of!(Frame, kick_count)
+        offset_of!(Frame, time),
+        offset_of!(Frame, flow),
+        offset_of!(Frame, kick_ages),
+        offset_of!(Frame, kick_powers),
+        offset_of!(Frame, kick_seeds),
+        offset_of!(Frame, intensity),
+        offset_of!(Frame, bass_stretch),
+        offset_of!(Frame, kick_power),
+        offset_of!(Frame, kick_count),
+        offset_of!(Frame, silence),
+        offset_of!(Frame, animating)
     );
     assert_eq!(out.lines().next(), Some(layout.as_str()));
     assert_eq!(out.lines().last(), Some("ok"));
