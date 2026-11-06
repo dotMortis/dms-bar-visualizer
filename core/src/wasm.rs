@@ -45,32 +45,76 @@ use js_sys::{Float64Array, Object, Reflect};
 use wasm_bindgen::prelude::*;
 
 use crate::lock_ring::HOUR_POINTS;
-use crate::{Kind, LockRingFrame, Player, Silence, Visualizer, BANDS, GLYPH_FIELDS, KICK_SLOTS};
+use crate::{Frame, Kind, LockRingFrame, Player, Visualizer, BANDS, GLYPH_FIELDS, KICK_SLOTS};
 
 /// The frame's number fields, in the order `numbers()` gives them.
 const NUMBERS: [&str; 10] =
     ["bass", "mid", "treble", "kick", "time", "flow", "intensity", "bassStretch", "kickPower", "kickCount"];
 
-/// A Visualizer for JS, and the frame object it hands out.
+/// A Visualizer for JS, and the objects it hands out.
 #[wasm_bindgen(js_name = Visualizer)]
 pub struct WasmVisualizer {
     visualizer: Visualizer,
-    frame: Object,
-    bands: Float64Array,
-    kick_ages: Float64Array,
-    kick_powers: Float64Array,
-    kick_seeds: Float64Array,
-    /// The JS names of the number fields, and of silence and animating, made once.
-    keys: [JsValue; NUMBERS.len()],
-    silence_key: JsValue,
-    animating_key: JsValue,
-    /// The Silence cases' names, by Silence as u32, made once.
-    silences: [JsValue; 4],
+    frame: FrameObject,
     /// The glyphs object glyphs() hands out, its data, and the name of its count.
     glyphs: Object,
     glyph_data: Float64Array,
     count_key: JsValue,
     lock_ring: LockRingObject,
+}
+
+/// The frame's array fields, in the order `FrameObject::update()` fills them.
+const ARRAYS: [(&str, usize); 4] =
+    [("bands", BANDS), ("kickAges", KICK_SLOTS), ("kickPowers", KICK_SLOTS), ("kickSeeds", KICK_SLOTS)];
+
+/// The object `frame()` hands out, its arrays and its keys, made once.
+struct FrameObject {
+    object: Object,
+    arrays: [Float64Array; ARRAYS.len()],
+    keys: [JsValue; NUMBERS.len()],
+    silence_key: JsValue,
+    animating_key: JsValue,
+    /// The Silence cases' names, by Silence as usize.
+    silences: [JsValue; 4],
+}
+
+impl FrameObject {
+    fn new() -> Self {
+        let object = Object::new();
+        FrameObject {
+            arrays: ARRAYS.map(|(key, length)| array(&object, key, length)),
+            object,
+            keys: NUMBERS.map(JsValue::from_str),
+            silence_key: JsValue::from_str("silence"),
+            animating_key: JsValue::from_str("animating"),
+            silences: ["", "no-player", "paused", "silent"].map(JsValue::from_str),
+        }
+    }
+
+    fn update(&self, f: &Frame) -> Object {
+        let arrays: [&[f64]; ARRAYS.len()] = [&f.bands, &f.kick_ages, &f.kick_powers, &f.kick_seeds];
+        for (array, values) in self.arrays.iter().zip(arrays) {
+            array.copy_from(values);
+        }
+        let numbers = [
+            f.bass,
+            f.mid,
+            f.treble,
+            f.kick,
+            f.time,
+            f.flow,
+            f.intensity,
+            f.bass_stretch,
+            f.kick_power,
+            f.kick_count as f64,
+        ];
+        for (key, value) in self.keys.iter().zip(numbers) {
+            let _ = Reflect::set(&self.object, key, &JsValue::from_f64(value));
+        }
+        let _ = Reflect::set(&self.object, &self.silence_key, &self.silences[f.silence as usize]);
+        let _ = Reflect::set(&self.object, &self.animating_key, &JsValue::from_bool(f.animating));
+        self.object.clone()
+    }
 }
 
 /// The Lock Ring's number fields, in the order `LockRingObject::numbers()` gives them.
@@ -167,21 +211,12 @@ impl WasmVisualizer {
     /// A Visualizer on the default settings.
     #[wasm_bindgen(constructor)]
     pub fn new() -> WasmVisualizer {
-        let frame = Object::new();
         let glyphs = Object::new();
         let _ = Reflect::set(&glyphs, &JsValue::from_str("count"), &JsValue::from_f64(0.0));
         let _ = Reflect::set(&glyphs, &JsValue::from_str("stride"), &JsValue::from_f64(GLYPH_FIELDS as f64));
         WasmVisualizer {
             visualizer: Visualizer::new(),
-            bands: array(&frame, "bands", BANDS),
-            kick_ages: array(&frame, "kickAges", KICK_SLOTS),
-            kick_powers: array(&frame, "kickPowers", KICK_SLOTS),
-            kick_seeds: array(&frame, "kickSeeds", KICK_SLOTS),
-            frame,
-            keys: NUMBERS.map(JsValue::from_str),
-            silence_key: JsValue::from_str("silence"),
-            animating_key: JsValue::from_str("animating"),
-            silences: ["", "no-player", "paused", "silent"].map(JsValue::from_str),
+            frame: FrameObject::new(),
             glyph_data: array(&glyphs, "data", 0),
             glyphs,
             count_key: JsValue::from_str("count"),
@@ -319,34 +354,6 @@ impl WasmVisualizer {
 
     /// Everything to draw: the same object every call, updated in place.
     pub fn frame(&self) -> Object {
-        let f = self.visualizer.frame_ref();
-        self.bands.copy_from(&f.bands);
-        self.kick_ages.copy_from(&f.kick_ages);
-        self.kick_powers.copy_from(&f.kick_powers);
-        self.kick_seeds.copy_from(&f.kick_seeds);
-        let numbers = [
-            f.bass,
-            f.mid,
-            f.treble,
-            f.kick,
-            f.time,
-            f.flow,
-            f.intensity,
-            f.bass_stretch,
-            f.kick_power,
-            f.kick_count as f64,
-        ];
-        for (key, value) in self.keys.iter().zip(numbers) {
-            let _ = Reflect::set(&self.frame, key, &JsValue::from_f64(value));
-        }
-        let silence = &self.silences[match f.silence {
-            Silence::None => 0,
-            Silence::NoPlayer => 1,
-            Silence::Paused => 2,
-            Silence::Silent => 3,
-        }];
-        let _ = Reflect::set(&self.frame, &self.silence_key, silence);
-        let _ = Reflect::set(&self.frame, &self.animating_key, &JsValue::from_bool(f.animating));
-        self.frame.clone()
+        self.frame.update(self.visualizer.frame_ref())
     }
 }
