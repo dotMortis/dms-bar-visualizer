@@ -90,7 +90,7 @@ describe("lock ring plugin", () => {
     // detector, the ones the Bar Visualizer uses.
     test("the plugin runs the shared audio pipeline and kick detector", () => {
         const loaded = importGraph(PLUGIN).map(i => fs.realpathSync(path.join(PLUGIN, i.target)));
-        for (const shared of ["audio/AudioPipeline.qml", "docs/kick.mjs", "docs/config.mjs"])
+        for (const shared of ["audio/AudioPipeline.qml", "audio/active-player.mjs", "docs/kick.mjs", "docs/config.mjs"])
             assert.ok(loaded.includes(fs.realpathSync(path.join(ROOT, shared))), `the plugin loads ${shared}`);
     });
 

@@ -14,6 +14,7 @@ How the pieces fit together, and how to change them. For installing and using th
 | `shell.qml` | The Bar Visualizer: a Quickshell config, one surface per screen |
 | `shaders/viz.frag` | The Bar Visualizer's look |
 | `audio/AudioPipeline.qml` | The shared audio pipeline: follows the Active Player, runs cava, detects Kicks |
+| `audio/active-player.mjs` | The pipeline's two choices: the Active Player, and the output the capture follows |
 | `lock-ring/` | The Lock Ring plugin (`LockRing.qml`, `LockAudio.qml`, `LockLyrics.qml`, `plugin.json`) |
 | `docs/` | The live demo (GitHub Pages), plus the plain-JS modules both visualizers and the demo import |
 | `core/` | The Rust core ([ADR 0007](docs/adr/0007-no-script-in-the-per-frame-hot-path.md)): one `Visualizer` with all per-frame logic, so far the Kicks, bass/mid/treble and the Kick level. It replaces the JS modules below as later steps of spec #41 wire it in |
