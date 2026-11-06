@@ -2,7 +2,7 @@
 // sink probe (audio/AudioPipeline.qml) reads come from the scenario, not from what plays on the
 // desktop, so a stream starting or stopping there can't restart the capture mid-run.
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import path from "node:path";
 import { describe, test } from "node:test";
 
@@ -36,6 +36,19 @@ describe("harness stand-in pactl", () => {
         }).toString();
         const [sinks, inputs] = out.trim().split("\n").map(line => JSON.parse(line));
         assert.equal(inputs[0].sink, sinks[0].index);
+    });
+
+    test("subscribe: stays running and reports nothing, as the scenario's streams don't change", async () => {
+        const sub = spawn(PACTL, ["subscribe"], { env: { ...process.env, HARNESS_PLAYER: "Playing", HARNESS_PACTL: "/usr/bin/true" } });
+        let out = "";
+        sub.stdout.on("data", d => out += d);
+        sub.stderr.on("data", d => out += d);
+        const exited = new Promise(resolve => sub.once("exit", code => resolve(code)));
+        const early = await Promise.race([exited, new Promise(resolve => setTimeout(() => resolve("running"), 500))]);
+        sub.kill();
+        await exited;
+        assert.equal(early, "running", out);
+        assert.equal(out, "");
     });
 
     test("paused: its stream is corked; no player: no stream", () => {

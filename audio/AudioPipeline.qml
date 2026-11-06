@@ -72,6 +72,17 @@ Scope {
         activePlayer = Player.chooseActivePlayer(activePlayer, Mpris.players.values);
     }
 
+    // Checks the capture source again: now, or right after the check already running, which may
+    // have listed the streams before the change. Called through Qt.callLater, so a burst of
+    // events is one check.
+    property bool checkAgain: false
+    function checkSource() {
+        if (sinkProbe.running)
+            checkAgain = true;
+        else
+            sinkProbe.running = true;
+    }
+
     function avg(from, to) {
         let sum = 0;
         for (let i = from; i < to; i++)
@@ -80,8 +91,11 @@ Scope {
     }
 
     onEffectiveChanged: kickDetector.configure(effective)
-    Component.onCompleted: kickDetector.configure(effective)
-    onActivePlayerChanged: sinkProbe.running = true
+    Component.onCompleted: {
+        kickDetector.configure(effective);
+        updateActivePlayer();
+    }
+    onActivePlayerChanged: Qt.callLater(checkSource)
 
     onSourceChanged: {
         cava.running = false;
@@ -123,20 +137,64 @@ Scope {
         }
     }
 
-    Timer {
-        interval: 2000
-        running: true
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: {
+    // Following the Active Player, by events only: nothing runs while nothing changes.
+    // MPRIS: players coming and going, and each one's playback state.
+    Connections {
+        target: Mpris.players
+        function onValuesChanged() {
             root.updateActivePlayer();
-            sinkProbe.running = true;
         }
+    }
+    Variants {
+        model: Mpris.players.values
+        Connections {
+            required property var modelData
+            target: modelData
+            function onPlaybackStateChanged() {
+                root.updateActivePlayer();
+            }
+        }
+    }
+
+    // The sound server: one long-lived `pactl subscribe`, whose stream and output events check the
+    // source again (active-player.mjs rechecksSource). Each start checks too, for what happened
+    // while none ran. If it dies (the sound server restarting), it's started again after a pause
+    // that doubles while it keeps dying at once, up to a minute. One Process: never two at a time.
+    Process {
+        id: subscription
+        property real startedAt: 0
+        running: true
+        command: ["pactl", "subscribe"]
+        onStarted: {
+            startedAt = Date.now();
+            Qt.callLater(root.checkSource);
+        }
+        onExited: {
+            resubscribe.interval = Date.now() - startedAt > 60000 ? 1000 : Math.min(resubscribe.interval * 2, 60000);
+            resubscribe.restart();
+        }
+        stdout: SplitParser {
+            onRead: line => {
+                if (Player.rechecksSource(line))
+                    Qt.callLater(root.checkSource);
+            }
+        }
+    }
+    Timer {
+        id: resubscribe
+        interval: 500  // doubled before its first use
+        onTriggered: subscription.running = true
     }
 
     Process {
         id: sinkProbe
         command: ["sh", "-c", "pactl -f json list sinks; echo; pactl -f json list sink-inputs"]
+        onExited: {
+            if (root.checkAgain) {
+                root.checkAgain = false;
+                running = true;
+            }
+        }
         stdout: StdioCollector {
             onStreamFinished: {
                 try {

@@ -63,6 +63,7 @@ describe("audio pipeline", () => {
         const source = read(PIPELINE);
         assert.match(source, /Player\.chooseActivePlayer\(/);
         assert.match(source, /Player\.chooseSource\(/);
+        assert.match(source, /Player\.rechecksSource\(/);
         for (const own of ["isPlaying", "corked", "application.name"])
             assert.ok(!source.includes(own), `the pipeline still chooses by ${own} itself`);
     });
@@ -92,9 +93,12 @@ describe("audio pipeline", () => {
 
 // Runs the pipeline in a headless qs of its own (offscreen, its own runtime and config dirs, no
 // session bus, the harness's stand-in pactl): `body` goes inside AudioPipeline { }, and qs runs until
-// the shell quits or 15 s pass. Resolves to qs's log and the runtime dir.
+// the shell quits or `seconds` pass. `subscribe`, if given, is what `pactl subscribe` runs instead
+// of the stand-in's (sh, its stdout is the subscription). Every pactl run is logged to pactl.log in
+// the runtime dir, one line of arguments each. Resolves to qs's log, the runtime dir and the pactl
+// runs.
 const QS = spawnSync("qs", ["--version"], { stdio: "ignore" }).status === 0;
-function runPipeline(body) {
+function runPipeline(body, { seconds = 10, subscribe } = {}) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "bvh-ap."));
     fs.chmodSync(dir, 0o700);
     fs.writeFileSync(path.join(dir, "shell.qml"), `import QtQuick
@@ -105,15 +109,33 @@ ShellRoot {
         confPath: Quickshell.env("XDG_RUNTIME_DIR") + "/cava.conf"
         ${body}
     }
-    Timer { interval: 10000; running: true; onTriggered: Qt.quit() }
+    Timer { interval: ${seconds * 1000}; running: true; onTriggered: Qt.quit() }
 }
 `);
+    const bin = path.join(dir, "bin");
+    fs.mkdirSync(bin);
+    fs.writeFileSync(path.join(bin, "pactl"), `#!/bin/sh
+echo "$*" >> "$XDG_RUNTIME_DIR/pactl.log"
+${subscribe ? `[ "$*" = subscribe ] && { ${subscribe}
+}` : ""}
+exec "${path.join(ROOT, "harness", "bin", "pactl")}" "$@"
+`, { mode: 0o755 });
     const env = { ...process.env, QT_QPA_PLATFORM: "offscreen", XDG_RUNTIME_DIR: dir, XDG_CONFIG_HOME: dir, XDG_CACHE_HOME: dir,
         XDG_STATE_HOME: dir, XDG_DATA_HOME: dir, DBUS_SESSION_BUS_ADDRESS: `unix:path=${dir}/no-bus`,
-        PATH: `${path.join(ROOT, "harness", "bin")}:${process.env.PATH}`, HARNESS_PACTL: "/usr/bin/true", HARNESS_PLAYER: "none" };
+        PATH: `${bin}:${path.join(ROOT, "harness", "bin")}:${process.env.PATH}`, HARNESS_PACTL: "/usr/bin/true", HARNESS_PLAYER: "none" };
     for (const k of ["WAYLAND_DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE", "DISPLAY"]) delete env[k];
-    const run = spawnSync("qs", ["-p", path.join(dir, "shell.qml"), "--no-color"], { env, encoding: "utf8", timeout: 15000 });
-    return { log: run.stdout + run.stderr, dir, done: () => fs.rmSync(dir, { recursive: true, force: true }) };
+    const run = spawnSync("qs", ["-p", path.join(dir, "shell.qml"), "--no-color"], { env, encoding: "utf8", timeout: (seconds + 5) * 1000 });
+    const logged = path.join(dir, "pactl.log");
+    const pactl = fs.existsSync(logged) ? fs.readFileSync(logged, "utf8").trim().split("\n") : [];
+    return { log: run.stdout + run.stderr, dir, pactl, done: () => fs.rmSync(dir, { recursive: true, force: true }) };
+}
+
+// Follows the Active Player for `seconds` with a capture that does nothing; resolves to how often
+// `pactl subscribe` ran and how often the source was checked (each check lists the sinks once).
+function follow(seconds, subscribe) {
+    const { log, pactl, done } = runPipeline(`captureCommand: ["sleep", "${seconds + 5}"]`, { seconds, subscribe });
+    done();
+    return { subscriptions: pactl.filter(a => a === "subscribe").length, checks: pactl.filter(a => a.endsWith("list sinks")).length, log };
 }
 
 describe("audio pipeline in qs", { skip: !QS && "needs Quickshell (qs)" }, () => {
@@ -130,6 +152,26 @@ describe("audio pipeline in qs", { skip: !QS && "needs Quickshell (qs)" }, () =>
         } finally {
             done();
         }
+    });
+});
+
+describe("following the Active Player in qs", { skip: !QS && "needs Quickshell (qs)" }, () => {
+    test("with nothing changing, starts one subscription and checks the source once, no polling", () => {
+        const { subscriptions, checks, log } = follow(7, "exec sleep 30");
+        assert.deepEqual({ subscriptions, checks }, { subscriptions: 1, checks: 1 }, log);
+    });
+
+    test("checks the source again as a stream or output changes, not as a client comes and goes", () => {
+        const { subscriptions, checks, log } = follow(5, `sleep 1; echo "Event 'new' on client #24097"; echo "Event 'remove' on client #24097"
+            sleep 1; echo "Event 'change' on sink-input #7"; exec sleep 30`);
+        assert.deepEqual({ subscriptions, checks }, { subscriptions: 1, checks: 2 }, log);
+    });
+
+    test("restarts the subscription when it dies, and checks again for what it missed", () => {
+        // The first subscription dies at once (the sound server restarting); the next one lives.
+        const { subscriptions, checks, log } = follow(7, `[ "$(grep -c '^subscribe$' "$XDG_RUNTIME_DIR/pactl.log")" -gt 1 ] || exit 1
+            exec sleep 30`);
+        assert.deepEqual({ subscriptions, checks }, { subscriptions: 2, checks: 2 }, log);
     });
 });
 
