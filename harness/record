@@ -23,14 +23,15 @@
 set -euo pipefail
 
 HARNESS=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=lib.sh
+. "$HARNESS/lib.sh"
 OUT="" RUN_ARGS=() REVS=()
-die() { echo "harness: $*" >&2; exit 2; }
 
 while (($#)); do
     case $1 in
         --out) OUT=$2; shift ;;
         --warmup | --loops) RUN_ARGS+=("$1" "$2"); shift ;;
-        -h | --help) sed -n '2,/^set /p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
+        -h | --help) show_help "$0"; exit 0 ;;
         -*) die "unknown option $1" ;;
         *) REVS+=("$1") ;;
     esac
@@ -50,7 +51,8 @@ label() {
     else git -C "$HARNESS/.." rev-parse --short "$1^{commit}"; fi
 }
 A=$(label "${REVS[0]}") B=$(label "${REVS[1]}")
-[[ $A != "$B" ]] || B=$B-b
+# The same commit twice: the file names still tell A's from B's.
+[[ $A != "$B" ]] || { A=$A-A B=$B-B; }
 
 {
     echo "Screen recordings of the same replayed input (the reference track, harness/run's scenarios)"

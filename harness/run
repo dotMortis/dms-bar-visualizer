@@ -11,6 +11,7 @@
 #               silence_paused     Silence: cava's silence, the Active Player paused
 #               silence_playing    Silence: cava's silence while the Active Player reports playing
 #                                  (a silent track, "Silence"; the stand-in DMS has no lyrics for it)
+#               (the list: harness/scenarios.mjs)
 #   options     --host HOST    what runs: bar = the Bar Visualizer (shell.qml), the default;
 #                              lock = the Lock Ring, loaded as DMS loads it in a test qs
 #                              (harness/lockhost), with a stand-in for DMS's lyrics service in
@@ -54,9 +55,11 @@ set -euo pipefail
 
 HARNESS=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO=$(dirname "$HARNESS")
+# shellcheck source=lib.sh
+. "$HARNESS/lib.sh"
+# shellcheck source=stage.sh
+. "$HARNESS/stage.sh"
 HOST=bar COMMIT="" WARMUP=5 LOOPS=1 OUT="" CHECK_KICKS=0 CPU_ONLY=0 RECORD="" SCENARIO=""
-
-die() { echo "harness: $*" >&2; exit 2; }
 
 while (($#)); do
     case $1 in
@@ -68,7 +71,7 @@ while (($#)); do
         --check-kicks) CHECK_KICKS=1 ;;
         --cpu-only) CPU_ONLY=1 ;;
         --record) RECORD=$2; shift ;;
-        -h | --help) sed -n '2,/^set /p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
+        -h | --help) show_help "$0"; exit 0 ;;
         -*) die "unknown option $1" ;;
         *) [[ -z $SCENARIO ]] || die "one scenario at a time"; SCENARIO=$1 ;;
     esac
@@ -77,66 +80,41 @@ done
 [[ -n $SCENARIO ]] || die "which scenario? (see --help)"
 [[ -z $RECORD ]] || ((!CHECK_KICKS)) || die "--record or --check-kicks, not both"
 
-# --- Hosts: what runs. Each sets SHELL_DIR, the qs config dir, from TREE (the code under test).
-# A scenario's DMS (DMS=1) is the stand-in DMS socket (harness/dms) unless a host says otherwise
-# with DMS_SOCKET=0 and its own LYRICS_LOG, where its stand-in logs each lyrics lookup
-# (` lyrics.get ... -> found|none`), LYRICS_FROM, what the report calls that stand-in, and
-# LYRICS_NONE, what it says for a scenario without DMS.
-host_bar() { SHELL_DIR=$TREE RECORD_WINDOW=bar-visualizer; }
-# The Lock Ring in a test qs (never the live DMS or its lock screen): the plugin from TREE, created
-# from its file:// URL with Qt.createComponent and given what DMS gives a lock-screen widget
-# (Services/PluginService.qml, Modules/Plugins/DesktopWidgetContent.qml), in a layer-shell window
-# of its default size at the top left, click-through, on black. harness/lockhost stands in for the
-# parts of DMS it imports. A scenario with a DMS gets its stand-in lyrics service, which serves the
-# same timed lyrics in the same process as DMS's; one without gets a DMS without that service (as
-# before DMS 2.0), so the Lock Ring loads no Lyric Words, as the bar has none without DMS.
-host_lock() {
-    SHELL_DIR=$RUN/lock RECORD_WINDOW=lock-ring-harness DMS_SOCKET=0 LYRICS_LOG=$OUT/qs.log \
-        LYRICS_FROM="the stand-in lyrics service" LYRICS_NONE="a DMS without its lyrics service"
-    cp -r "$HARNESS/lockhost" "$SHELL_DIR"
-    local services="import qs.Services"
-    if ((!DMS)); then rm -r "$SHELL_DIR/Services"; services=""; fi
-    cat > "$SHELL_DIR/shell.qml" <<EOF
-import QtQuick
-import Quickshell
-import Quickshell.Wayland
-// Unused here: Quickshell serves the plugin only the qs.* modules its shell imports.
-import qs.Common
-import qs.Modules.Plugins
-$services
-ShellRoot {
-    PanelWindow {
-        id: win
-        screen: Quickshell.screens[0]
-        anchors { top: true; left: true }
-        implicitWidth: loader.item?.defaultWidth ?? 576
-        implicitHeight: loader.item?.defaultHeight ?? 576
-        color: "black"
-        exclusionMode: ExclusionMode.Ignore
-        WlrLayershell.layer: WlrLayer.Overlay
-        WlrLayershell.namespace: "lock-ring-harness"
-        mask: Region {}
-        readonly property var plugin: Qt.createComponent("file://$TREE/lock-ring/LockRing.qml", Component.PreferSynchronous, win)
-        Component.onCompleted: if (plugin.status === Component.Error) console.warn("harness: the Lock Ring didn't load: " + plugin.errorString())
-        Loader {
-            id: loader
-            anchors.fill: parent
-            sourceComponent: win.plugin
-            onLoaded: {
-                item.pluginId = "lockRing";
-                item.lockScreen = true;
-                item.widgetWidth = Qt.binding(() => loader.width);
-                item.widgetHeight = Qt.binding(() => loader.height);
-                item.screen = Qt.binding(() => win.screen);
-            }
-        }
-    }
+# --- Hosts: what runs. Each sets, from TREE (the code under test):
+#   SHELL_DIR       the qs config dir
+#   RECORD_WINDOW   the layer-shell namespace of the window --record cuts to
+# and where a scenario's DMS (DMS=1) comes from:
+#   DMS_SOCKET      1: the stand-in DMS socket (harness/dms) runs, for a scenario with DMS
+#   LYRICS_LOG      where its stand-in logs each lyrics lookup (` lyrics.get ... -> found|none`)
+#   LYRICS_FROM     what the report calls that stand-in
+#   LYRICS_NONE     what the report says for a scenario without DMS
+# The stand-in DMS socket, in the run's runtime dir, where the bar looks for DMS's.
+lyrics_from_dms_socket() {
+    DMS_SOCKET=$DMS LYRICS_LOG=$DMS_LOG LYRICS_FROM="the stand-in DMS" LYRICS_NONE="no DMS"
 }
-EOF
+host_bar() {
+    SHELL_DIR=$TREE RECORD_WINDOW=bar-visualizer
+    lyrics_from_dms_socket
+}
+# The Lock Ring in a test qs (never the live DMS or its lock screen): harness/lockhost/shell.qml,
+# with the plugin from TREE, and stand-ins for the parts of DMS it imports. A scenario with a DMS
+# gets its stand-in lyrics service, which serves the same timed lyrics in the same process as DMS's
+# and logs to qs.log; one without gets a DMS without that service (as before DMS 2.0), so the Lock
+# Ring loads no Lyric Words, as the bar has none without DMS.
+host_lock() {
+    SHELL_DIR=$RUN/lock RECORD_WINDOW=lock-ring-harness
+    DMS_SOCKET=0 LYRICS_LOG=$OUT/qs.log LYRICS_FROM="the stand-in lyrics service" \
+        LYRICS_NONE="a DMS without its lyrics service"
+    cp -r "$HARNESS/lockhost" "$SHELL_DIR"
+    if ((!DMS)); then
+        rm -r "$SHELL_DIR/Services"
+        sed -i '/^import qs\.Services$/d' "$SHELL_DIR/shell.qml"
+    fi
 }
 # The tree's own AudioPipeline in a bare shell that logs each Kick against the epoch.
 host_kicks() {
-    SHELL_DIR=$RUN/kicks
+    SHELL_DIR=$RUN/kicks RECORD_WINDOW=""
+    lyrics_from_dms_socket
     mkdir -p "$SHELL_DIR"
     cat > "$SHELL_DIR/shell.qml" <<EOF
 import QtQuick
@@ -169,10 +147,11 @@ RUN=$(mktemp -d /tmp/bvh.XXXXXX)
 TREE=$REPO
 OUT=${OUT:-$(mktemp -d /tmp/bvh-out.XXXXXX)}
 mkdir -p "$OUT"
+DMS_LOG=$OUT/dms.log
 cleanup() {
     local u
     # One at a time: systemctl stops none of them if one isn't loaded (not started, or gone).
-    for u in qs rec stage aux; do systemctl --user stop "$ID-$u.scope" 2>/dev/null || true; done
+    for u in qs rec stage bus; do systemctl --user stop "$ID-$u.scope" 2>/dev/null || true; done
     wait "${QS_JOB:-}" 2>/dev/null || true   # perf, when it wraps qs
     local p
     for p in ${PERF_QS:-}; do rm -f "/tmp/perf-$p.map"; done   # QML's JIT map, if the run failed before the report
@@ -183,7 +162,7 @@ trap 'exit 130' INT TERM
 
 # systemd-run --user --scope puts the scopes here.
 APP_SLICE=/sys/fs/cgroup/user.slice/user-$(id -u).slice/user@$(id -u).service/app.slice
-CG=$APP_SLICE/$ID-qs.scope
+QS_CGROUP=$APP_SLICE/$ID-qs.scope
 
 # The real node, not a version manager's shim: those read the user's config dirs, which the run swaps.
 NODE=$(node -p process.execPath)
@@ -218,14 +197,13 @@ for frag in "$TREE"/shaders/*.frag "$TREE"/lock-ring/shaders/*.frag; do
     [[ -e $frag && ! ${frag}.qsb -nt $frag ]] || continue
     "$QSB" --glsl "100 es,120,150" --hlsl 50 --msl 12 -o "$frag.qsb" "$frag"
 done
-DMS_SOCKET=$DMS LYRICS_LOG=$OUT/dms.log LYRICS_FROM="the stand-in DMS" LYRICS_NONE="no DMS"
 "host_$HOST"
 
 # The run's own runtime dir, linking back only to PipeWire, systemd and (before qs starts) the
 # compositor. Pulse is reached by its socket: pactl refuses a symlinked pulse/ dir.
-RT=/run/user/$(id -u)
+DESKTOP_RUNTIME=/run/user/$(id -u)
 for f in pipewire-0 systemd; do
-    [[ -e $RT/$f ]] && ln -s "$RT/$f" "$RUN/$f"
+    [[ -e $DESKTOP_RUNTIME/$f ]] && ln -s "$DESKTOP_RUNTIME/$f" "$RUN/$f"
 done
 chmod 700 "$RUN"
 mkdir -p "$RUN/config/bar-visualizer" "$RUN/cache" "$RUN/state" "$RUN/data"
@@ -234,10 +212,11 @@ echo '{}' > "$RUN/config/bar-visualizer/config.json"   # every setting at its de
 HARNESS_PACTL=$(command -v pactl || true)   # the real one, before bin/ goes first on PATH
 export HARNESS_PACTL XDG_RUNTIME_DIR=$RUN XDG_CONFIG_HOME=$RUN/config XDG_CACHE_HOME=$RUN/cache \
     XDG_STATE_HOME=$RUN/state XDG_DATA_HOME=$RUN/data \
-    PULSE_SERVER=unix:$RT/pulse/native PATH=$HARNESS/bin:$PATH NO_AT_BRIDGE=1 \
-    HARNESS_FIXTURE=$FIXTURE HARNESS_SILENT=$SILENT HARNESS_LOOP=$LOOP_LENGTH HARNESS_LOG=$OUT/capture.log \
+    PULSE_SERVER=unix:$DESKTOP_RUNTIME/pulse/native PATH=$HARNESS/bin:$PATH NO_AT_BRIDGE=1 \
+    HARNESS_TREE=$TREE HARNESS_FIXTURE=$FIXTURE HARNESS_SILENT=$SILENT HARNESS_LOOP=$LOOP_LENGTH \
+    HARNESS_LOG=$OUT/capture.log \
     HARNESS_PLAYER=$PLAYER HARNESS_PLAYER_TITLE=$PLAYER_TITLE HARNESS_PLAYER_LOG=$OUT/player.log \
-    HARNESS_DMS=$DMS_SOCKET HARNESS_DMS_LOG=$OUT/dms.log HARNESS_LYRICS=$HARNESS/lyrics.json \
+    HARNESS_DMS=$DMS_SOCKET HARNESS_DMS_LOG=$DMS_LOG HARNESS_LYRICS=$HARNESS/lyrics.json \
     HARNESS_REFERENCE=$HARNESS/reference.json
 : > "$HARNESS_LOG"
 : > "$HARNESS_PLAYER_LOG"
@@ -250,109 +229,62 @@ sleep_until() { local s; s=$(awk -v t="$1" -v n="$(now)" 'BEGIN { d = t - n; pri
 export HARNESS_EPOCH=$(awk -v n="$(now)" -v w="$WARMUP" 'BEGIN { printf "%.6f", n + w }')
 WINDOW=$(awk -v l="$LOOP_LENGTH" -v n="$LOOPS" 'BEGIN { printf "%.6f", l * n }')
 
-# A private session bus, held open in its own scope with the stand-ins on it. They stand in for
-# the user's session (the stand-in player for Spotify, say, and the stand-in DMS for DMS), so
+# A private session bus, held open in its own scope ($ID-bus) with the stand-ins on it. They stand
+# in for the user's session (the stand-in player for Spotify, say, and the stand-in DMS for DMS), so
 # their CPU isn't the visualizer's.
-systemd-run --user --scope --unit="$ID-aux" -q \
+systemd-run --user --scope --unit="$ID-bus" -q \
     dbus-run-session --config-file="$HARNESS/bus.conf" -- \
     sh -c 'echo "$DBUS_SESSION_BUS_ADDRESS" > "$XDG_RUNTIME_DIR/bus.addr"
            [ "$HARNESS_PLAYER" = none ] || "$0/player" &
            [ "$HARNESS_DMS" = 0 ] || "$0/dms" &
            exec sleep infinity' "$HARNESS" \
-    > "$OUT/aux.log" 2>&1 &
+    > "$OUT/bus.log" 2>&1 &
 for _ in $(seq 50); do [[ -s $RUN/bus.addr ]] && break; sleep 0.1; done
-[[ -s $RUN/bus.addr ]] || die "the private session bus didn't start (see $OUT/aux.log)"
+[[ -s $RUN/bus.addr ]] || die "the private session bus didn't start (see $OUT/bus.log)"
 export DBUS_SESSION_BUS_ADDRESS=$(cat "$RUN/bus.addr")
 player_on_bus() { busctl --address="$DBUS_SESSION_BUS_ADDRESS" list --no-legend 2>/dev/null | grep -q '^org\.mpris\.MediaPlayer2\.harness '; }
 if [[ $PLAYER != none ]]; then
     for _ in $(seq 50); do player_on_bus && break; sleep 0.1; done
-    player_on_bus || die "the stand-in player didn't start (see $OUT/aux.log)"
+    player_on_bus || die "the stand-in player didn't start (see $OUT/bus.log)"
 fi
 # The bar looks for DMS's socket once at start, then only every 15 s: it must be there before qs.
 dms_up() { compgen -G "$RUN/dms-*.sock" >/dev/null; }
 if ((DMS_SOCKET)); then
     for _ in $(seq 50); do dms_up && break; sleep 0.1; done
-    dms_up || die "the stand-in DMS didn't start (see $OUT/aux.log)"
+    dms_up || die "the stand-in DMS didn't start (see $OUT/bus.log)"
 fi
 
-# --- The stage (--record): a headless Hyprland of its own for the run to show on, so a recording
-# holds nothing of the desktop. It has its own runtime dir ($RUN/s, short for its sockets' paths),
-# config, cache, state and data dirs and the run's private bus. It starts as a client of the
-# desktop's compositor and turns its one window there (its WAYLAND-1 output) off at once; it shows
-# on its output STAGE, headless, the size of the desktop's monitor in logical pixels. It never
-# reaches systemd or the user's bus: Hyprland hands its environment to `systemctl --user` and
-# `dbus-update-activation-environment` at start, which would point the user's services at the
-# stage, so stand-ins for both that do nothing are first on its PATH.
-stage_ctl() { XDG_RUNTIME_DIR=$STAGE HYPRLAND_INSTANCE_SIGNATURE=$STAGE_SIG hyprctl "$@"; }
-stage_up() { stage_ctl monitors 2>/dev/null | grep -q '^Monitor STAGE '; }
-stage_start() {
-    STAGE=$RUN/s
-    mkdir -p "$STAGE/bin" "$STAGE/config" "$STAGE/cache" "$STAGE/state" "$STAGE/data"
-    chmod 700 "$STAGE"
-    ln -s "$RT/${WAYLAND_DISPLAY:-wayland-1}" "$STAGE/wayland-host"
-    local stub
-    for stub in systemctl dbus-update-activation-environment; do
-        printf '#!/bin/sh\nexit 0\n' > "$STAGE/bin/$stub"
-        chmod +x "$STAGE/bin/$stub"
-    done
-    XDG_RUNTIME_DIR=$RT hyprctl -j monitors > "$RUN/desktop.json" 2>/dev/null || echo '[]' > "$RUN/desktop.json"
-    local mode
-    mode=$("$NODE" "$HARNESS/stage.mjs" mode "$RUN/desktop.json")
-    cat > "$STAGE/stage.lua" <<EOF
-hl.monitor({ output = "WAYLAND-1", disabled = true })
-hl.monitor({ output = "", mode = "$mode", position = "0x0", scale = 1 })
-hl.config({
-    misc = { disable_hyprland_logo = true, disable_splash_rendering = true, force_default_wallpaper = 0, background_color = 0x000000 },
-    xwayland = { enabled = false },
-    ecosystem = { no_update_news = true, no_donation_nag = true },
-})
-EOF
-    systemd-run --user --scope --unit="$ID-stage" -q \
-        env -u HYPRLAND_INSTANCE_SIGNATURE -u DISPLAY XDG_RUNTIME_DIR="$STAGE" WAYLAND_DISPLAY=wayland-host \
-        XDG_CONFIG_HOME="$STAGE/config" XDG_CACHE_HOME="$STAGE/cache" XDG_STATE_HOME="$STAGE/state" \
-        XDG_DATA_HOME="$STAGE/data" PATH="$STAGE/bin:$PATH" \
-        Hyprland -c "$STAGE/stage.lua" > "$OUT/stage.log" 2>&1 &
-    local sock=""
-    for _ in $(seq 100); do
-        sock=$(compgen -G "$STAGE/hypr/*/.socket.sock" | head -1 || true)
-        [[ -n $sock && -S $STAGE/wayland-1 ]] && break
-        sleep 0.1
-    done
-    [[ -n $sock && -S $STAGE/wayland-1 ]] || die "the stage didn't start (see $OUT/stage.log)"
-    STAGE_SIG=$(basename "$(dirname "$sock")")
-    stage_ctl output create headless STAGE > /dev/null
-    for _ in $(seq 50); do stage_up && break; sleep 0.1; done
-    stage_up || die "the stage has no output (see $OUT/stage.log)"
-}
-
-# The compositor qs shows on: the desktop's, or the stage's.
-SHOW_RT=$RT
+# The compositor qs shows on: the desktop's, or the stage's (--record, harness/stage.sh).
+SHOW_RUNTIME=$DESKTOP_RUNTIME
 if [[ -n $RECORD ]]; then
     stage_start
-    SHOW_RT=$STAGE
+    SHOW_RUNTIME=$STAGE
     export WAYLAND_DISPLAY=wayland-1 HYPRLAND_INSTANCE_SIGNATURE=$STAGE_SIG
 fi
 for f in "${WAYLAND_DISPLAY:-wayland-1}" hypr; do
-    [[ -e $SHOW_RT/$f ]] && ln -s "$SHOW_RT/$f" "$RUN/$f"
+    [[ -e $SHOW_RUNTIME/$f ]] && ln -s "$SHOW_RUNTIME/$f" "$RUN/$f"
 done
 
 # --- Measures: set up before qs starts (optional), begin before the window, end after it, report
-# after the run. ----------------------------------------------------------------------------------
-pids() { cat "$CG/cgroup.procs" 2>/dev/null; }
+# after the run. Each report prints its lines and writes its result.json fields (one JSON object)
+# to $RUN/<measure>.json, merged into result.json in the measures' order. ----------------------------
+pids() { cat "$QS_CGROUP/cgroup.procs" 2>/dev/null; }
 # A short-lived child (sh, pactl) can exit while it's read: then empty, not a failed run (set -e,
 # pipefail).
 comm() { cat "/proc/$1/comm" 2>/dev/null || true; }
 ticks() { { sed 's/.*) //' "/proc/$1/stat" 2>/dev/null || true; } | awk '{ print $12 + $13 }'; }   # utime + stime
-usage() { awk -v k="$1" '$1 == k { print $2 }' "$CG/cpu.stat"; }
+cpu_stat() { awk -v k="$1" '$1 == k { print $2 }' "$QS_CGROUP/cpu.stat"; }
+# us of CPU over ns of wall time, as % of one core.
+of_core() { awk -v u="$1" -v t="$2" 'BEGIN { printf "%.1f", u * 1000 / t * 100 }'; }
 
 measure_cpu_begin() {
-    CPU_U0=$(usage usage_usec) CPU_USER0=$(usage user_usec) CPU_SYS0=$(usage system_usec) CPU_T0=$(date +%s%N)
+    CPU_U0=$(cpu_stat usage_usec) CPU_USER0=$(cpu_stat user_usec) CPU_SYS0=$(cpu_stat system_usec) CPU_T0=$(date +%s%N)
     declare -gA TICKS0=() NAME=()
     local p
     for p in $(pids); do TICKS0[$p]=$(ticks "$p"); NAME[$p]=$(comm "$p"); done
 }
 measure_cpu_end() {
-    CPU_U1=$(usage usage_usec) CPU_USER1=$(usage user_usec) CPU_SYS1=$(usage system_usec) CPU_T1=$(date +%s%N)
+    CPU_U1=$(cpu_stat usage_usec) CPU_USER1=$(cpu_stat user_usec) CPU_SYS1=$(cpu_stat system_usec) CPU_T1=$(date +%s%N)
     declare -gA TICKS1=()
     local p
     for p in $(pids); do TICKS1[$p]=$(ticks "$p"); NAME[$p]=${NAME[$p]:-$(comm "$p")}; done
@@ -360,28 +292,25 @@ measure_cpu_end() {
     for p in "${!TICKS1[@]}"; do [[ ${NAME[$p]} != cava ]] || CAPTURE_ALIVE=1; done
 }
 measure_cpu_report() {
-    local hz ns pct user sys qs=0 cap=0 p d
+    local hz ns qs=0 capture=0 p d
     hz=$(getconf CLK_TCK) ns=$((CPU_T1 - CPU_T0))
-    of_core() { awk -v u="$1" -v t="$ns" 'BEGIN { printf "%.1f", u * 1000 / t * 100 }'; }   # us over the window
     # Processes alive for the whole window, by name; whatever else ran in it (sh, pactl, a capture
     # restarted mid-window) is the rest of the total.
     for p in "${!TICKS1[@]}"; do
         [[ -n ${TICKS0[$p]:-} && -n ${TICKS1[$p]} ]] || continue
         d=$(((${TICKS1[$p]} - ${TICKS0[$p]}) * 1000000 / hz))
-        case ${NAME[$p]} in qs) qs=$((qs + d)) ;; cava) cap=$((cap + d)) ;; esac
+        case ${NAME[$p]} in qs) qs=$((qs + d)) ;; cava) capture=$((capture + d)) ;; esac
     done
-    local total=$((CPU_U1 - CPU_U0))
-    pct=$(of_core "$total") user=$(of_core $((CPU_USER1 - CPU_USER0))) sys=$(of_core $((CPU_SYS1 - CPU_SYS0)))
-    local pqs pcap prest
-    pqs=$(of_core "$qs") pcap=$(of_core "$cap") prest=$(of_core $((total - qs - cap < 0 ? 0 : total - qs - cap)))
+    local total=$((CPU_U1 - CPU_U0)) rest
+    rest=$((total - qs - capture < 0 ? 0 : total - qs - capture))
+    local pct user sys pqs pcap prest
+    pct=$(of_core "$total" "$ns") user=$(of_core $((CPU_USER1 - CPU_USER0)) "$ns") sys=$(of_core $((CPU_SYS1 - CPU_SYS0)) "$ns")
+    pqs=$(of_core "$qs" "$ns") pcap=$(of_core "$capture" "$ns") prest=$(of_core "$rest" "$ns")
     echo "cpu      $pct % of one core (qs + capture + children), user $user, system $sys"
     echo "         qs $pqs, capture $pcap, other (sh, pactl, ...) $prest"
-    RESULT_JSON+="\"cpu_pct\": $pct, \"cpu_user_pct\": $user, \"cpu_system_pct\": $sys, \"cpu_qs_pct\": $pqs, \"cpu_capture_pct\": $pcap, \"cpu_other_pct\": $prest, "
+    "$NODE" "$HARNESS/result.mjs" "$RUN/cpu.json" n:cpu_pct="$pct" n:cpu_user_pct="$user" n:cpu_system_pct="$sys" \
+        n:cpu_qs_pct="$pqs" n:cpu_capture_pct="$pcap" n:cpu_other_pct="$prest"
 }
-
-# The deeper measures report through a node script each: it prints its lines and writes its
-# result.json fields (one JSON object) to a file, appended here.
-add_json() { local j; j=$(cat "$1"); j=${j#\{}; j=${j%\}}; [[ -z $j ]] || RESULT_JSON+="$j, "; }
 
 # Frame timing and GPU frame time, from Qt's own render-loop log in qs.log: QSG_RENDER_TIMING logs
 # each frame the render loop renders, per window, QSG_RHI_PROFILE adds the GPU's time for it
@@ -395,7 +324,6 @@ measure_frames_report() {
     local music=()
     ((SILENT)) || music=(--music)   # with music the visualizer moves: no frame means nothing was drawn
     "$NODE" "$HARNESS/frames.mjs" "$OUT/qs.log" "$FRAMES_T0" "$FRAMES_T1" --utc-offset "$FRAMES_UTC_OFFSET" "${monitors[@]}" "${music[@]}" --json "$RUN/frames.json" || exit 1
-    add_json "$RUN/frames.json"
 }
 
 # GPU busy: the DRM driver's per-client engine time (/proc/<pid>/fdinfo of each /dev/dri fd), for
@@ -413,10 +341,7 @@ gpu_snapshot() {
 }
 measure_gpu_begin() { gpu_snapshot > "$RUN/gpu0.txt"; }
 measure_gpu_end() { gpu_snapshot > "$RUN/gpu1.txt"; }
-measure_gpu_report() {
-    "$NODE" "$HARNESS/gpu.mjs" "$RUN/gpu0.txt" "$RUN/gpu1.txt" --json "$RUN/gpu.json"
-    add_json "$RUN/gpu.json"
-}
+measure_gpu_report() { "$NODE" "$HARNESS/gpu.mjs" "$RUN/gpu0.txt" "$RUN/gpu1.txt" --json "$RUN/gpu.json"; }
 
 # The CPU profile: perf samples every process in the scope (qs's threads, the capture, sh, pactl)
 # in the window only, user space only (all perf_event_paranoid 2 allows). perf must be qs's
@@ -463,7 +388,6 @@ measure_profile_report() {
     for p in $PERF_QS; do if [[ -e /tmp/perf-$p.map ]]; then mv "/tmp/perf-$p.map" "$OUT/"; fi; done
     cat "$RUN/parts.txt"
     echo "         $OUT/perf.data, $OUT/profile.txt"
-    add_json "$RUN/profile.json"
 }
 
 # The recording (--record): wf-recorder on the stage's output, cut to the visualizer's window, over
@@ -506,7 +430,7 @@ PLAYER_ALIVE=0
 [[ $PLAYER == none ]] || ! player_on_bus || PLAYER_ALIVE=1
 LOCKED=0
 ((CHECK_KICKS)) || ! session_locked || LOCKED=1
-systemctl --user stop "$ID-qs.scope" "$ID-aux.scope" 2>/dev/null || true
+systemctl --user stop "$ID-qs.scope" "$ID-bus.scope" 2>/dev/null || true
 
 STARTS=$(grep -c '^start' "$HARNESS_LOG" || true)
 echo "harness  $SCENARIO on $HOST, $TREE_DESC"
@@ -520,7 +444,7 @@ READS=$(grep -c ' Get' "$HARNESS_PLAYER_LOG" || true)
 if [[ $PLAYER == none ]]; then
     echo "player   none"
 else
-    ((PLAYER_ALIVE)) || { echo "FAILED: the stand-in player wasn't on the bus at the end of the window (see $OUT/aux.log)"; exit 1; }
+    ((PLAYER_ALIVE)) || { echo "FAILED: the stand-in player wasn't on the bus at the end of the window (see $OUT/bus.log)"; exit 1; }
     ((READS)) || { echo "FAILED: the visualizer never read the stand-in player (see $OUT/player.log, $OUT/qs.log)"; exit 1; }
     echo "player   $PLAYER \"$PLAYER_TITLE\", the Active Player (read $READS time(s))"
 fi
@@ -547,7 +471,13 @@ if [[ -n $RECORD ]]; then
     exit
 fi
 
-RESULT_JSON="{\"scenario\": \"$SCENARIO\", \"host\": \"$HOST\", \"commit\": \"$REV\", \"dirty\": $DIRTY, \"tree\": \"$TREE_DESC\", \"track\": \"$TRACK\", \"player\": \"$PLAYER\", \"player_title\": \"$PLAYER_TITLE\", \"dms\": $DMS, \"lyrics_requests\": $ASKED, \"window_s\": $WINDOW, \"warmup_s\": $WARMUP, \"loadavg\": \"$LOAD\", \"capture_starts\": $STARTS, "
-for m in "${MEASURES[@]}"; do "measure_${m}_report"; done
-echo "${RESULT_JSON%, }}" > "$OUT/result.json"
+PARTS=()
+for m in "${MEASURES[@]}"; do
+    "measure_${m}_report"
+    [[ ! -e $RUN/$m.json ]] || PARTS+=("@$RUN/$m.json")
+done
+"$NODE" "$HARNESS/result.mjs" "$OUT/result.json" \
+    s:scenario="$SCENARIO" s:host="$HOST" s:commit="$REV" b:dirty="$DIRTY" s:tree="$TREE_DESC" s:track="$TRACK" \
+    s:player="$PLAYER" s:player_title="$PLAYER_TITLE" n:dms="$DMS" n:lyrics_requests="$ASKED" n:window_s="$WINDOW" \
+    n:warmup_s="$WARMUP" s:loadavg="$LOAD" n:capture_starts="$STARTS" "${PARTS[@]}"
 echo "out      $OUT"
