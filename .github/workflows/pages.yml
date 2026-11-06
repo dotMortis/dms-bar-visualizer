@@ -31,10 +31,16 @@ jobs:
           workspaces: core
       # The wasm-bindgen CLI must be the exact version core/Cargo.toml pins.
       - id: wasm-bindgen
-        run: echo "version=$(sed -n 's/^wasm-bindgen = "=\(.*\)"$/\1/p' core/Cargo.toml)" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(core/build-wasm.sh --wasm-bindgen-version)" >> "$GITHUB_OUTPUT"
       - uses: taiki-e/install-action@v2
         with:
           tool: wasm-bindgen@${{ steps.wasm-bindgen.outputs.version }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Nothing deploys unless the core's tests pass and its WASM build matches the native one.
+      - run: cargo test --manifest-path core/Cargo.toml
+      - run: node core/parity.mjs
       - run: core/build-wasm.sh docs/wasm
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

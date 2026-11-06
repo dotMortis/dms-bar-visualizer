@@ -4,14 +4,20 @@
 # module; in node, `initSync({ module: <the .wasm's bytes> })`.
 #
 #     core/build-wasm.sh [out-dir]    (default: core/target/wasm-web)
+#     core/build-wasm.sh --wasm-bindgen-version    (prints the wasm-bindgen CLI version it needs)
 #
 # Needs once: rustup target add wasm32-unknown-unknown
 #             cargo install wasm-bindgen-cli --version <the wasm-bindgen pinned in Cargo.toml> --locked
 set -euo pipefail
 core="$(cd "$(dirname "$0")" && pwd)"
-out="${1:-$core/target/wasm-web}"
 
+# The wasm-bindgen CLI must be the exact version Cargo.toml pins.
 want="$(sed -n 's/^wasm-bindgen = "=\(.*\)"$/\1/p' "$core/Cargo.toml")"
+if [[ "${1:-}" == "--wasm-bindgen-version" ]]; then
+    echo "$want"
+    exit 0
+fi
+out="${1:-$core/target/wasm-web}"
 have="$(wasm-bindgen --version 2>/dev/null | cut -d' ' -f2 || true)"
 if [[ "$have" != "$want" ]]; then
     echo "build-wasm: needs wasm-bindgen CLI $want (have: ${have:-none}):" >&2
