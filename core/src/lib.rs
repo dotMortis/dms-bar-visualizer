@@ -2,15 +2,18 @@
 //! [`Visualizer`] is the one seam: everything goes in through it and comes out of its [`Frame`].
 
 // The C ABI is the native boundary; in WASM, wasm-bindgen's exports would clash with its names.
+pub mod bar_words;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod c_abi;
 mod kick;
+mod lyric_line;
 pub mod ribbons;
 mod settings;
 #[cfg(target_arch = "wasm32")]
 mod wasm;
 
 use kick::{KickDetector, KickSettings};
+pub use lyric_line::LyricWord;
 use settings::Settings;
 
 /// cava's layout: 32 bands from 30 Hz to 14 kHz, bass first.
