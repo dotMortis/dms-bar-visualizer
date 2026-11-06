@@ -105,6 +105,8 @@ python3 tests/fixtures/record.py all          # re-record all of them (about 4 m
 
 ## Measuring
 
+The numbers for every step, from v0.10.0 on, how they were measured and how to re-run them are in [docs/performance.md](docs/performance.md). `node harness/table.mjs <dirs>` turns runs' `result.json` files into its tables.
+
 ```sh
 harness/run music                      # the Bar Visualizer on the reference track: CPU, frames, GPU, profile
 harness/run --cpu-only music           # CPU alone
