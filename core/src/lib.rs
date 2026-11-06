@@ -5,6 +5,7 @@
 #[cfg(not(target_arch = "wasm32"))]
 pub mod c_abi;
 mod kick;
+pub mod lock_ring;
 pub mod ribbons;
 mod settings;
 #[cfg(target_arch = "wasm32")]
