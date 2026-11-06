@@ -402,14 +402,16 @@ const live = () => view === "ring" ? lockRingSettings(cfg) : cfg;
 const configureKicks = () => core.configure(coreSettings(cfg, view));
 
 const core = new Visualizer();
+// The demo's sources always play: no Active Player to follow, so never Silence but "silent".
+core.setPlayer("playing");
 // What the sources fill: one capture frame, 32 bands in 0..1, bass first.
 const input = new Float64Array(BANDS);
 const st = {
-  // The core's bands, bass/mid/treble and Kick level, as of its last frame (readCore()).
-  values: new Float32Array(BANDS), bass: 0, mid: 0, treble: 0, kick: 0,
-  time: 0, flow: 0, kickCount: 0,
-  // Same ring buffer as kickTimes/kickPowers/kickSeeds in audio/AudioPipeline.qml.
-  kickTimes: new Array(8).fill(-100), kickPowers: new Float32Array(8), kickSeeds: new Float32Array(8),
+  // The core's frame, as of its last call (readCore()): the bands, bass/mid/treble, the Kick level,
+  // the animation clock (wrapped at 1200 s), the wave phase (flow) and the Kick slots.
+  values: new Float32Array(BANDS), bass: 0, mid: 0, treble: 0, kick: 0, time: 0, flow: 0,
+  kickAges: new Float32Array(8), kickPowers: new Float32Array(8), kickSeeds: new Float32Array(8),
+  kickCount: 0,
   inset: cfg.spacing, cornerRadius: cfg.radius,
 };
 
@@ -419,6 +421,8 @@ function readCore() {
   const f = core.frame();
   st.values.set(f.bands);
   st.bass = f.bass; st.mid = f.mid; st.treble = f.treble; st.kick = f.kick;
+  st.time = f.time; st.flow = f.flow; st.kickCount = f.kickCount;
+  st.kickAges.set(f.kickAges); st.kickPowers.set(f.kickPowers); st.kickSeeds.set(f.kickSeeds);
   return f;
 }
 
@@ -432,11 +436,6 @@ function onValues(now) {
   if (f.kickCount === coreKicks) return;
   coreKicks = f.kickCount;
   const power = f.kickPower;
-  st.kickCount = (st.kickCount + 1) % 1000;
-  const slot = st.kickCount % 8;
-  st.kickTimes[slot] = st.time;
-  st.kickPowers[slot] = power;
-  st.kickSeeds[slot] = st.kickCount;
   ringLyrics.kick(power, now * 1000);
   barLyrics.kick(power, now * 1000);
 }
@@ -807,7 +806,7 @@ function drawRing() {
   const values = ringUniforms({
     values: st.values, time: st.time, flow: st.flow, treble: st.treble, kick: st.kick,
     swell: ring.swell, presence: ring.presence, intensity: live().intensity, bassStretch: cfg.bassStretch,
-    kickAges: st.kickTimes.map(t => st.time - t), kickPowers: st.kickPowers, kickSeeds: st.kickSeeds,
+    kickAges: st.kickAges, kickPowers: st.kickPowers, kickSeeds: st.kickSeeds,
     now: new Date(), handLevels: ring.handLevels, handPhases: ring.handPhases, flash: ring.flash, handWaves: cfg.lockRing.handWaves,
     dialRadius: Math.min(ringCanvas.width, ringCanvas.height) * DIAL_RATIO,
   });
@@ -888,7 +887,7 @@ const cssRgb = c => `rgb(${c.join(" ")})`;
 const WHITE = [255, 255, 255];
 function drawWords(size) {
   if (ring.words.length === 0) return;
-  const kickAges = st.kickTimes.map(t => st.time - t);
+  const kickAges = st.kickAges;
   const scene = {
     dialRadius: size * DIAL_RATIO, values: st.values, flow: st.flow, time: st.time % 1200, treble: st.treble,
     swell: ring.swell, kick: st.kick, bassStretch: cfg.bassStretch,
@@ -966,7 +965,7 @@ function drawBarWords(words) {
   if (words.length === 0) return;
   const inputs = {
     width, height, values: st.values, time: st.time, kick: st.kick, treble: st.treble, flow: st.flow,
-    bassStretch: cfg.bassStretch, kickAges: st.kickTimes.map(t => st.time - t), kickPowers: st.kickPowers,
+    bassStretch: cfg.bassStretch, kickAges: st.kickAges, kickPowers: st.kickPowers,
   };
   const em = Math.max(8, Math.round(height * BAR_LOOK.font));
   wctx.font = `600 ${em}px ${WORD_FAMILY}`;
@@ -1068,10 +1067,8 @@ function frame() {
     nextBands = t + 1 / 60;
   }
 
-  st.time += dt * cfg.speed;
-  st.flow += dt * cfg.speed * (8 * st.bass + 4 * st.mid + 6 * st.kick);
-  core.advance(dt);   // the Kick level fades at kickDecay
-  readCore();
+  core.advance(dt);   // the clock and flow run, the Kick level fades at kickDecay, the Kicks age
+  const f = readCore();
 
   // Ease the corner radius like the Behavior in shell.qml (the inset eases via CSS).
   const targetR = maxBox.checked ? 0 : cfg.radius;
@@ -1084,7 +1081,7 @@ function frame() {
   ring.swell = m.swell; ring.presence = m.presence;
   const h = handMotion.step(levels, dt, cfg.speed);
   ring.handLevels = h.levels; ring.handPhases = h.phases;
-  const kickAges = st.kickTimes.map(t => st.time - t);
+  const kickAges = st.kickAges;
   ring.flash = handFlash(kickAges, st.kickPowers, cfg.kickDecay);
   ring.timeCrossing = shockwaveCrossing(TIME_RADIUS, kickAges, st.kickPowers, st.kickSeeds, Math.PI);  // the time sits at 6 o'clock
   ring.words = ringLyrics.words(now * 1000);
@@ -1096,14 +1093,16 @@ function frame() {
     const dpr = resize();
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.uniform1f(U.time, st.time); gl.uniform1f(U.bass, st.bass); gl.uniform1f(U.mid, st.mid);
-    gl.uniform1f(U.treble, st.treble); gl.uniform1f(U.kick, st.kick);
-    gl.uniform1f(U.radius, st.cornerRadius * dpr); gl.uniform1f(U.intensity, cfg.intensity);
-    gl.uniform1f(U.bassStretch, cfg.bassStretch); gl.uniform1f(U.flow, st.flow);
-    gl.uniform1fv(U.kickAges, st.kickTimes.map(t => st.time - t));
-    gl.uniform1fv(U.kickPowers, st.kickPowers); gl.uniform1fv(U.kickSeeds, st.kickSeeds);
+    // Everything but the bar's geometry (radius, res) straight from the core's frame.
+    gl.uniform1f(U.time, f.time); gl.uniform1f(U.bass, f.bass); gl.uniform1f(U.mid, f.mid);
+    gl.uniform1f(U.treble, f.treble); gl.uniform1f(U.kick, f.kick);
+    gl.uniform1f(U.intensity, f.intensity); gl.uniform1f(U.bassStretch, f.bassStretch);
+    gl.uniform1f(U.flow, f.flow);
+    gl.uniform1fv(U.kickAges, f.kickAges); gl.uniform1fv(U.kickPowers, f.kickPowers);
+    gl.uniform1fv(U.kickSeeds, f.kickSeeds);
+    gl.uniform1fv(U.bands, f.bands);
+    gl.uniform1f(U.radius, st.cornerRadius * dpr);
     gl.uniform2f(U.res, canvas.width, canvas.height);
-    gl.uniform1fv(U.bands, st.values);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     drawBarWords(barLyrics.words(now * 1000));
   }
