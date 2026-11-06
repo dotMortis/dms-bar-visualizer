@@ -48,6 +48,16 @@ pub enum Player {
     Playing = 2,
 }
 
+/// Which visualizer a Visualizer is: the Bar Visualizer, or the Lock Ring, which runs on the bar's
+/// settings with its lockRing percentages applied (ADR 0005) and keeps the Lock Ring's own state
+/// (`Visualizer::lock_ring`).
+#[repr(u32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Kind {
+    Bar = 0,
+    LockRing = 1,
+}
+
 /// Which Silence case applies (GLOSSARY.md), or None when there is something to hear.
 #[repr(u32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -108,6 +118,9 @@ pub struct Frame {
 /// One visualizer instance. Every call is total: bad input is clamped or ignored, never a panic,
 /// and after `new` nothing allocates but `configure`.
 pub struct Visualizer {
+    kind: Kind,
+    /// config.json's settings as configured, and the ones this kind runs on.
+    config: Settings,
     settings: Settings,
     kicks: KickDetector,
     /// The animation clock, unwrapped: the Kick slots' ages are counted on it.
@@ -147,6 +160,8 @@ impl Visualizer {
     pub fn new() -> Self {
         let settings = Settings::default();
         Visualizer {
+            kind: Kind::Bar,
+            config: settings.clone(),
             kicks: KickDetector::new(kick_settings(&settings)),
             clock: 0.0,
             kick_times: [EMPTY_SLOT; KICK_SLOTS],
@@ -181,12 +196,28 @@ impl Visualizer {
     /// good settings. They take effect on the next frame; the running state carries over.
     pub fn configure(&mut self, settings: &str) {
         if let Some(settings) = Settings::parse(settings) {
-            self.kicks.configure(kick_settings(&settings));
-            self.frame.intensity = settings.intensity;
-            self.frame.bass_stretch = settings.bass_stretch;
-            self.settings = settings;
-            self.update_animating();
+            self.config = settings;
+            self.apply_settings();
         }
+    }
+
+    /// Which visualizer this is: the Bar Visualizer (as new), or the Lock Ring. Configures it as
+    /// that kind on the settings last configured; the running state carries over.
+    pub fn set_kind(&mut self, kind: Kind) {
+        self.kind = kind;
+        self.apply_settings();
+    }
+
+    fn apply_settings(&mut self) {
+        let settings = match self.kind {
+            Kind::Bar => self.config.clone(),
+            Kind::LockRing => self.config.lock_ring(),
+        };
+        self.kicks.configure(kick_settings(&settings));
+        self.frame.intensity = settings.intensity;
+        self.frame.bass_stretch = settings.bass_stretch;
+        self.settings = settings;
+        self.update_animating();
     }
 
     /// One capture frame: the BANDS bands, 0..1, bass first, and when they came, in real
