@@ -3,7 +3,7 @@
 // frame), are matched loop by loop to the Kicks the kick-replay tests expect for the track.
 //
 //   node harness/kicks.mjs <kick log> <loops> [track]   checks a log of "KICK <s since epoch> <power>"
-//   lines; exits 1 if any loop's Kicks are off
+//   lines (harness/check-kicks's qs.log); exits 1 if any loop's Kicks are off
 import fs from "node:fs";
 
 import { CONFIGS, FIXTURES, replay } from "../tests/replay.mjs";
@@ -52,10 +52,15 @@ export function checkKicks(live, { expected, length, loops, tolerance = 1 / 30 }
     return { ok: perLoop.every(l => !l.missed && !l.extra), loops: perLoop };
 }
 
+// The Kicks in a log (harness/kicks/shell.qml's "KICK <s since epoch> <power>" lines among qs's
+// others), as s since the epoch.
+export function liveKicks(log) {
+    return log.split("\n").map(line => line.match(/KICK (-?[\d.]+)/)).filter(Boolean).map(m => Number(m[1]));
+}
+
 if (import.meta.main) {
     const [log, loops, name = REFERENCE_TRACK] = process.argv.slice(2);
-    const live = fs.readFileSync(log, "utf8").split("\n")
-        .map(line => line.match(/KICK (-?[\d.]+)/)).filter(Boolean).map(m => Number(m[1]));
+    const live = liveKicks(fs.readFileSync(log, "utf8"));
     const result = checkKicks(live, { ...replayTrack(name), loops: Number(loops) });
     for (const l of result.loops)
         console.log(`kicks loop ${l.loop}: ${l.kicks} live, ${l.missed} missed, ${l.extra} extra, worst ${l.worstMs} ms`);

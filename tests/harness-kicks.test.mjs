@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { REFERENCE_TRACK, checkKicks, replayTrack } from "../harness/kicks.mjs";
+import { REFERENCE_TRACK, checkKicks, liveKicks, replayTrack } from "../harness/kicks.mjs";
 
 // A made-up track: Kicks at 1, 2 and 3 s of a 4 s loop.
 const expected = [1, 2, 3];
@@ -39,6 +39,16 @@ describe("harness kick check", () => {
         assert.ok(Math.abs(track.length - 24.05) < 0.001, `loop length ${track.length}`);
         // Times into the track: its first Kick comes after the 2 s of silence it starts with.
         assert.ok(track.expected[0] > 1.5 && track.expected[0] < 2.5, `first Kick at ${track.expected[0]}`);
+    });
+
+    test("a run's qs.log gives its Kicks' times since the epoch, other lines ignored", () => {
+        const log = [
+            "2026-11-06 13:24:59.139 DEBUG qml: KICK -4.9141 1.000",
+            "2026-11-06 13:24:59.200 INFO scene: Configuration Loaded",
+            "2026-11-06 13:25:06.100 DEBUG qml: KICK 2.0012 0.792",
+            "",
+        ].join("\n");
+        assert.deepEqual(liveKicks(log), [-4.9141, 2.0012]);
     });
 
     test("Kicks during the warm-up or after the last whole loop don't count", () => {
