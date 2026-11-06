@@ -7,9 +7,9 @@
 use crate::bar_words::{em, lay_word, row_widths, word_look};
 use crate::glyph::{Glyph, GlyphCopy};
 use crate::lock_ring::{
-    shockwave_crossing as ring_crossing, word_look as ring_word_look, word_placement, LockRing, PlacedLetter,
-    WordScene, DIAL_RATIO, TIME_HIT_COLORS, TIME_HIT_GLOW_COLOR, TIME_HIT_SOFTEN, WORD_FONT, WORD_FONT_MIN,
-    WORD_LOOK_CORE, WORD_LOOK_GLOW_RADIUS, WORD_LOOK_GLOW_SPREAD,
+    rgb, shockwave_crossing as ring_crossing, word_look as ring_word_look, word_placement, LockRing, PlacedLetter,
+    WordScene, TIME_HIT_COLORS, TIME_HIT_GLOW_COLOR, TIME_HIT_SOFTEN, WORD_FONT, WORD_FONT_MIN, WORD_LOOK_CORE,
+    WORD_LOOK_GLOW_RADIUS, WORD_LOOK_GLOW_SPREAD,
 };
 use crate::lyric_line::{LyricLine, LyricWord, Spot};
 use crate::ribbons::{ribbon_color, shockwave_crossing, RibbonInputs};
@@ -35,30 +35,72 @@ const GLOW_SPREAD_FROM: f64 = 0.5;
 const GLOW_RADIUS: f64 = 0.45;
 const COPY_BLUR: f64 = 0.08;
 
+/// The Lock Ring's word colors, as 0..1 channels: the Digital Time's glow a hit tints toward, and
+/// its split copies'.
+const RING_GLOW_COLOR: [f64; 3] = rgb(TIME_HIT_GLOW_COLOR);
+const RING_COPY_COLORS: [[f64; 3]; 3] = [rgb(TIME_HIT_COLORS[0]), rgb(TIME_HIT_COLORS[1]), rgb(TIME_HIT_COLORS[2])];
+
 /// The Lyric Words' state in a Visualizer.
 pub(crate) struct LyricWords {
     line: LyricLine,
     /// The bar's size in pixels (0 until set: no glyphs).
     width: f64,
     height: f64,
+    /// The Lock Ring's side in pixels (0 until set: no glyphs on the ring).
+    side: f64,
+    /// The font's measures, and a word's letters while it's laid out.
+    measure: Measure,
+    /// The glyphs, as of the last display frame; room for the most letters the lyrics can show.
+    glyphs: Vec<Glyph>,
+}
+
+/// The font's measures, and the word being laid out.
+struct Measure {
     /// Each letter's advance in ems, sorted by letter, and the font's line height in ems.
     letters: Vec<(char, f64)>,
     line_height: f64,
-    /// The glyphs, as of the last display frame; room for the most letters the lyrics can show.
-    glyphs: Vec<Glyph>,
     /// A word's letters' advances, in pixels, and on the Lock Ring their spots, while it's laid out.
     advances: Vec<f64>,
     placed: Vec<PlacedLetter>,
-    /// The Lock Ring's side in pixels (0 until set: no glyphs on the ring).
-    side: f64,
 }
 
-/// A letter's advance in `letters`, in ems.
-fn advance_of(letters: &[(char, f64)], c: char) -> f64 {
-    match letters.binary_search_by_key(&c, |l| l.0) {
-        Ok(i) => letters[i].1,
-        Err(_) => FALLBACK_ADVANCE,
+impl Measure {
+    /// A letter's advance, in ems.
+    fn advance(&self, c: char) -> f64 {
+        match self.letters.binary_search_by_key(&c, |l| l.0) {
+            Ok(i) => self.letters[i].1,
+            Err(_) => FALLBACK_ADVANCE,
+        }
     }
+
+    /// Room for the letters of `most` glyphs.
+    fn make_room(&mut self, most: usize) {
+        self.advances.reserve_exact(most.saturating_sub(self.advances.len()));
+        self.placed.reserve_exact(most.saturating_sub(self.placed.len()));
+    }
+
+    /// Measures `text`'s letters at `em` pixels into `advances`, with `placed` as many: false,
+    /// measuring nothing, if their glyphs wouldn't fit in the room `glyphs` has left, or the
+    /// letters in the room make_room gave.
+    fn word(&mut self, text: &str, em: f64, glyphs: &Vec<Glyph>) -> bool {
+        let count = text.chars().count();
+        let room = self.advances.capacity().min(self.placed.capacity());
+        if glyphs.len() + count > glyphs.capacity() || count > room {
+            return false;
+        }
+        self.advances.clear();
+        for c in text.chars() {
+            self.advances.push(self.advance(c) * em);
+        }
+        self.placed.clear();
+        self.placed.resize(count, PlacedLetter::default());
+        true
+    }
+}
+
+/// A color's bright core: `toward` the way to white.
+fn core_of(color: [f64; 3], toward: f64) -> [f64; 3] {
+    color.map(|c| c + (1.0 - c) * toward)
 }
 
 impl LyricWords {
@@ -67,12 +109,14 @@ impl LyricWords {
             line: LyricLine::new(),
             width: 0.0,
             height: 0.0,
-            letters: Vec::new(),
-            line_height: FALLBACK_LINE_HEIGHT,
-            glyphs: Vec::new(),
-            advances: Vec::new(),
-            placed: Vec::new(),
             side: 0.0,
+            measure: Measure {
+                letters: Vec::new(),
+                line_height: FALLBACK_LINE_HEIGHT,
+                advances: Vec::new(),
+                placed: Vec::new(),
+            },
+            glyphs: Vec::new(),
         }
     }
 
@@ -100,8 +144,7 @@ impl LyricWords {
     fn make_room(&mut self) {
         let most = self.line.most_letters();
         self.glyphs.reserve_exact(most.saturating_sub(self.glyphs.len()));
-        self.advances.reserve_exact(most.saturating_sub(self.advances.len()));
-        self.placed.reserve_exact(most.saturating_sub(self.placed.len()));
+        self.measure.make_room(most);
     }
 
     /// One display frame, at `now` on the core's clock: the words move on, and their glyphs are
@@ -109,40 +152,30 @@ impl LyricWords {
     pub fn advance(&mut self, now: f64, frame: &Frame, ring: &LockRing) {
         self.line.step(now);
         self.glyphs.clear();
-        if self.line.kind() == Kind::LockRing {
-            self.lay_out_ring(frame, ring);
-            return;
+        match self.line.kind() {
+            Kind::Bar => self.lay_out_bar(frame),
+            Kind::LockRing => self.lay_out_ring(frame, ring),
         }
+    }
+
+    /// The words' glyphs on the bar, from its top left, as LyricWordsLayer.qml laid them out.
+    fn lay_out_bar(&mut self, frame: &Frame) {
         if !(self.width > 0.0 && self.height > 0.0) {
             return;
         }
         let em = em(self.height);
-        let clearance = self.line_height * em * CLEARANCE;
-        let inputs = RibbonInputs {
-            width: self.width,
-            height: self.height,
-            bands: &frame.bands,
-            time: frame.time,
-            kick: frame.kick,
-            treble: frame.treble,
-            flow: frame.flow,
-            bass_stretch: frame.bass_stretch,
-            kick_ages: &frame.kick_ages,
-            kick_powers: &frame.kick_powers,
-        };
-        let letters = &self.letters;
+        let clearance = self.measure.line_height * em * CLEARANCE;
+        let inputs = RibbonInputs::of_frame(frame, self.width, self.height);
         for (index, word) in self.line.words().iter().enumerate() {
             let Spot::Bar { ribbon, x } = word.spot else { continue };
             let (text, row, before) = self.line.text(word);
-            let count = text.chars().count();
-            if self.glyphs.len() + count > self.glyphs.capacity() || count > self.advances.capacity() {
+            if !self.measure.word(text, em, &self.glyphs) {
                 break;
             }
-            self.advances.clear();
-            self.advances.extend(text.chars().map(|c| advance_of(letters, c) * em));
-            let rows = row_widths(row, before, |c| advance_of(letters, c) * em, em);
+            let measure = &self.measure;
+            let rows = row_widths(row, before, |c| measure.advance(c) * em, em);
             let start = self.glyphs.len();
-            let letters = lay_word(ribbon, x, &self.advances, &inputs, clearance, Some(rows));
+            let letters = lay_word(ribbon, x, &measure.advances, &inputs, clearance, Some(rows));
             for (letter, c) in letters.zip(text.chars()) {
                 let (x, y, angle) = (letter.x, letter.y, letter.angle);
                 self.glyphs.push(Glyph {
@@ -166,14 +199,14 @@ impl LyricWords {
                 continue;
             }
             let color = ribbon_color(middle, ribbon, &inputs);
-            let whiten = CORE_WHITE + (1.0 - CORE_WHITE) * look.white;
+            let core = core_of(color, CORE_WHITE + (1.0 - CORE_WHITE) * look.white);
             let outward = if middle < self.width / 2.0 { -1.0 } else { 1.0 };
             for glyph in &mut self.glyphs[start..] {
                 glyph.scale = look.scale;
                 glyph.pivot_x = middle;
                 glyph.pivot_y = middle_y;
                 glyph.color = color;
-                glyph.core = color.map(|c| c + (1.0 - c) * whiten);
+                glyph.core = core;
                 glyph.opacity = look.opacity.min(1.0);
                 glyph.glow = look.glow;
                 glyph.glow_spread = 1.0 + GLOW_SPREAD * (look.glow - GLOW_SPREAD_FROM).max(0.0);
@@ -191,63 +224,39 @@ impl LyricWords {
             }
         }
     }
-}
 
-impl LyricWords {
     /// The words' glyphs on the Lock Ring, around the Dial's center, as LockRing.qml laid them out.
     fn lay_out_ring(&mut self, frame: &Frame, ring: &LockRing) {
         if self.side <= 0.0 {
             return;
         }
-        let f = frame;
-        let (ages, powers, seeds) = (&f.kick_ages, &f.kick_powers, &f.kick_seeds);
-        let scene = WordScene {
-            dial_radius: self.side * DIAL_RATIO,
-            values: &f.bands,
-            flow: f.flow,
-            time: f.time,
-            treble: f.treble,
-            swell: ring.frame.swell,
-            kick: f.kick,
-            bass_stretch: f.bass_stretch,
-            kick_ages: ages,
-            kick_powers: powers,
-            kick_seeds: seeds,
-            poses: ring.poses,
-            phases: ring.frame.hand_phases,
-        };
-        let glow_color = hex_rgb(TIME_HIT_GLOW_COLOR);
-        let copy_colors = TIME_HIT_COLORS.map(hex_rgb);
-        let letters = &self.letters;
+        let scene = WordScene::of_frame(frame, &ring.frame, ring.poses, self.side);
+        let (ages, powers, seeds) = (&frame.kick_ages, &frame.kick_powers, &frame.kick_seeds);
         for (index, word) in self.line.words().iter().enumerate() {
             let text = self.line.text(word).0;
-            let count = text.chars().count();
-            if self.glyphs.len() + count > self.glyphs.capacity() || count > self.advances.capacity() {
+            let em = (self.side * WORD_FONT * word.size).max(WORD_FONT_MIN);
+            if !self.measure.word(text, em, &self.glyphs) {
                 break;
             }
-            let em = (self.side * WORD_FONT * word.size).max(WORD_FONT_MIN);
-            self.advances.clear();
-            self.advances.extend(text.chars().map(|c| advance_of(letters, c) * em));
-            self.placed.clear();
-            self.placed.resize(count, PlacedLetter::default());
-            let place = word_placement(word.spot, &self.advances, &scene, &mut self.placed);
+            let place = word_placement(word.spot, &self.measure.advances, &scene, &mut self.measure.placed);
             let look = ring_word_look(word, ring_crossing(place.radius, ages, powers, seeds, Some(place.theta)));
             if look.opacity.is_nan() || look.opacity <= 0.0 {
                 continue;
             }
             let hit = look.hit;
             let tint = hit.glow_opacity * 0.6;
-            let color: [f64; 3] = std::array::from_fn(|c| place.color[c] + (glow_color[c] - place.color[c]) * tint);
-            let whiten = WORD_LOOK_CORE + (1.0 - WORD_LOOK_CORE) * look.white;
+            let color: [f64; 3] =
+                std::array::from_fn(|c| place.color[c] + (RING_GLOW_COLOR[c] - place.color[c]) * tint);
+            let core = core_of(place.color, WORD_LOOK_CORE + (1.0 - WORD_LOOK_CORE) * look.white);
             let out = libm::hypot(place.x, place.y).max(1.0);
             let (out_x, out_y) = (place.x / out, place.y / out);
             let copies: [GlyphCopy; 3] = std::array::from_fn(|i| GlyphCopy {
-                color: copy_colors[i],
+                color: RING_COPY_COLORS[i],
                 dx: out_x * hit.copy_offsets[i] * em,
                 dy: out_y * hit.copy_offsets[i] * em,
                 opacity: hit.copy_opacity,
             });
-            for (letter, c) in self.placed.iter().zip(text.chars()) {
+            for (letter, c) in self.measure.placed.iter().zip(text.chars()) {
                 self.glyphs.push(Glyph {
                     letter: c as u32 as f64,
                     word: index as f64,
@@ -258,7 +267,7 @@ impl LyricWords {
                     pivot_x: place.x,
                     pivot_y: place.y,
                     color,
-                    core: place.color.map(|c| c + (1.0 - c) * whiten),
+                    core,
                     opacity: look.opacity.min(1.0),
                     glow: 1.0,
                     glow_spread: hit.glow_scale + WORD_LOOK_GLOW_SPREAD,
@@ -272,13 +281,6 @@ impl LyricWords {
             }
         }
     }
-}
-
-/// A "#rrggbb" color's channels, 0..1.
-fn hex_rgb(hex: &str) -> [f64; 3] {
-    std::array::from_fn(|i| {
-        u8::from_str_radix(hex.get(1 + 2 * i..3 + 2 * i).unwrap_or("0"), 16).unwrap_or(0) as f64 / 255.0
-    })
 }
 
 impl Visualizer {
@@ -334,9 +336,9 @@ impl Visualizer {
             letters.chars().zip(advances.iter().map(|&a| a.min(MAX_EMS))).filter(|&(_, a)| a >= 0.0).collect();
         table.sort_by_key(|l| l.0);
         table.dedup_by_key(|l| l.0);
-        self.lyrics.letters = table;
+        self.lyrics.measure.letters = table;
         if line_height >= 0.0 {
-            self.lyrics.line_height = line_height.min(MAX_EMS);
+            self.lyrics.measure.line_height = line_height.min(MAX_EMS);
         }
     }
 

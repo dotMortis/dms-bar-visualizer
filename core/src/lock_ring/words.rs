@@ -8,10 +8,12 @@
 use std::f64::consts::{PI, TAU};
 
 use super::clock::{time_hit, TimeHit};
+use super::frame::LockRingFrame;
 use super::hands::{wave_offset, HandPose};
 use super::kicks::ribbon_surge;
-use super::ring::{ribbon_level, ribbon_radius, spectrum_at, RibbonAt};
+use super::ring::{ribbon_level, ribbon_radius, spectrum_at, RibbonAt, DIAL_RATIO};
 use crate::lyric_line::{LyricWord, Spot};
+use crate::Frame;
 
 /// A lead vocal's font size, as a share of the ring's side (as the Digital Time's TIME_FONT is),
 /// and the smallest it gets, in pixels.
@@ -66,8 +68,9 @@ fn fract(x: f64) -> f64 {
     x - libm::floor(x)
 }
 
-fn rgb(c: [u8; 3]) -> [f64; 3] {
-    c.map(|v| v as f64 / 255.0)
+/// An 8-bit color's channels, 0..1.
+pub const fn rgb(c: [u8; 3]) -> [f64; 3] {
+    [c[0] as f64 / 255.0, c[1] as f64 / 255.0, c[2] as f64 / 255.0]
 }
 
 /// A channel to 8 bits and back, as v0.10.0's hex colors had it (JS Math.round).
@@ -111,6 +114,28 @@ pub struct WordScene<'a> {
     pub kick_seeds: &'a [f64],
     pub poses: [HandPose; 3],
     pub phases: [f64; 3],
+}
+
+impl<'a> WordScene<'a> {
+    /// The scene as a Frame and the Lock Ring's state have it, with the Hands' `poses`, on a ring
+    /// `side` pixels across.
+    pub fn of_frame(frame: &'a Frame, ring: &LockRingFrame, poses: [HandPose; 3], side: f64) -> Self {
+        WordScene {
+            dial_radius: side * DIAL_RATIO,
+            values: &frame.bands,
+            flow: frame.flow,
+            time: frame.time,
+            treble: frame.treble,
+            swell: ring.swell,
+            kick: frame.kick,
+            bass_stretch: frame.bass_stretch,
+            kick_ages: &frame.kick_ages,
+            kick_powers: &frame.kick_powers,
+            kick_seeds: &frame.kick_seeds,
+            poses,
+            phases: ring.hand_phases,
+        }
+    }
 }
 
 /// One letter of a placed word: its center, px from the Dial's center (y down), and its rotation,

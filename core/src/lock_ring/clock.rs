@@ -2,6 +2,7 @@
 // how it takes a Shockwave's hit. Ported from v0.10.0's docs/lock-ring/clock.mjs; how the Digital
 // Time reads (12h/24h, DMS's settings) stays with the host, which has the text and the fonts.
 use super::ring::DIAL_RATIO;
+use super::words::{RING_BLUE, RING_LAVENDER, RING_MAUVE};
 
 /// Seconds in a day: the local time of day runs 0..DAY.
 pub const DAY: f64 = 86400.0;
@@ -31,13 +32,13 @@ pub const TIME_RADIUS: f64 = TIME_TOP + TIME_FONT / DIAL_RATIO / 2.0;
 /// Its split copies: each one's color and how far it is pushed outward (away from the center), in
 /// the Shockwave's order (lavender leads its front, mauve and blue trail it, as in ring.frag),
 /// their opacity and their blur radius, so they read as light rather than print.
-pub const TIME_HIT_COLORS: [&str; 3] = ["#b4befe", "#cba6f7", "#89b4fa"];
+pub const TIME_HIT_COLORS: [[u8; 3]; 3] = [RING_LAVENDER, RING_MAUVE, RING_BLUE];
 pub const TIME_HIT_SPLIT: [f64; 3] = [0.16, 0.11, 0.06];
 pub const TIME_HIT_OPACITY: f64 = 0.9;
 pub const TIME_HIT_SOFTEN: f64 = 0.03;
 /// The digits' glow: its color, blur radius, opacity and how much wider than the digits it spreads
 /// (a share of their size); and how far the digits flare toward white, 0..1.
-pub const TIME_HIT_GLOW_COLOR: &str = "#e6ebff";
+pub const TIME_HIT_GLOW_COLOR: [u8; 3] = [0xe6, 0xeb, 0xff];
 pub const TIME_HIT_GLOW_RADIUS: f64 = 0.35;
 pub const TIME_HIT_GLOW_OPACITY: f64 = 1.0;
 pub const TIME_HIT_GLOW_SPREAD: f64 = 0.07;

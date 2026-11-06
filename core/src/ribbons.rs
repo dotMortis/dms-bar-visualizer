@@ -5,6 +5,8 @@
 //! docs/index.html draw them and repeat these as `const float`/`const vec3` of the same names
 //! (tests/bar_constants.rs checks they match), so change all three together.
 
+use crate::Frame;
+
 // The Ribbons' wave, in bar-heights along the bar (x) and shares of its thickness across it (y):
 // Ribbon k waves at RIBBON_FREQ + k * RIBBON_FREQ_STEP a bar-height, its phase the flow times
 // 1 + k * RIBBON_SPEED_STEP, offset by k * RIBBON_OFFSET. The treble rides on it as a ripple
@@ -76,6 +78,24 @@ pub struct RibbonInputs<'a> {
     pub bass_stretch: f64,
     pub kick_ages: &'a [f64],
     pub kick_powers: &'a [f64],
+}
+
+impl<'a> RibbonInputs<'a> {
+    /// The inputs as a Frame has them, for a bar `width` x `height` pixels.
+    pub fn of_frame(frame: &'a Frame, width: f64, height: f64) -> Self {
+        RibbonInputs {
+            width,
+            height,
+            bands: &frame.bands,
+            time: frame.time,
+            kick: frame.kick,
+            treble: frame.treble,
+            flow: frame.flow,
+            bass_stretch: frame.bass_stretch,
+            kick_ages: &frame.kick_ages,
+            kick_powers: &frame.kick_powers,
+        }
+    }
 }
 
 /// Where an x falls in viz.frag's picture: p.x in bar-heights (shaken), dx (bar-heights from the

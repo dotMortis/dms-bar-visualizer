@@ -58,18 +58,7 @@ fn the_letters_sit_as_lay_word_puts_them_at_the_bars_em() {
     let row = RowWidths { width: 3.85 * 32.0, before: 0.0 };
     let word = v.lyric_words()[0];
     let frame = v.frame();
-    let inputs = RibbonInputs {
-        width: 800.0,
-        height: 40.0,
-        bands: &frame.bands,
-        time: frame.time,
-        kick: frame.kick,
-        treble: frame.treble,
-        flow: frame.flow,
-        bass_stretch: frame.bass_stretch,
-        kick_ages: &frame.kick_ages,
-        kick_powers: &frame.kick_powers,
-    };
+    let inputs = RibbonInputs::of_frame(&frame, 800.0, 40.0);
     let clearance = 1.25 * 32.0 * 0.32;
     let expected: Vec<_> = {
         let (ribbon, x) = bar_spot(&word);
@@ -90,18 +79,7 @@ fn each_glyph_carries_its_words_look_color_and_pivot() {
     v.advance(0.1);
     let (glyphs, words, frame) = (v.glyphs(), v.lyric_words(), v.frame());
     let word = words[0];
-    let inputs = RibbonInputs {
-        width: 800.0,
-        height: 40.0,
-        bands: &frame.bands,
-        time: frame.time,
-        kick: frame.kick,
-        treble: frame.treble,
-        flow: frame.flow,
-        bass_stretch: frame.bass_stretch,
-        kick_ages: &frame.kick_ages,
-        kick_powers: &frame.kick_powers,
-    };
+    let inputs = RibbonInputs::of_frame(&frame, 800.0, 40.0);
     let first = glyphs[0];
     // The word's middle, between its first and last letters, is what it scales around and where
     // its color and Shockwave crossing are taken.

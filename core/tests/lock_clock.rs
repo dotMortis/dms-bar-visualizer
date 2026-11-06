@@ -85,7 +85,7 @@ mod digital_time_hit {
 
     #[test]
     fn splits_into_lavender_mauve_and_blue_copies_offset_outward_in_the_shockwaves_order() {
-        assert_eq!(TIME_HIT_COLORS, ["#b4befe", "#cba6f7", "#89b4fa"]);
+        assert_eq!(TIME_HIT_COLORS, [[0xb4, 0xbe, 0xfe], [0xcb, 0xa6, 0xf7], [0x89, 0xb4, 0xfa]]);
         let hit = time_hit(1.0);
         assert!(hit.copy_offsets.iter().all(|&o| o > 0.0) && hit.copy_opacity > 0.0, "{hit:?}");
         // Lavender leads the front, blue trails it, so lavender is pushed out farthest.

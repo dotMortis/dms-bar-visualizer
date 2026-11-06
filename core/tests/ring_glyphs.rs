@@ -46,21 +46,7 @@ fn scene(v: &Visualizer) -> (visualizer_core::Frame, LockRingFrame) {
 }
 
 fn word_scene<'a>(f: &'a visualizer_core::Frame, r: &LockRingFrame) -> WordScene<'a> {
-    WordScene {
-        dial_radius: SIDE * DIAL_RATIO,
-        values: &f.bands,
-        flow: f.flow,
-        time: f.time,
-        treble: f.treble,
-        swell: r.swell,
-        kick: f.kick,
-        bass_stretch: f.bass_stretch,
-        kick_ages: &f.kick_ages,
-        kick_powers: &f.kick_powers,
-        kick_seeds: &f.kick_seeds,
-        poses: hand_poses(TEN_TEN, r.hand_levels, r.hand_flash, 1.0),
-        phases: r.hand_phases,
-    }
+    WordScene::of_frame(f, r, hand_poses(TEN_TEN, r.hand_levels, r.hand_flash, 1.0), SIDE)
 }
 
 /// The glyphs of word `index`.
