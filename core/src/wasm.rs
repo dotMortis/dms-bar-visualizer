@@ -8,6 +8,15 @@
 //! visualizer.advance(dtSeconds);
 //! const { bands, bass, mid, treble, kick, time, flow, kickAges, kickPowers, kickSeeds,
 //!         intensity, bassStretch, kickPower, kickCount, silence, animating } = visualizer.frame();
+//! // The Lyric Words: the track, its lyrics (DMS's, as JSON text), position readings, the bar's
+//! // size and the font's letter advances in ems; out come glyph instances.
+//! visualizer.setSeed(seed);
+//! visualizer.setTrack(id, lengthSeconds);
+//! visualizer.setLyrics(lyricsJsonText);
+//! visualizer.setPosition(songSeconds, rate);
+//! visualizer.setBarSize(width, height);
+//! visualizer.setLetters(letters, float64ArrayOfAdvances, lineHeight);
+//! const { count, stride, data } = visualizer.glyphs();
 //! visualizer.free();
 //! ```
 //!
@@ -21,7 +30,7 @@
 use js_sys::{Float64Array, Object, Reflect};
 use wasm_bindgen::prelude::*;
 
-use crate::{Player, Silence, Visualizer, BANDS, KICK_SLOTS};
+use crate::{Player, Silence, Visualizer, BANDS, GLYPH_FIELDS, KICK_SLOTS};
 
 /// The frame's number fields, in the order `numbers()` gives them.
 const NUMBERS: [&str; 10] =
@@ -42,6 +51,10 @@ pub struct WasmVisualizer {
     animating_key: JsValue,
     /// The Silence cases' names, by Silence as u32, made once.
     silences: [JsValue; 4],
+    /// The glyphs object glyphs() hands out, its data, and the name of its count.
+    glyphs: Object,
+    glyph_data: Float64Array,
+    count_key: JsValue,
 }
 
 impl Default for WasmVisualizer {
@@ -62,6 +75,9 @@ impl WasmVisualizer {
     #[wasm_bindgen(constructor)]
     pub fn new() -> WasmVisualizer {
         let frame = Object::new();
+        let glyphs = Object::new();
+        let _ = Reflect::set(&glyphs, &JsValue::from_str("count"), &JsValue::from_f64(0.0));
+        let _ = Reflect::set(&glyphs, &JsValue::from_str("stride"), &JsValue::from_f64(GLYPH_FIELDS as f64));
         WasmVisualizer {
             visualizer: Visualizer::new(),
             bands: array(&frame, "bands", BANDS),
@@ -73,6 +89,9 @@ impl WasmVisualizer {
             silence_key: JsValue::from_str("silence"),
             animating_key: JsValue::from_str("animating"),
             silences: ["", "no-player", "paused", "silent"].map(JsValue::from_str),
+            glyph_data: array(&glyphs, "data", 0),
+            glyphs,
+            count_key: JsValue::from_str("count"),
         }
     }
 
@@ -109,6 +128,67 @@ impl WasmVisualizer {
     /// One display frame, dt seconds after the last.
     pub fn advance(&mut self, dt: f64) {
         self.visualizer.advance(dt);
+    }
+
+    /// Seeds where the Lyric Words land (an integer, taken mod 2^32). See `Visualizer::set_seed`.
+    #[wasm_bindgen(js_name = setSeed)]
+    pub fn set_seed(&mut self, seed: f64) {
+        self.visualizer.set_seed(if seed.is_finite() { seed.rem_euclid(4_294_967_296.0) as u32 } else { 1 });
+    }
+
+    /// The Active Player's track: any identity, and its length in seconds (0: unknown). See
+    /// `Visualizer::set_track`.
+    #[wasm_bindgen(js_name = setTrack)]
+    pub fn set_track(&mut self, id: &str, length: f64) {
+        self.visualizer.set_track(id, length);
+    }
+
+    /// The track's lyrics, as JSON text: DMS's lyrics. See `Visualizer::set_lyrics`.
+    #[wasm_bindgen(js_name = setLyrics)]
+    pub fn set_lyrics(&mut self, lyrics: &str) {
+        self.visualizer.set_lyrics(lyrics);
+    }
+
+    /// A playback position reading, now: the song time in seconds and the playback rate. See
+    /// `Visualizer::set_position`.
+    #[wasm_bindgen(js_name = setPosition)]
+    pub fn set_position(&mut self, time: f64, rate: f64) {
+        self.visualizer.set_position(time, rate);
+    }
+
+    /// The bar's size in pixels. See `Visualizer::set_bar_size`.
+    #[wasm_bindgen(js_name = setBarSize)]
+    pub fn set_bar_size(&mut self, width: f64, height: f64) {
+        self.visualizer.set_bar_size(width, height);
+    }
+
+    /// The font's measures in ems: a string of letters, a Float64Array of their advances in order,
+    /// and the line height. See `Visualizer::set_letters`.
+    #[wasm_bindgen(js_name = setLetters)]
+    pub fn set_letters(&mut self, letters: &str, advances: &Float64Array, line_height: f64) {
+        self.visualizer.set_letters(letters, &advances.to_vec(), line_height);
+    }
+
+    /// The Lyric Words shown, as glyph instances: `{ count, stride, data }`, the same object every
+    /// call, updated in place. `data` is a Float64Array holding `count` glyphs, `stride` numbers
+    /// each, laid out as core/src/glyph.rs's Glyph (letter, word, x, y, angle, scale, pivotX,
+    /// pivotY, color r g b, core r g b, opacity, glow, glowSpread, blur, white, em, then three
+    /// copies of color r g b, dx, opacity); past them it holds leftovers. It is replaced by a longer
+    /// one when lyrics with more letters come.
+    pub fn glyphs(&mut self) -> Object {
+        let glyphs = self.visualizer.glyphs();
+        // A Glyph is GLYPH_FIELDS doubles (glyph.rs checks it), so the glyphs are one slice of them.
+        let flat = unsafe { std::slice::from_raw_parts(glyphs.as_ptr() as *const f64, glyphs.len() * GLYPH_FIELDS) };
+        if (self.glyph_data.length() as usize) < flat.len() {
+            self.glyph_data = Float64Array::new_with_length(flat.len() as u32);
+            let _ = Reflect::set(&self.glyphs, &JsValue::from_str("data"), &self.glyph_data);
+        }
+        if !flat.is_empty() {
+            // A view of WASM memory, copied out at once: nothing in WASM memory allocated.
+            self.glyph_data.set(&unsafe { Float64Array::view(flat) }.into(), 0);
+        }
+        let _ = Reflect::set(&self.glyphs, &self.count_key, &JsValue::from_f64(glyphs.len() as f64));
+        self.glyphs.clone()
     }
 
     /// Everything to draw: the same object every call, updated in place.

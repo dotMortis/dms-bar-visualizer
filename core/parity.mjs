@@ -2,7 +2,8 @@
 // with the same powers, as the native build, on every recorded fixture at both replay configs, so
 // the demo can't drift from what runs on the desktop. The rest of the frame (the clock, flow, Kick
 // level and slots, Silence, animating) must come out the same too, checked on each replay's last
-// frame, which every frame before it feeds.
+// frame, which every frame before it feeds. So must the Lyric Words' glyph instances, over the demo
+// song sung on one fixture (examples/glyphs.rs).
 //
 //     node core/parity.mjs
 //
@@ -103,8 +104,45 @@ for (const { scenario, config, settings, kicks: expected, frame } of native) {
             `first difference at Kick ${i}: WASM ${JSON.stringify(got[i])}, native ${JSON.stringify(expected[i])}`);
     }
 }
+// The Lyric Words: examples/glyphs.rs's run through the WASM, its glyphs every GLYPH_EVERY frames.
+const GLYPH_EVERY = 15, LETTERS = "abcdefghijklmnopqrstuvwxyzENRVWS,";
+function glyphRun() {
+    const visualizer = new Visualizer();
+    visualizer.configure(native.find(r => r.config === "defaults")?.settings ?? native[0].settings);
+    visualizer.setSeed(42);
+    visualizer.setBarSize(1200, 36);
+    visualizer.setLetters(LETTERS, Float64Array.from(Array.from(LETTERS), (_, i) => 0.3 + 0.01 * i), 1.3);
+    visualizer.setTrack("demo", 24);
+    visualizer.setLyrics(`{"found": true, "synced": ${fs.readFileSync(path.join(core, "../harness/lyrics.json"), "utf8")}}`);
+    visualizer.setPlayer("playing");
+    visualizer.setPosition(0.5, 1);
+    const snapshots = [];
+    frames("steady_house").forEach(({ time, values }, n) => {
+        visualizer.pushBands(values, time);
+        visualizer.advance(1 / 60);
+        if (n % GLYPH_EVERY === 0) {
+            const { count, stride, data } = visualizer.glyphs();
+            snapshots.push(Array.from(data.subarray(0, count * stride)));
+        }
+    });
+    visualizer.free();
+    return snapshots;
+}
+const nativeGlyphs = JSON.parse(run("cargo", ["run", "--quiet", "--release", "--example", "glyphs"])).glyphs;
+const wasmGlyphs = glyphRun();
+let glyphs = 0;
+nativeGlyphs.forEach((expected, i) => {
+    const got = wasmGlyphs[i] ?? [];
+    glyphs += expected.length / 35;
+    const at = got.findIndex((x, j) => !Object.is(x, expected[j]));
+    if (got.length !== expected.length || at >= 0)
+        failures.push(`glyphs at frame ${i * GLYPH_EVERY}: ${got.length / 35} in WASM, ${expected.length / 35} native; first difference at number ${at}: WASM ${got[at]}, native ${expected[at]}`);
+});
+if (!glyphs)
+    failures.push("glyphs: the Lyric Words never showed");
+
 if (failures.length || !native.length) {
     console.error(`parity: WASM and native Kicks differ\n${failures.join("\n") || "no native replays"}`);
     process.exit(1);
 }
-console.log(`parity: ok, ${kicks} Kicks and the last frames identical in WASM and native over ${native.length} replays (${scenarios.length} fixtures x ${native.length / scenarios.length} configs)`);
+console.log(`parity: ok, ${glyphs} glyphs over ${nativeGlyphs.length} snapshots, ${kicks} Kicks and the last frames identical in WASM and native over ${native.length} replays (${scenarios.length} fixtures x ${native.length / scenarios.length} configs)`);
