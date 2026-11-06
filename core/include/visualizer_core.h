@@ -42,6 +42,8 @@ typedef struct VisualizerFrame {
     double kick_ages[VISUALIZER_KICK_SLOTS];
     double kick_powers[VISUALIZER_KICK_SLOTS];
     double kick_seeds[VISUALIZER_KICK_SLOTS];
+    /* The intensity and bassStretch settings, as configured. */
+    double intensity, bass_stretch;
     /* The last Kick's power, 0.5..1 by how hard the hit was next to the recent ones; 0 before any. */
     double kick_power;
     /* How many Kicks have fired so far (wrapping): a new one fired when it changes. */

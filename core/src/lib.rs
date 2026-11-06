@@ -52,6 +52,9 @@ pub struct Frame {
     pub kick_ages: [f64; KICK_SLOTS],
     pub kick_powers: [f64; KICK_SLOTS],
     pub kick_seeds: [f64; KICK_SLOTS],
+    /// The intensity and bassStretch settings, as configured.
+    pub intensity: f64,
+    pub bass_stretch: f64,
     /// The last Kick's power, 0.5..1 by how hard the hit was next to the recent ones; 0 before any.
     pub kick_power: f64,
     /// How many Kicks have fired so far (wrapping): a new one fired when it changes.
@@ -97,7 +100,6 @@ impl Visualizer {
         let settings = Settings::default();
         Visualizer {
             kicks: KickDetector::new(kick_settings(&settings)),
-            settings,
             clock: 0.0,
             kick_times: [EMPTY_SLOT; KICK_SLOTS],
             kick_seed: 0,
@@ -112,9 +114,12 @@ impl Visualizer {
                 kick_ages: [-EMPTY_SLOT; KICK_SLOTS],
                 kick_powers: [0.0; KICK_SLOTS],
                 kick_seeds: [0.0; KICK_SLOTS],
+                intensity: settings.intensity,
+                bass_stretch: settings.bass_stretch,
                 kick_power: 0.0,
                 kick_count: 0,
             },
+            settings,
         }
     }
 
@@ -124,6 +129,8 @@ impl Visualizer {
     pub fn configure(&mut self, settings: &str) {
         if let Some(settings) = Settings::parse(settings) {
             self.kicks.configure(kick_settings(&settings));
+            self.frame.intensity = settings.intensity;
+            self.frame.bass_stretch = settings.bass_stretch;
             self.settings = settings;
         }
     }

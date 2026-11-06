@@ -155,3 +155,12 @@ fn each_kick_overwrites_the_oldest_slot_and_seeds_count_to_999_and_round() {
     }
     assert!(kicks > 1000, "{kicks} Kicks");
 }
+
+#[test]
+fn intensity_and_bass_stretch_come_as_configured() {
+    // shell.qml hands viz.frag config.intensity and config.bassStretch as they are.
+    let mut visualizer = Visualizer::new();
+    assert_eq!((visualizer.frame().intensity, visualizer.frame().bass_stretch), (1.0, 1.4));
+    visualizer.configure(r#"{"intensity": 0.6, "bassStretch": 2}"#);
+    assert_eq!((visualizer.frame().intensity, visualizer.frame().bass_stretch), (0.6, 2.0));
+}
