@@ -46,3 +46,32 @@ describe("harness results table", () => {
         assert.equal(cpu.at(-1), "| v0.10.0 | 255ff1f | 2.0 (1.5-9.0, 3) | - | - | - | - | - | - | - | 4.3 | - |");
     });
 });
+
+describe("harness results table: a dirty working tree", () => {
+    const HEAD = "1234567890abcdef1234567890abcdef12345678";
+    const tree = (over = {}) => cpuRun(2.0, { commit: HEAD, tree: "working tree at v0.10.0-3-g1234567", dirty: false, ...over });
+    const dirty = cpu => tree({ cpu_pct: cpu, tree: "working tree at v0.10.0-3-g1234567-dirty", dirty: true });
+
+    test("runs of a dirty tree aren't summed with the clean runs of its commit", () => {
+        const cells = summarize([tree(), tree({ cpu_pct: 2.2 }), dirty(9.0)]);
+        assert.equal(cells.length, 2);
+        const clean = cells.find(c => !c.dirty), changed = cells.find(c => c.dirty);
+        assert.deepEqual([clean.cpu.median, clean.cpu.n], [2.1, 2]);
+        assert.deepEqual([changed.cpu.median, changed.cpu.n], [9.0, 1]);
+    });
+
+    test("a dirty tree gets a row of its own, its commit marked +dirty", () => {
+        const rows = resultTables(summarize([tree(), dirty(9.0)])).split(/\n\n(?=\*\*)/)
+            .find(t => t.includes("CPU, --cpu-only")).split("\n").filter(l => l.startsWith("| v0.10.0"));
+        assert.deepEqual(rows.map(l => l.split(" | ").slice(0, 3).join(" | ")), [
+            "| v0.10.0-3-g1234567 | 1234567 | 2.0",
+            "| v0.10.0-3-g1234567-dirty | 1234567+dirty | 9.0",
+        ]);
+    });
+
+    test("a result.json from before the flag reads as dirty from its tree's -dirty", () => {
+        const old = dirty(9.0);
+        delete old.dirty;
+        assert.equal(summarize([tree(), old]).length, 2);
+    });
+});

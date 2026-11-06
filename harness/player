@@ -13,9 +13,11 @@
 # Env: HARNESS_PLAYER           its PlaybackStatus at start: Playing, Paused or Stopped
 #      HARNESS_EPOCH            wall-clock s at which the track is at its start (default: now)
 #      HARNESS_LOOP             the track's length in s
-#      HARNESS_PLAYER_TITLE     xesam:title (default "Steady House"); artist "Harness", album "Replay"
+#      HARNESS_PLAYER_TITLE     xesam:title (default: the reference track's, harness/reference.json);
+#                               artist "Harness", album "Replay"
 #      HARNESS_PLAYER_POSITION  the position in s while not playing at start (default 0)
 #      HARNESS_PLAYER_LOG       a file every property read and call is logged to, with its sender
+import json
 import os
 import time
 
@@ -27,7 +29,11 @@ from gi.repository import GLib
 ROOT, PLAYER, PROPS = "org.mpris.MediaPlayer2", "org.mpris.MediaPlayer2.Player", "org.freedesktop.DBus.Properties"
 
 length = float(os.environ["HARNESS_LOOP"])
-title = os.environ.get("HARNESS_PLAYER_TITLE") or "Steady House"
+if os.environ.get("HARNESS_PLAYER_TITLE"):
+    title = os.environ["HARNESS_PLAYER_TITLE"]
+else:
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "reference.json")) as f:
+        title = json.load(f)["title"]  # the reference track's
 log_path = os.environ.get("HARNESS_PLAYER_LOG")
 
 

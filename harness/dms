@@ -2,8 +2,8 @@
 # The harness's stand-in for the DMS socket (ADR 0006): $XDG_RUNTIME_DIR/dms-<its pid>.sock, in the
 # run's own runtime dir, so the Bar Visualizer finds it (its pid alive) and never the live DMS.
 # Newline-delimited JSON, as DMS speaks it: a hello listing the lyrics capability on connect, then
-# lyrics.get answered from harness/lyrics.json for the reference track ("Steady House", what the
-# stand-in player plays), and found: false for any other (the silent track, "Silence"). Nothing it
+# lyrics.get answered from harness/lyrics.json for the reference track (its title in
+# harness/reference.json, what the stand-in player plays), and found: false for any other (the silent track, "Silence"). Nothing it
 # answers comes from the network, whatever allowNetwork asks for.
 #
 # Env: XDG_RUNTIME_DIR   where the socket goes
@@ -14,8 +14,10 @@ import socket
 import threading
 import time
 
-LYRICS_TITLE = "Steady House"
-with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "lyrics.json")) as f:
+HERE = os.path.dirname(os.path.abspath(__file__))
+with open(os.path.join(HERE, "reference.json")) as f:
+    LYRICS_TITLE = json.load(f)["title"]  # the reference track's
+with open(os.path.join(HERE, "lyrics.json")) as f:
     LYRICS = json.load(f)
 log_path = os.environ.get("HARNESS_DMS_LOG")
 log_lock = threading.Lock()

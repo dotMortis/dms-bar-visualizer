@@ -3,8 +3,8 @@
 #
 #   harness/run [options] <scenario>
 #
-#   scenarios   music              the reference track (harness/kicks.mjs REFERENCE_TRACK), the Active
-#                                  Player playing it; no Lyric Words (no DMS)
+#   scenarios   music              the reference track (harness/reference.json), the Active Player
+#                                  playing it; no Lyric Words (no DMS)
 #               music_lyrics       music with Lyric Words: the same, with a stand-in DMS answering the
 #                                  bar's lyrics request with the fixed timed lyrics (harness/lyrics.json)
 #               silence_no_player  Silence: cava's silence, no Active Player
@@ -76,18 +76,6 @@ while (($#)); do
 done
 [[ -n $SCENARIO ]] || die "which scenario? (see --help)"
 [[ -z $RECORD ]] || ((!CHECK_KICKS)) || die "--record or --check-kicks, not both"
-
-# --- Scenarios: the input. Each sets FIXTURE (the band stream) or SILENT=1 (cava's silence instead),
-# TRACK (its name in the report), and PLAYER: the stand-in Active Player's PlaybackStatus at start
-# (Playing, Paused) or none, with PLAYER_TITLE, the track it reports. It plays a track as long as the
-# reference track's loop, on the same timeline. DMS=1 runs the stand-in DMS socket (harness/dms):
-# it has the timed lyrics (harness/lyrics.json) for "Steady House" and none for any other title.
-scenario_music() { FIXTURE=$REPO/tests/fixtures/$REFERENCE.txt SILENT=0 TRACK=$REFERENCE PLAYER=Playing PLAYER_TITLE="Steady House" DMS=0; }
-scenario_music_lyrics() { scenario_music; DMS=1; }
-scenario_silence_no_player() { FIXTURE="" SILENT=1 TRACK=silence PLAYER=none PLAYER_TITLE="" DMS=0; }
-scenario_silence_paused() { FIXTURE="" SILENT=1 TRACK=silence PLAYER=Paused PLAYER_TITLE="Steady House" DMS=0; }
-# A silent track has no words: the stand-in DMS finds none for "Silence".
-scenario_silence_playing() { FIXTURE="" SILENT=1 TRACK=silence PLAYER=Playing PLAYER_TITLE="Silence" DMS=1; }
 
 # --- Hosts: what runs. Each sets SHELL_DIR, the qs config dir, from TREE (the code under test).
 # A scenario's DMS (DMS=1) is the stand-in DMS socket (harness/dms) unless a host says otherwise
@@ -170,7 +158,6 @@ session_locked() {
     [[ -n $id && $(loginctl show-session "$id" -p LockedHint --value 2>/dev/null) == yes ]]
 }
 
-declare -F "scenario_$SCENARIO" >/dev/null || die "no scenario '$SCENARIO'"
 declare -F "host_$HOST" >/dev/null || die "no host '$HOST'"
 ((CHECK_KICKS)) && HOST=kicks
 ((CHECK_KICKS)) || [[ -n $RECORD ]] || ! session_locked || die "the screen is locked: nothing the run shows would be drawn; unlock it (and keep it unlocked) first"
@@ -200,11 +187,13 @@ CG=$APP_SLICE/$ID-qs.scope
 
 # The real node, not a version manager's shim: those read the user's config dirs, which the run swaps.
 NODE=$(node -p process.execPath)
-read -r REFERENCE LOOP_LENGTH < <("$NODE" --input-type=module -e "
-    import { REFERENCE_TRACK, replayTrack } from '$HARNESS/kicks.mjs';
-    console.log(REFERENCE_TRACK, replayTrack(REFERENCE_TRACK).length.toFixed(6));")
-[[ -n ${LOOP_LENGTH:-} ]] || die "couldn't read the reference track from kicks.mjs"
-"scenario_$SCENARIO"
+# --- The scenario: the input (harness/scenarios.mjs, the one list of them): REFERENCE, LOOP_LENGTH,
+# FIXTURE (the band stream) or SILENT=1 (cava's silence instead), TRACK (its name in the report),
+# PLAYER (the stand-in Active Player's PlaybackStatus at start, or none) with PLAYER_TITLE, and DMS=1
+# for a stand-in for DMS's lyrics (the timed lyrics, harness/lyrics.json, for the reference track only).
+SCENARIO_INPUT=$("$NODE" "$HARNESS/scenarios.mjs" "$SCENARIO") || exit 2
+while IFS='=' read -r key value; do printf -v "$key" '%s' "$value"; done <<< "$SCENARIO_INPUT"
+[[ -n ${LOOP_LENGTH:-} ]] || die "couldn't read the scenario from harness/scenarios.mjs"
 ((CHECK_KICKS && SILENT)) && die "--check-kicks needs a scenario with music"
 
 # The code under test: this working tree, or REV exported from git (nothing in the checkout changes).
@@ -214,9 +203,13 @@ if [[ -n $COMMIT ]]; then
     mkdir -p "$TREE"
     git -C "$REPO" archive "$REV" | tar -x -C "$TREE"
     TREE_DESC="$(git -C "$REPO" describe --tags --always "$REV") ($REV)"
+    DIRTY=false
 else
     REV=$(git -C "$REPO" rev-parse HEAD)
     TREE_DESC="working tree at $(git -C "$REPO" describe --tags --always --dirty)"
+    # Changes not in REV: harness/table.mjs keeps such runs apart from REV's own.
+    DIRTY=false
+    [[ $TREE_DESC != *-dirty ]] || DIRTY=true
 fi
 
 # What install.sh builds: the shaders (gitignored), compiled where missing or older than their source.
@@ -244,7 +237,8 @@ export HARNESS_PACTL XDG_RUNTIME_DIR=$RUN XDG_CONFIG_HOME=$RUN/config XDG_CACHE_
     PULSE_SERVER=unix:$RT/pulse/native PATH=$HARNESS/bin:$PATH NO_AT_BRIDGE=1 \
     HARNESS_FIXTURE=$FIXTURE HARNESS_SILENT=$SILENT HARNESS_LOOP=$LOOP_LENGTH HARNESS_LOG=$OUT/capture.log \
     HARNESS_PLAYER=$PLAYER HARNESS_PLAYER_TITLE=$PLAYER_TITLE HARNESS_PLAYER_LOG=$OUT/player.log \
-    HARNESS_DMS=$DMS_SOCKET HARNESS_DMS_LOG=$OUT/dms.log HARNESS_LYRICS=$HARNESS/lyrics.json
+    HARNESS_DMS=$DMS_SOCKET HARNESS_DMS_LOG=$OUT/dms.log HARNESS_LYRICS=$HARNESS/lyrics.json \
+    HARNESS_REFERENCE=$HARNESS/reference.json
 : > "$HARNESS_LOG"
 : > "$HARNESS_PLAYER_LOG"
 : > "$HARNESS_DMS_LOG"
@@ -553,7 +547,7 @@ if [[ -n $RECORD ]]; then
     exit
 fi
 
-RESULT_JSON="{\"scenario\": \"$SCENARIO\", \"host\": \"$HOST\", \"commit\": \"$REV\", \"tree\": \"$TREE_DESC\", \"track\": \"$TRACK\", \"player\": \"$PLAYER\", \"player_title\": \"$PLAYER_TITLE\", \"dms\": $DMS, \"lyrics_requests\": $ASKED, \"window_s\": $WINDOW, \"warmup_s\": $WARMUP, \"loadavg\": \"$LOAD\", \"capture_starts\": $STARTS, "
+RESULT_JSON="{\"scenario\": \"$SCENARIO\", \"host\": \"$HOST\", \"commit\": \"$REV\", \"dirty\": $DIRTY, \"tree\": \"$TREE_DESC\", \"track\": \"$TRACK\", \"player\": \"$PLAYER\", \"player_title\": \"$PLAYER_TITLE\", \"dms\": $DMS, \"lyrics_requests\": $ASKED, \"window_s\": $WINDOW, \"warmup_s\": $WARMUP, \"loadavg\": \"$LOAD\", \"capture_starts\": $STARTS, "
 for m in "${MEASURES[@]}"; do "measure_${m}_report"; done
 echo "${RESULT_JSON%, }}" > "$OUT/result.json"
 echo "out      $OUT"

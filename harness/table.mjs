@@ -4,6 +4,7 @@
 //
 //   dirs: searched for result.json (harness/run --out); --max-load: leave out runs that started at
 //   a 1-minute load average over L; --runs: list the runs (load, CPU, kind) instead of the tables
+import { HOSTS, SCENARIOS } from "./scenarios.mjs";
 
 // Median and spread of a list of numbers.
 function spread(xs) {
@@ -17,15 +18,21 @@ function spread(xs) {
 export const MEASURES = ["cpu_pct", "frames_fps", "frames_late", "gpu_frame_ms_mean", "gpu_frame_ms_p95", "gpu_busy_pct"];
 const isFull = r => "frames_fps" in r;
 const load1 = r => Number(String(r.loadavg).split(" ")[0]);
+// A run of a working tree with changes not in its commit. result.json says so; one from before it
+// did, its tree's describe (-dirty).
+const isDirty = r => r.dirty ?? /-dirty$/.test(String(r.tree));
+// A step: its commit, and a dirty tree of it apart from the commit itself.
+const stepKey = r => `${r.commit}${isDirty(r) ? "+dirty" : ""}`;
 
-// One cell per commit, host and scenario: the --cpu-only runs' CPU and the other runs' measures,
+// One cell per step, host and scenario: the --cpu-only runs' CPU and the other runs' measures,
 // leaving out runs that started at a 1-minute load average over maxLoad.
 export function summarize(results, { maxLoad = Infinity } = {}) {
     const cells = new Map();
     for (const r of results) {
         if (load1(r) > maxLoad) continue;
-        const key = `${r.commit} ${r.host} ${r.scenario}`;
-        if (!cells.has(key)) cells.set(key, { commit: r.commit, tree: r.tree, host: r.host, scenario: r.scenario, runs: [] });
+        const key = `${stepKey(r)} ${r.host} ${r.scenario}`;
+        if (!cells.has(key))
+            cells.set(key, { step: stepKey(r), commit: r.commit, dirty: isDirty(r), tree: r.tree, host: r.host, scenario: r.scenario, runs: [] });
         cells.get(key).runs.push(r);
     }
     return [...cells.values()].map(c => {
@@ -38,8 +45,6 @@ export function summarize(results, { maxLoad = Infinity } = {}) {
     });
 }
 
-const HOSTS = ["bar", "lock"];
-const SCENARIOS = ["music", "music_lyrics", "silence_no_player", "silence_paused", "silence_playing"];
 // The tables, in order: a title and how a cell reads its number from a cell, with its decimals.
 const TABLES = [
     ["CPU, --cpu-only: % of one core (qs + capture + children)", c => c.cpu, 1],
@@ -61,18 +66,18 @@ function cellText(s, decimals) {
     return s.n > 1 ? `${f(s.median)} (${f(s.min)}-${f(s.max)}, ${s.n})` : f(s.median);
 }
 
-// Markdown: one table per measure, a row per step (commit, in the order first seen), a column per
-// host and scenario.
+// Markdown: one table per measure, a row per step (commit, or a dirty tree of it, in the order first
+// seen), a column per host and scenario.
 export function resultTables(cells) {
-    const steps = [...new Map(cells.map(c => [c.commit, stepName(c.tree)]))];
-    const columns = HOSTS.flatMap(h => SCENARIOS.map(s => [h, s]));
+    const steps = [...new Map(cells.map(c => [c.step, { name: stepName(c.tree), commit: `${c.commit.slice(0, 7)}${c.dirty ? "+dirty" : ""}` }]))];
+    const columns = HOSTS.flatMap(h => Object.keys(SCENARIOS).map(s => [h, s]));
     return TABLES.map(([title, pick, decimals]) => [
         `**${title}**`,
         "",
         `| Step | Commit | ${columns.map(([h, s]) => `${h} ${s}`).join(" | ")} |`,
         `| --- | --- | ${columns.map(() => "---").join(" | ")} |`,
-        ...steps.map(([commit, name]) => `| ${name} | ${commit.slice(0, 7)} | ${columns.map(([h, s]) => {
-            const cell = cells.find(c => c.commit === commit && c.host === h && c.scenario === s);
+        ...steps.map(([step, { name, commit }]) => `| ${name} | ${commit} | ${columns.map(([h, s]) => {
+            const cell = cells.find(c => c.step === step && c.host === h && c.scenario === s);
             return cellText(cell && pick(cell), decimals);
         }).join(" | ")} |`),
     ].join("\n")).join("\n\n") + "\n";

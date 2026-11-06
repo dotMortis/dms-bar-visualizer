@@ -1,6 +1,7 @@
 // Stand-in for DMS's LyricsService (Services/, DMS v2.0+), the Lock Ring's Lyric Words source: the
 // same controller properties LockLyrics.qml reads, with the fixed timed lyrics (HARNESS_LYRICS,
-// harness/lyrics.json) for the reference track and none for any other (lyrics.mjs). Like DMS's, it
+// harness/lyrics.json) for the reference track (its title in HARNESS_REFERENCE,
+// harness/reference.json) and none for any other (lyrics.mjs). Like DMS's, it
 // follows the Active Player (the stand-in, the only player on the run's bus) only while subscribed,
 // and anchors the playback clock to its position on a new track, a play or pause, a rate change
 // and a seek (the stand-in's Seeked at each loop's wrap). Each lookup is logged to qs.log
@@ -29,9 +30,10 @@ Singleton {
     readonly property var player: subscribed ? (Mpris.players.values[0] ?? null) : null
     readonly property string title: player?.trackTitle ?? ""
 
-    property var doc: null
-    // The lookup for the playing track, once the lyrics are read.
-    readonly property var found: player && doc ? Lyrics.lyricsFor(title, doc) : null
+    property var timedLines: null
+    property string referenceTitle: ""
+    // The lookup for the playing track, once the lyrics and the reference track's title are read.
+    readonly property var found: player && timedLines && referenceTitle ? Lyrics.lyricsFor(title, timedLines, referenceTitle) : null
     onFoundChanged: {
         if (found)
             console.info(`harness lyrics.get "${title}" -> ${found.synced ? "found" : "none"}`);
@@ -39,7 +41,12 @@ Singleton {
 
     FileView {
         path: Quickshell.env("HARNESS_LYRICS")
-        onLoaded: root.doc = JSON.parse(text())
+        onLoaded: root.timedLines = JSON.parse(text())
+    }
+
+    FileView {
+        path: Quickshell.env("HARNESS_REFERENCE")
+        onLoaded: root.referenceTitle = JSON.parse(text()).title
     }
 
     readonly property QtObject controller: QtObject {

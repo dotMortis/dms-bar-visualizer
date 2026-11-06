@@ -9,7 +9,8 @@ import path from "node:path";
 import { describe, test } from "node:test";
 
 import { createLyricWords } from "../docs/lyric-words.mjs";
-import { LYRICS_TITLE, lyricsFor } from "../harness/lockhost/Services/lyrics.mjs";
+import { lyricsFor } from "../harness/lockhost/Services/lyrics.mjs";
+import { REFERENCE } from "../harness/scenarios.mjs";
 
 const ROOT = path.join(import.meta.dirname, "..");
 const HARNESS = path.join(ROOT, "harness");
@@ -23,7 +24,7 @@ describe("the Lock Ring host's stand-in lyrics service", () => {
     // LockLyrics.qml's tracker, fed the stand-in controller's lines for `title` as LockLyrics
     // passes them ({ state, synced }), the track at its start at wall 0 and playing.
     const ring = title => {
-        const controller = lyricsFor(title, LYRICS);
+        const controller = lyricsFor(title, LYRICS, REFERENCE.title);
         const tracker = createLyricWords({ placement: "ribbons-or-hands", seed: 1 });
         tracker.setTrack(title, LOOP);
         tracker.setLyrics({ state: controller.state, synced: controller.synced ? controller.lines : [] });
@@ -36,22 +37,16 @@ describe("the Lock Ring host's stand-in lyrics service", () => {
         return tracker.words(seconds * 1000);
     };
 
-    test("gives the reference track the timed lyrics: the bar's words at the bar's times", () => {
+    test("gives the reference track (\"Steady House\") the timed lyrics: the bar's words at the bar's times", () => {
         assert.deepEqual(texts(wordsAt(ring("Steady House"), 0.5)), []);
         assert.deepEqual(texts(wordsAt(ring("Steady House"), 2.1)), ["Neon", "rivers", "light"]);
         assert.deepEqual(texts(wordsAt(ring("Steady House"), 11.5)), []);
     });
 
     test("finds none for any other track (the silent one), as DMS reports it", () => {
-        const none = lyricsFor("Silence", LYRICS);
+        const none = lyricsFor("Silence", LYRICS, REFERENCE.title);
         assert.deepEqual([none.state, none.synced, none.lines], ["none", false, []]);
         assert.deepEqual(texts(wordsAt(ring("Silence"), 2.1)), []);
-    });
-
-    test("serves the title the stand-in DMS socket serves, so both hosts get lyrics for the same track", () => {
-        const dms = fs.readFileSync(path.join(HARNESS, "dms"), "utf8").match(/^LYRICS_TITLE = "([^"]+)"$/m);
-        assert.ok(dms, "harness/dms names its LYRICS_TITLE");
-        assert.equal(LYRICS_TITLE, dms[1]);
     });
 });
 

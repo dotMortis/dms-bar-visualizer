@@ -7,7 +7,7 @@
 #
 # Env: HARNESS_FIXTURE   the fixture to replay
 #      HARNESS_EPOCH     wall-clock s at which the track is at its first frame (default: now)
-#      HARNESS_LOOP      the loop length in s (default: first frame to one frame past the last)
+#      HARNESS_LOOP      the loop length in s: harness/kicks.mjs replayTrack().length, from harness/run
 #      HARNESS_SILENT=1  print what cava prints on silence instead: 5 s of all-zero lines at 60 fps
 #                        (its sleep_timer=5), then nothing
 #      HARNESS_LOG       a file each start is logged to, with its argv
@@ -34,7 +34,7 @@ try:
         lines = f.read().splitlines()[1:]  # after the JSON header
     frames = [(float(t), raw) for t, raw in (line.split(" ", 1) for line in lines)]
     first = frames[0][0]
-    length = float(os.environ.get("HARNESS_LOOP") or frames[-1][0] - first + frames[1][0] - first)
+    length = float(os.environ["HARNESS_LOOP"])  # one formula for it, harness/kicks.mjs
 
     loop = (time.time() - epoch) // length  # negative before the epoch: the warm-up plays the track's end
     while True:

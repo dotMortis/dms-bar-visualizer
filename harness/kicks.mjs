@@ -8,12 +8,13 @@ import fs from "node:fs";
 
 import { CONFIGS, FIXTURES, replay } from "../tests/replay.mjs";
 
-// The track every scenario with music plays: Kicks, bassline and hats, so every band group has
-// work, and the same all the way through, so any window of it costs about the same.
-export const REFERENCE_TRACK = "steady_house";
+// The track every scenario with music plays (harness/reference.json): Kicks, bassline and hats, so
+// every band group has work, and the same all the way through, so any window of it costs about the same.
+export const REFERENCE_TRACK = JSON.parse(fs.readFileSync(new URL("reference.json", import.meta.url), "utf8")).track;
 
 // A fixture as the harness's fake cava replays it, looping: its length (first frame to one frame
-// past the last) and the Kicks the replay tests expect at the default settings, in s into the track.
+// past the last), the loop length harness/run gives the stand-ins (HARNESS_LOOP), and the Kicks the
+// replay tests expect at the default settings, in s into the track.
 export function replayTrack(name) {
     const { frames } = FIXTURES[name];
     const first = frames[0].time;
