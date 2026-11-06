@@ -23,6 +23,7 @@ import tempfile
 import threading
 import time
 
+sys.dont_write_bytecode = True  # importing tests/fixtures/record.py leaves no __pycache__ in the repo
 HARNESS = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HARNESS)
 WARMUP = 5.0
