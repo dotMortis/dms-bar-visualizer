@@ -50,7 +50,49 @@ node harness/table.mjs --max-load 2 $RUNS           # the tables below, runs und
 
 ## Results
 
-Not measured yet: the v0.10.0 row comes first.
+v0.10.0 was measured on 2026-11-06, 16:04 to 16:38, with `--commit v0.10.0` from `perf/native-core` (the harness of 9eab625): 4 `--cpu-only` runs a cell (7 for `music_lyrics`) and 1 run with every measure (3 for `music_lyrics`). The 1-minute load average at the start of the runs kept was 0.67 to 1.96; six runs that started at 2.25 to 2.77 were left out and run again. Cells read `median (lowest-highest, runs)`; a single number is a single run.
+
+**CPU, --cpu-only: % of one core (qs + capture + children)**
+
+| Step | Commit | bar music | bar music_lyrics | bar silence_no_player | bar silence_paused | bar silence_playing | lock music | lock music_lyrics | lock silence_no_player | lock silence_paused | lock silence_playing |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| v0.10.0 | 255ff1f | 1.6 (1.5-1.7, 4) | 14.6 (14.4-15.7, 7) | 1.1 (1.1-1.2, 4) | 1.2 (1.2-1.3, 4) | 1.2 (1.2-1.2, 4) | 2.3 (2.3-2.4, 4) | 32.8 (29.4-37.4, 7) | 1.6 (1.5-1.6, 4) | 1.6 (1.6-1.6, 4) | 1.6 (1.6-1.7, 4) |
+
+**CPU with every measure on: % of one core**
+
+| Step | Commit | bar music | bar music_lyrics | bar silence_no_player | bar silence_paused | bar silence_playing | lock music | lock music_lyrics | lock silence_no_player | lock silence_paused | lock silence_playing |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| v0.10.0 | 255ff1f | 2.5 | 18.5 (18.4-19.9, 3) | 2.0 | 1.8 | 1.9 | 3.1 | 34.8 (27.8-38.4, 3) | 2.4 | 2.4 | 2.4 |
+
+**Frames per second, per window**
+
+| Step | Commit | bar music | bar music_lyrics | bar silence_no_player | bar silence_paused | bar silence_playing | lock music | lock music_lyrics | lock silence_no_player | lock silence_paused | lock silence_playing |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| v0.10.0 | 255ff1f | 60.0 | 60.0 (60.0-60.0, 3) | 60.0 | 60.0 | 60.0 | 60.0 | 59.9 (59.3-60.0, 3) | 60.0 | 60.0 | 60.0 |
+
+**Late frames, per window of one loop**
+
+| Step | Commit | bar music | bar music_lyrics | bar silence_no_player | bar silence_paused | bar silence_playing | lock music | lock music_lyrics | lock silence_no_player | lock silence_paused | lock silence_playing |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| v0.10.0 | 255ff1f | 0 | 0 (0-0, 3) | 0 | 0 | 0 | 0 | 3 (0-9, 3) | 0 | 0 | 0 |
+
+**GPU frame time, mean: ms**
+
+| Step | Commit | bar music | bar music_lyrics | bar silence_no_player | bar silence_paused | bar silence_playing | lock music | lock music_lyrics | lock silence_no_player | lock silence_paused | lock silence_playing |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| v0.10.0 | 255ff1f | 0.906 | 2.168 (2.026-2.168, 3) | 0.095 | 0.095 | 0.095 | 3.458 | 3.756 (3.721-3.771, 3) | 2.640 | 2.638 | 2.640 |
+
+**GPU frame time, 95th percentile: ms**
+
+| Step | Commit | bar music | bar music_lyrics | bar silence_no_player | bar silence_paused | bar silence_playing | lock music | lock music_lyrics | lock silence_no_player | lock silence_paused | lock silence_playing |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| v0.10.0 | 255ff1f | 1.200 | 3.097 (2.930-3.104, 3) | 0.097 | 0.096 | 0.097 | 3.918 | 4.570 (4.490-4.592, 3) | 2.658 | 2.657 | 2.659 |
+
+**GPU busy: % of the render engine**
+
+| Step | Commit | bar music | bar music_lyrics | bar silence_no_player | bar silence_paused | bar silence_playing | lock music | lock music_lyrics | lock silence_no_player | lock silence_paused | lock silence_playing |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| v0.10.0 | 255ff1f | 5.61 | 12.51 (11.77-12.62, 3) | 0.75 | 0.75 | 0.75 | 20.79 | 22.32 (22.31-22.65, 3) | 15.93 | 15.92 | 15.93 |
 
 ## Accepted costs
 
