@@ -31,6 +31,9 @@ typedef struct VisualizerFrame {
     double kick;
     /* The animation clock: display seconds times speed, wrapped at 1200 s for 32-bit floats. */
     double time;
+    /* The wave phase: runs at speed times 8 bass + 4 mid + 6 Kick level a second; wrapped at 40 pi,
+     * where every Ribbon repeats. */
+    double flow;
     /* The last Kick's power, 0.5..1 by how hard the hit was next to the recent ones; 0 before any. */
     double kick_power;
     /* How many Kicks have fired so far (wrapping): a new one fired when it changes. */

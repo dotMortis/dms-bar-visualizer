@@ -16,6 +16,9 @@ use settings::Settings;
 pub const BANDS: usize = 32;
 /// Where `Frame::time` wraps (shell.qml's `audio.time % 1200`).
 pub const TIME_WRAP: f64 = 1200.0;
+/// Where `Frame::flow` wraps: the shader only uses flow times multiples of 1/20, so every Ribbon
+/// is periodic in 40π and the wrap is seamless (audio/AudioPipeline.qml).
+pub const FLOW_WRAP: f64 = 40.0 * std::f64::consts::PI;
 
 /// Everything to draw, as of the last call. Laid out as C's `VisualizerFrame`
 /// (include/visualizer_core.h): change both together.
@@ -33,6 +36,9 @@ pub struct Frame {
     /// The animation clock: display seconds times speed, wrapped at TIME_WRAP s for the shader's
     /// 32-bit floats.
     pub time: f64,
+    /// The wave phase: runs at speed times 8 bass + 4 mid + 6 Kick level a second, so the Ribbons
+    /// move with the music; wrapped at FLOW_WRAP, where every Ribbon repeats.
+    pub flow: f64,
     /// The last Kick's power, 0.5..1 by how hard the hit was next to the recent ones; 0 before any.
     pub kick_power: f64,
     /// How many Kicks have fired so far (wrapping): a new one fired when it changes.
@@ -84,6 +90,7 @@ impl Visualizer {
                 treble: 0.0,
                 kick: 0.0,
                 time: 0.0,
+                flow: 0.0,
                 kick_power: 0.0,
                 kick_count: 0,
             },
@@ -129,6 +136,9 @@ impl Visualizer {
         let speed = self.settings.speed;
         self.clock = (self.clock + dt * speed).min(f64::MAX);
         self.frame.time = self.clock % TIME_WRAP;
+        let f = &self.frame;
+        let step = dt * speed * (8.0 * f.bass + 4.0 * f.mid + 6.0 * f.kick);
+        self.frame.flow = (f.flow + step).min(f64::MAX) % FLOW_WRAP;
         self.frame.kick *= libm::exp(-dt * self.settings.kick_decay);
     }
 
