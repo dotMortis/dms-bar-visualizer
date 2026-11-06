@@ -76,7 +76,7 @@ Then restart it: `systemctl --user restart bar-visualizer`. Qt caches the compil
 
 Then `dms restart`.
 
-The Lock Ring's shader mirrors functions and constants from the Lock Ring's modules. `tests/lock-constants.test.mjs` checks the constants match, so change both sides together. It also holds `lyrics.mjs`, which lays the Lyric Words on the strands and Hands and colors them as `ring.frag` does, to `ring.frag`'s inline numbers. Likewise the Bar Visualizer's shader, and the demo's port of it, mirror the Ribbon shape and color in `docs/bar-ribbons.mjs`, checked by `tests/bar-constants.test.mjs`.
+The Lock Ring's shader mirrors functions and constants from the Lock Ring's modules, now in the core (`core/src/lock_ring/`). `core/tests/lock_constants.rs` (and, for `lyrics.mjs` and the QML and demo, `tests/lock-constants.test.mjs`) checks the constants match, so change both sides together. It also holds `lyrics.mjs`, which lays the Lyric Words on the strands and Hands and colors them as `ring.frag` does, to `ring.frag`'s inline numbers. Likewise the Bar Visualizer's shader, and the demo's port of it, mirror the Ribbon shape and color in `docs/bar-ribbons.mjs`, checked by `tests/bar-constants.test.mjs`.
 
 Colors are Catppuccin Mocha: the `palette()` cycle and the `LAVENDER` / `MAUVE` / `PINK` / `BLUE` constants in each shader.
 
@@ -85,7 +85,7 @@ Colors are Catppuccin Mocha: the `palette()` cycle and the `LAVENDER` / `MAUVE` 
 `docs/index.html` is the [live demo](https://dotmortis.github.io/dms-bar-visualizer/).
 
 - **Bar view:** it carries its own GLSL ES port of `shaders/viz.frag`. Mirror shader changes there.
-- **Lock Ring view** (`#ring`): nothing to mirror. It fetches the plugin's own `ring.frag` and converts it to GLSL ES as the page loads (`docs/webgl.mjs`), and imports the Lock Ring's modules. Only the Digital Time is drawn twice: in `LockRing.qml` and in the demo's canvas.
+- **Lock Ring view** (`#ring`): nothing to mirror. It fetches the plugin's own `ring.frag` and converts it to GLSL ES as the page loads (`docs/webgl.mjs`), and runs the core as the Lock Ring kind (`setKind("lock-ring")`, the plain config: the core applies the Lock Ring's percentages): the ring's motion, the Hands (on the local time it's given), the Hour Points, the Digital Time's hit and the shader's Kick slots come from its `lockRing()`. Only the Digital Time is drawn twice: in `LockRing.qml` and in the demo's canvas.
 - **Kicks:** not mirrored either. The demo runs the core (`core/`) built to WASM: its Kicks, band averages, bass/mid/treble and Kick level. Kick slots, time and flow are still the page's own until the core has them.
 
 To run the demo locally, build the core into `docs/wasm/` first (it needs the WASM tools, see the parity check under Tests), and again after changing the core. Browsers don't load module scripts over `file://`, so serve the directory and open http://localhost:8000:
@@ -111,9 +111,9 @@ The Rust core has its own tests, which need only the Rust toolchain:
 cargo test --manifest-path core/Cargo.toml
 ```
 
-They hold `core/`'s `Visualizer` to the same budgets on the same `tests/fixtures`, plus the frame-rate, one-kick-per-hit, volume, speed, band-mapping, bar-constants (the Ribbons' numbers in `core/src/ribbons.rs` against `shaders/viz.frag` and the demo's port), shader-input and Silence tests, and the hot path's rules: after `configure`, `push_bands`, `advance`, `set_player` and `frame` never allocate, and no input makes a call panic, through the Rust API and the C ABI (`core/include/visualizer_core.h`) alike. A C program (`core/tests/c/smoke.c`) drives the C ABI end to end; it needs a C compiler, `cc`.
+They hold `core/`'s `Visualizer` to the same budgets on the same `tests/fixtures`, plus the frame-rate, one-kick-per-hit, volume, speed, band-mapping, bar-constants (the Ribbons' numbers in `core/src/ribbons.rs` against `shaders/viz.frag` and the demo's port), shader-input and Silence tests, the Lock Ring kind's (its percentages, Kicks, ribbon, Hour Points, Hands, clock and constants against `ring.frag`, ported from the `lock-*` JS tests) and the wall clock's, and the hot path's rules: after `configure`, `push_bands`, `advance`, `set_player` and `frame` never allocate (nor, for the Lock Ring, `set_kind`, `set_local_time` and `lock_ring`), and no input makes a call panic, through the Rust API and the C ABI (`core/include/visualizer_core.h`) alike. A C program (`core/tests/c/smoke.c`) drives the C ABI end to end; it needs a C compiler, `cc`.
 
-The parity check proves the WASM build the demo runs fires exactly the same Kicks, times and powers to the last bit, as the native build, on every fixture, and ends each replay on the same frame (clock, flow, Kick slots, Silence):
+The parity check proves the WASM build the demo runs fires exactly the same Kicks, times and powers to the last bit, as the native build, on every fixture, and ends each replay on the same frame (clock, flow, Kick slots, Silence) and, as the Lock Ring, the same Lock Ring state:
 
 ```sh
 node core/parity.mjs
