@@ -4,7 +4,7 @@
 mod common;
 
 use common::*;
-use visualizer_core::{Visualizer, BANDS};
+use visualizer_core::{Visualizer, BANDS, KICK_SLOTS};
 
 fn close(a: f64, b: f64) -> bool {
     (a - b).abs() < 1e-9
@@ -93,4 +93,65 @@ fn flow_wraps_at_40_pi_where_every_ribbon_repeats() {
         visualizer.advance(1.0);
     }
     assert!(close(visualizer.frame().flow, 132.0 - 125.663_706_143_591_72), "{}", visualizer.frame().flow);
+}
+
+// The Kick slots: the last KICK_SLOTS Kicks, so a new Kick's Shockwave and Spray add to the ones
+// still playing. A ring buffer: Kick n (counted 1..999, 0, 1, ...) goes in slot n % 8 with its
+// age on the animation clock, its power and n as its seed.
+
+#[test]
+fn before_any_kick_every_slot_is_empty() {
+    let mut visualizer = Visualizer::new();
+    visualizer.advance(2.0);
+    let frame = visualizer.frame();
+    assert_eq!(frame.kick_powers, [0.0; KICK_SLOTS]);
+    assert_eq!(frame.kick_seeds, [0.0; KICK_SLOTS]);
+    // An empty slot's Kick was 100 s before the clock started.
+    assert_eq!(frame.kick_ages, [102.0; KICK_SLOTS]);
+}
+
+#[test]
+fn a_kick_lands_in_its_slot_and_ages_on_the_animation_clock() {
+    let mut visualizer = at_first_kick();
+    let frame = visualizer.frame();
+    assert_eq!(frame.kick_ages[1], 0.0);
+    assert_eq!(frame.kick_powers[1], frame.kick_power);
+    assert_eq!(frame.kick_seeds[1], 1.0);
+    for slot in [0, 2, 3, 4, 5, 6, 7] {
+        assert_eq!(frame.kick_powers[slot], 0.0, "slot {slot}");
+        assert!(close(frame.kick_ages[slot], frame.time + 100.0), "slot {slot}");
+    }
+    visualizer.advance(0.25);
+    assert!(close(visualizer.frame().kick_ages[1], 0.25));
+    visualizer.configure(r#"{"speed": 2}"#);
+    visualizer.advance(0.25);
+    assert!(close(visualizer.frame().kick_ages[1], 0.75));
+}
+
+#[test]
+fn each_kick_overwrites_the_oldest_slot_and_seeds_count_to_999_and_round() {
+    // kick_only, over and over: its 44 Kicks 23 times is past 1000.
+    let frames = &fixture("kick_only").frames;
+    let length = frames.last().unwrap().time + 1.0;
+    let mut visualizer = Visualizer::new();
+    let mut kicks = 0u32;
+    for pass in 0..23 {
+        for f in frames {
+            let count = visualizer.frame().kick_count;
+            visualizer.push_bands(&f.values, f.time + pass as f64 * length);
+            let frame = visualizer.frame();
+            if frame.kick_count != count {
+                kicks += 1;
+                let seed = kicks % 1000;
+                let slot = (seed % 8) as usize;
+                assert_eq!(frame.kick_seeds[slot], seed as f64, "Kick {kicks}");
+                assert_eq!(frame.kick_powers[slot], frame.kick_power, "Kick {kicks}");
+                assert_eq!(frame.kick_ages[slot], 0.0, "Kick {kicks}");
+                // The others are older.
+                assert!(frame.kick_ages.iter().enumerate().all(|(i, &age)| i == slot || age > 0.0), "Kick {kicks}");
+            }
+            visualizer.advance(1.0 / 60.0);
+        }
+    }
+    assert!(kicks > 1000, "{kicks} Kicks");
 }

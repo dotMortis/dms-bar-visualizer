@@ -16,6 +16,13 @@ use settings::Settings;
 pub const BANDS: usize = 32;
 /// Where `Frame::time` wraps (shell.qml's `audio.time % 1200`).
 pub const TIME_WRAP: f64 = 1200.0;
+/// How many Kicks play at once: a new Kick's Shockwave and Spray add to those of the last ones
+/// (KICKS in shaders/viz.frag and docs/lock-ring/ring.frag).
+pub const KICK_SLOTS: usize = 8;
+/// An empty Kick slot's time: 100 s before the clock started, played out long ago.
+const EMPTY_SLOT: f64 = -100.0;
+/// Kick seeds count 1..999, then 0 and round again.
+const SEEDS: u32 = 1000;
 /// Where `Frame::flow` wraps: the shader only uses flow times multiples of 1/20, so every Ribbon
 /// is periodic in 40π and the wrap is seamless (audio/AudioPipeline.qml).
 pub const FLOW_WRAP: f64 = 40.0 * std::f64::consts::PI;
@@ -39,6 +46,12 @@ pub struct Frame {
     /// The wave phase: runs at speed times 8 bass + 4 mid + 6 Kick level a second, so the Ribbons
     /// move with the music; wrapped at FLOW_WRAP, where every Ribbon repeats.
     pub flow: f64,
+    /// The Kick slots, the last KICK_SLOTS Kicks, in any order: each one's age on the animation
+    /// clock (unwrapped: an empty slot's is time + 100), power (0 = empty) and seed (its number,
+    /// 1..999 then 0 and round again: a fresh Spray per Kick).
+    pub kick_ages: [f64; KICK_SLOTS],
+    pub kick_powers: [f64; KICK_SLOTS],
+    pub kick_seeds: [f64; KICK_SLOTS],
     /// The last Kick's power, 0.5..1 by how hard the hit was next to the recent ones; 0 before any.
     pub kick_power: f64,
     /// How many Kicks have fired so far (wrapping): a new one fired when it changes.
@@ -52,6 +65,9 @@ pub struct Visualizer {
     kicks: KickDetector,
     /// The animation clock, unwrapped: the Kick slots' ages are counted on it.
     clock: f64,
+    /// When each slot's Kick fired, on the clock (-100 for none), and the last Kick's seed.
+    kick_times: [f64; KICK_SLOTS],
+    kick_seed: u32,
     frame: Frame,
 }
 
@@ -83,6 +99,8 @@ impl Visualizer {
             kicks: KickDetector::new(kick_settings(&settings)),
             settings,
             clock: 0.0,
+            kick_times: [EMPTY_SLOT; KICK_SLOTS],
+            kick_seed: 0,
             frame: Frame {
                 bands: [0.0; BANDS],
                 bass: 0.0,
@@ -91,6 +109,9 @@ impl Visualizer {
                 kick: 0.0,
                 time: 0.0,
                 flow: 0.0,
+                kick_ages: [-EMPTY_SLOT; KICK_SLOTS],
+                kick_powers: [0.0; KICK_SLOTS],
+                kick_seeds: [0.0; KICK_SLOTS],
                 kick_power: 0.0,
                 kick_count: 0,
             },
@@ -126,6 +147,12 @@ impl Visualizer {
             self.frame.kick = 1.0;
             self.frame.kick_count = self.frame.kick_count.wrapping_add(1);
             self.frame.kick_power = power;
+            self.kick_seed = (self.kick_seed + 1) % SEEDS;
+            let slot = self.kick_seed as usize % KICK_SLOTS;
+            self.kick_times[slot] = self.clock;
+            self.frame.kick_powers[slot] = power;
+            self.frame.kick_seeds[slot] = self.kick_seed as f64;
+            self.frame.kick_ages[slot] = 0.0;
         }
     }
 
@@ -140,6 +167,9 @@ impl Visualizer {
         let step = dt * speed * (8.0 * f.bass + 4.0 * f.mid + 6.0 * f.kick);
         self.frame.flow = (f.flow + step).min(f64::MAX) % FLOW_WRAP;
         self.frame.kick *= libm::exp(-dt * self.settings.kick_decay);
+        for (age, &at) in self.frame.kick_ages.iter_mut().zip(&self.kick_times) {
+            *age = self.clock - at;
+        }
     }
 
     /// Everything to draw.
