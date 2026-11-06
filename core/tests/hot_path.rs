@@ -6,7 +6,7 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 
 use common::*;
-use visualizer_core::{Frame, Player, Silence, Visualizer, BANDS, FLOW_WRAP, TIME_WRAP};
+use visualizer_core::{Frame, Kind, Player, Silence, Visualizer, BANDS, FLOW_WRAP, TIME_WRAP};
 
 /// The system allocator, counting the allocations on threads that asked it to.
 struct Counting;
@@ -134,6 +134,49 @@ fn the_lyric_words_and_their_glyphs_never_allocate_after_set_lyrics() {
     assert!(words >= 60 && glyphs > 300, "the words did show: {words} words, {glyphs} glyphs at most");
 }
 
+/// A Lock Ring showing the song's Lyric Words on a 600 px ring.
+fn singing_ring(settings: &str) -> Visualizer {
+    let mut visualizer = singing(settings);
+    visualizer.set_kind(Kind::LockRing);
+    visualizer.set_ring_size(600.0);
+    visualizer
+}
+
+#[test]
+fn the_lock_rings_lyric_words_and_their_glyphs_never_allocate_after_set_lyrics() {
+    let frames = &fixture("steady_house").frames;
+    let mut visualizer = singing_ring(&DEFAULTS.json());
+    let (mut words, mut glyphs, mut on_hands) = (0, 0, 0);
+    let n = allocations(|| {
+        visualizer.set_player(Player::Playing);
+        visualizer.set_position(0.0, 1.0);
+        for (i, f) in frames.iter().enumerate() {
+            visualizer.set_local_time(36000.0 + i as f64 / 60.0);
+            visualizer.set_ring_size(600.0 + (i % 7) as f64);
+            visualizer.push_bands(&f.values, f.time);
+            visualizer.advance(1.0 / 60.0);
+            match i % 600 {
+                100 => visualizer.set_position(visualizer.song_position() + 0.05, 1.0),
+                300 => visualizer.set_position(38.0, 1.0),
+                400 => visualizer.set_player(Player::Paused),
+                420 => visualizer.set_player(Player::Playing),
+                599 => visualizer.set_position(0.5, 1.25),
+                _ => {}
+            }
+            words = words.max(visualizer.lyric_words().len());
+            let shown = std::hint::black_box(visualizer.glyphs());
+            glyphs = glyphs.max(shown.len());
+            on_hands += visualizer
+                .lyric_words()
+                .iter()
+                .filter(|w| matches!(w.spot, visualizer_core::Spot::Hand { .. }))
+                .count();
+        }
+    });
+    assert_eq!(n, 0, "allocations over {} frames", frames.len());
+    assert!(words >= 60 && glyphs > 300 && on_hands > 0, "the words did show: {words} words, {glyphs} glyphs");
+}
+
 #[test]
 fn the_same_lyrics_again_dont_allocate_per_frame_either() {
     let mut visualizer = singing("{}");
@@ -248,8 +291,22 @@ fn bad_input_never_panics_and_frame_stays_drawable() {
 fn assert_drawable(visualizer: &Visualizer, after: &str) {
     let words = visualizer.lyric_words().len();
     for g in visualizer.glyphs() {
-        let copies = g.copies.iter().flat_map(|c| [c.color[0], c.color[1], c.color[2], c.dx, c.opacity]);
-        let numbers = [g.x, g.y, g.angle, g.scale, g.pivot_x, g.pivot_y, g.glow, g.glow_spread, g.blur, g.white, g.em];
+        let copies = g.copies.iter().flat_map(|c| [c.color[0], c.color[1], c.color[2], c.dx, c.dy, c.opacity]);
+        let numbers = [
+            g.x,
+            g.y,
+            g.angle,
+            g.scale,
+            g.pivot_x,
+            g.pivot_y,
+            g.glow,
+            g.glow_spread,
+            g.blur,
+            g.white,
+            g.em,
+            g.glow_radius,
+            g.copy_blur,
+        ];
         assert!(
             numbers.into_iter().chain(g.color).chain(g.core).chain(copies).all(f64::is_finite),
             "{g:?} after {after}"
@@ -272,12 +329,15 @@ fn bad_lyrics_input_never_panics_and_the_glyphs_stay_drawable() {
         r#"[{"t": 1, "e": 2, "parts": [null, {"t": 1, "x": "part"}], "x": "ignored"}]"#,
     ];
     let frames = &fixture("steady_house").frames;
-    for text in lyrics {
+    for (text, kind) in lyrics.iter().flat_map(|t| [(t, Kind::Bar), (t, Kind::LockRing)]) {
         for (size, letters) in
             [((800.0, 40.0), 0.5), ((f64::NAN, -3.0), f64::NAN), ((1e308, 1e308), 1e308), ((1.0, 0.1), 0.0)]
         {
             let mut visualizer = Visualizer::new();
+            visualizer.set_kind(kind);
             visualizer.set_bar_size(size.0, size.1);
+            visualizer.set_ring_size(size.0.max(size.1));
+            visualizer.set_local_time(size.1);
             visualizer.set_letters("ab✨", &[letters, -1.0, f64::INFINITY], letters);
             visualizer.set_track("t", [300.0, f64::NAN, -5.0, 1e308][text.len() % 4]);
             visualizer.set_lyrics(text);
@@ -290,7 +350,7 @@ fn bad_lyrics_input_never_panics_and_the_glyphs_stay_drawable() {
                     let rate = [1.0, f64::INFINITY, -2.0, 0.0, 1e308][n / 50 % 5];
                     visualizer.set_position(time, rate);
                 }
-                assert_drawable(&visualizer, &format!("frame {n} of {text:?} on {size:?}"));
+                assert_drawable(&visualizer, &format!("frame {n} of {text:?} on {size:?} ({kind:?})"));
                 for w in visualizer.lyric_words() {
                     let _ = (visualizer.word_text(w), visualizer.word_row(w));
                 }
@@ -364,6 +424,36 @@ mod c_abi {
                 visualizer_set_player(visualizer, 2);
                 visualizer_set_position(visualizer, 28.0, 1.0);
                 for f in frames {
+                    visualizer_push_bands(visualizer, f.values.as_ptr(), f.values.len(), f.time);
+                    visualizer_advance(visualizer, 1.0 / 60.0);
+                    let mut count = 0;
+                    std::hint::black_box(visualizer_glyphs(visualizer, &mut count));
+                    most = most.max(count);
+                }
+            });
+            visualizer_destroy(visualizer);
+            assert_eq!(n, 0, "allocations per {} frames", frames.len());
+            assert!(most > 100, "the words did show: {most} glyphs");
+        }
+    }
+
+    #[test]
+    fn the_lock_rings_lyric_words_never_allocate_after_set_lyrics() {
+        let frames = &fixture("zoo1").frames;
+        let (song, letters) = (super::song(), "abcdefghijklmnopqrstuvwxyz");
+        unsafe {
+            let visualizer = visualizer_create();
+            visualizer_set_kind(visualizer, Kind::LockRing as u32);
+            visualizer_set_letters(visualizer, letters.as_ptr(), letters.len(), [0.5; 26].as_ptr(), 26, 1.2);
+            visualizer_set_track(visualizer, "song".as_ptr(), 4, 45.0);
+            visualizer_set_lyrics(visualizer, song.as_ptr(), song.len());
+            let mut most = 0;
+            let n = allocations(|| {
+                visualizer_set_ring_size(visualizer, 600.0);
+                visualizer_set_player(visualizer, 2);
+                visualizer_set_position(visualizer, 28.0, 1.0);
+                for (i, f) in frames.iter().enumerate() {
+                    visualizer_set_local_time(visualizer, 36000.0 + i as f64 / 60.0);
                     visualizer_push_bands(visualizer, f.values.as_ptr(), f.values.len(), f.time);
                     visualizer_advance(visualizer, 1.0 / 60.0);
                     let mut count = 0;
