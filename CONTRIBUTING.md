@@ -16,7 +16,7 @@ How the pieces fit together, and how to change them. For installing and using th
 | `audio/AudioPipeline.qml` | The shared audio pipeline: follows the Active Player, runs cava while it plays, detects Kicks, tells the Silence case |
 | `audio/active-player.mjs` | The pipeline's two choices: the Active Player, and the output the capture follows |
 | `audio/silence.mjs` | Silence: which case applies (no Active Player, paused, silent output), and whether the capture runs |
-| `lock-ring/` | The Lock Ring plugin (`LockRing.qml`, `LockAudio.qml`, `LockLyrics.qml`, `plugin.json`; `pace.mjs`: how often it draws, every frame or `SILENCE_FPS` in Silence) |
+| `lock-ring/` | The Lock Ring plugin (`LockRing.qml`, `LockAudio.qml`, `LockLyrics.qml`, `plugin.json`) |
 | `docs/` | The live demo (GitHub Pages), plus the plain-JS modules both visualizers and the demo import |
 | `core/` | The Rust core ([ADR 0007](docs/adr/0007-no-script-in-the-per-frame-hot-path.md)): one `Visualizer` with all per-frame logic, so far the Kicks, bass/mid/treble and the Kick level, behind a C ABI (`core/include/visualizer_core.h`) and a wasm-bindgen API (`core/src/wasm.rs`, built by `core/build-wasm.sh`; the demo runs it). It replaces the JS modules below as later steps of spec #41 wire it in |
 | `docs/kick.mjs` | The Kick detector the visualizers still run, until they run `core/` |
@@ -53,6 +53,8 @@ The pipeline writes cava's config to `$XDG_RUNTIME_DIR/bar-visualizer-cava.conf`
 The Bar Visualizer is a Wayland layer surface on the `bottom` layer (namespace `bar-visualizer`): click-through (an empty input mask), ignoring exclusive zones, and sized and inset exactly like the DankBar. The DMS bar draws on the `top` layer, so with a transparent bar background the Bar Visualizer shows through. With a maximized window on a monitor's active workspace, it drops its gap and rounding together with the bar, by the same rule DMS uses.
 
 The Lock Ring can't work that way: while the screen is locked, only DMS's own surfaces are visible. So it's a DMS plugin drawn inside the lock screen ([ADR 0001](docs/adr/0001-lock-ring-runs-inside-dms.md)).
+
+In Silence the Lock Ring keeps breathing, but slowly (`lock-ring/pace.mjs`): once the music has played out on the ring (ribbons faded, no Shockwave left, no Lyric Word moving), `LockAudio.qml` steps every ring's frame at `SILENCE_FPS` on a Timer instead of every frame, and stops the pipeline's frame clock (`clockRunning`), since any running frame clock redraws every frame. It keeps the rings' animation clock and the time on the Hands and Digital Time itself, one for every monitor. The first sound brings every frame back at once.
 
 ## Shaders
 
