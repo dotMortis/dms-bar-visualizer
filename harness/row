@@ -1,0 +1,122 @@
+#!/bin/bash
+# A step's row on the performance page (docs/performance.md): every scenario on both hosts, the
+# runs taken in turn so drift spreads over all of them, as the v0.10.0 row was taken.
+#
+#   harness/row [--commit REV] [--max-load L] --out DIR
+#
+#   e.g. harness/row --commit v0.10.0 --out ~/bvh-runs/v0.10.0
+#        node harness/table.mjs --max-load 2 ~/bvh-runs/v0.10.0
+#
+#   --commit REV   measure REV (harness/run --commit); default: this working tree
+#   --out DIR      the runs: DIR/cpu/<host>-<scenario>-<n> (--cpu-only) and DIR/full/... (every
+#                  measure), each a harness/run --out dir with its result.json; DIR/progress.log
+#   --max-load L   a run that started at a 1-minute load average over L is set aside and run
+#                  again (default 2, this machine's: 32 threads, idle at about 1)
+#
+# The runs, in this order (the counts are the page's: --cpu-only 4 a cell, 7 for music_lyrics;
+# every measure 1 a cell, 3 for music_lyrics):
+#   1. --cpu-only round 1, then round 2: each round every host and scenario in turn
+#   2. one run with every measure of every host and scenario
+#   3. --cpu-only rounds 3 and 4
+#   4. --cpu-only rounds 5 to 7 of music_lyrics, each host in turn
+#   5. runs 2 and 3 with every measure of music_lyrics, per host
+# That's 60 runs, about 30 minutes. Then the set-asides, until none is left (at most 5 passes):
+#   - a run under a load spike (over --max-load when it started, result.json's loadavg) is set
+#     aside to DIR/set-aside/ (its result.json renamed, so table.mjs doesn't read it) and the
+#     pass runs it again; so is a run harness/run failed (a music run that drew nothing, the
+#     capture or the stand-in player gone).
+#   - a locked screen stops it (exit 3): nothing a run shows would be drawn. Unlock and run the
+#     same command again: it skips every run that already has its result.json.
+# Leave the desktop idle and bar-visualizer.service stopped while it runs.
+set -euo pipefail
+
+HARNESS=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=lib.sh
+. "$HARNESS/lib.sh"
+COMMIT="" OUT="" MAX_LOAD=2
+CPU_ROUNDS=4 LYRICS_CPU_ROUNDS=7 LYRICS_FULL_RUNS=3 PASSES=5
+
+while (($#)); do
+    case $1 in
+        --commit) COMMIT=$2; shift ;;
+        --out) OUT=$2; shift ;;
+        --max-load) MAX_LOAD=$2; shift ;;
+        -h | --help) show_help "$0"; exit 0 ;;
+        *) die "unknown argument $1 (see --help)" ;;
+    esac
+    shift
+done
+[[ -n $OUT ]] || die "where do the runs go? --out DIR (see --help)"
+mkdir -p "$OUT/set-aside"
+LOG=$OUT/progress.log
+NODE=$(node -p process.execPath)
+read -ra HOSTS < <("$NODE" --input-type=module -e "import { HOSTS } from '$HARNESS/scenarios.mjs'; console.log(HOSTS.join(' '))")
+read -ra SCENARIOS < <("$NODE" --input-type=module -e "import { SCENARIOS } from '$HARNESS/scenarios.mjs'; console.log(Object.keys(SCENARIOS).join(' '))")
+COMMIT_ARGS=()
+[[ -z $COMMIT ]] || COMMIT_ARGS=(--commit "$COMMIT")
+
+say() { echo "$(date +%T) $*" | tee -a "$LOG"; }
+load1() { "$NODE" -p "String(JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).loadavg).split(' ')[0]" "$1"; }
+over_max_load() { awk -v l="$(load1 "$1")" -v m="$MAX_LOAD" 'BEGIN { exit !(l > m) }'; }
+set_aside() { # dir why
+    local to
+    to=$OUT/set-aside/$(basename "$(dirname "$1")")-$(basename "$1")-$2-$(date +%s)
+    mv "$1" "$to"
+    [[ ! -e $to/result.json ]] || mv "$to/result.json" "$to/result.json.set-aside"
+}
+
+SET_ASIDE=0
+# One run: kind (cpu or full), host, scenario, n. Skipped if it has its result.json.
+run() {
+    local kind=$1 host=$2 scenario=$3 n=$4
+    local dir=$OUT/$kind/$host-$scenario-$n
+    [[ ! -e $dir/result.json ]] || return 0
+    if session_locked; then say "the screen is locked: stopping; unlock it and run the same command again"; exit 3; fi
+    rm -rf "$dir"
+    mkdir -p "$dir"
+    local opt=()
+    [[ $kind == full ]] || opt=(--cpu-only)
+    if ! "$HARNESS/run" "${COMMIT_ARGS[@]}" "${opt[@]}" --host "$host" --out "$dir" "$scenario" > "$dir/run.txt" 2>&1 \
+        || [[ ! -e $dir/result.json ]]; then
+        say "$kind $host $scenario $n FAILED, set aside: $(grep -m1 'FAILED\|harness:' "$dir/run.txt" || tail -1 "$dir/run.txt")"
+        set_aside "$dir" failed
+        SET_ASIDE=1
+        return 0
+    fi
+    if over_max_load "$dir/result.json"; then
+        say "$kind $host $scenario $n started at load $(load1 "$dir/result.json"), over $MAX_LOAD: set aside"
+        set_aside "$dir" load
+        SET_ASIDE=1
+        return 0
+    fi
+    say "$kind $host $scenario $n load $(load1 "$dir/result.json") $(grep -o '"cpu_pct":[0-9.]*' "$dir/result.json")"
+}
+round() { # kind n [scenario]: every host and scenario (or the one scenario) in turn
+    local host scenario
+    for host in "${HOSTS[@]}"; do
+        for scenario in "${@:3}"; do run "$1" "$host" "$scenario" "$2"; done
+    done
+}
+
+pass() {
+    local n
+    round cpu 1 "${SCENARIOS[@]}"
+    round cpu 2 "${SCENARIOS[@]}"
+    round full 1 "${SCENARIOS[@]}"
+    for ((n = 3; n <= CPU_ROUNDS; n++)); do round cpu "$n" "${SCENARIOS[@]}"; done
+    for ((n = CPU_ROUNDS + 1; n <= LYRICS_CPU_ROUNDS; n++)); do round cpu "$n" music_lyrics; done
+    local host
+    for host in "${HOSTS[@]}"; do
+        for ((n = 2; n <= LYRICS_FULL_RUNS; n++)); do run full "$host" music_lyrics "$n"; done
+    done
+}
+
+say "row of ${COMMIT:-the working tree} into $OUT (max load $MAX_LOAD)"
+for ((p = 1; p <= PASSES; p++)); do
+    SET_ASIDE=0
+    pass
+    ((SET_ASIDE)) || { say "done"; exit 0; }
+    say "pass $p set runs aside: running them again"
+done
+say "runs still set aside after $PASSES passes (see $OUT/set-aside): run the same command again"
+exit 1

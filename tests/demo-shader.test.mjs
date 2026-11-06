@@ -85,71 +85,59 @@ void main() { fragColor = vec4(ubuf.level) * ubuf.a0 * ubuf.qt_Opacity; }
     });
 });
 
-// The page sets the ring shader's uniforms from the same state LockRing.qml binds them to.
+// The page sets the ring shader's uniforms as LockRing.qml binds them, straight from the core's
+// frame() and lockRing() (the core's own tests check what's in them: core/tests/lock_ring_frame.rs).
 describe("ring uniforms in the demo", () => {
-    const state = {
-        values: Array.from({ length: 32 }, (_, i) => i / 31), time: 1300, flow: 2, treble: 0.3,
-        swell: 0.05, presence: 1, intensity: 1.2, bassStretch: 1.4,
-        kickAges: [0.5, 9], kickPowers: [0.8, 1], kickSeeds: [3, 4], kick: 0.4,
-        now: new Date(2026, 10, 4, 3, 0, 0), flash: 0.5, handWaves: 1, dialRadius: 200,
-        handLevels: { bass: 0.8, mid: 0.2, treble: 0.3 }, handPhases: { hour: 1, minute: 2, second: 3 },
+    const frame = {
+        bands: Float64Array.from({ length: 32 }, (_, i) => i / 31), time: 100, flow: 2, treble: 0.3, kick: 0.4,
+        intensity: 1.2, bassStretch: 1.4,
     };
-    const silence = { bass: 0, mid: 0, treble: 0 };
-
-    test("the hands point at the true time, whatever the music", () => {
-        const u = ringUniforms(state);
-        assert.deepEqual(u.handAngle, [Math.PI / 2, 0, 0, 0]);
-        const quiet = ringUniforms({ ...state, handLevels: silence, flash: 0 });
-        assert.deepEqual(quiet.handAngle, u.handAngle);
-    });
-
-    test("the hands swing with their bands and the kick flash, and straighten at handWaves 0", () => {
-        const u = ringUniforms(state);
-        assert.equal(u.handFlash, 0.5);
-        assert.ok(u.handAmp[0] > u.handAmp[1] / 0.78 * 0.52, "the bass swings the hour hand hardest, for its length");
-        assert.deepEqual(ringUniforms({ ...state, handWaves: 0 }).handAmp, [0, 0, 0, 0]);
-        const silent = ringUniforms({ ...state, handLevels: silence, flash: 0 });
-        assert.deepEqual(silent.handAmp, [0, 0, 0, 0]);
-        assert.deepEqual(silent.handGlow, [0, 0, 0, 0]);
-    });
-
-    test("each hand's wave runs at its own phase, and the ribbons get the kick", () => {
-        const u = ringUniforms(state);
-        assert.deepEqual(u.handPhase, [1, 2, 3, 0]);
-        assert.equal(u.kick, 0.4);
-    });
-
-    test("the hands float: each starts out from the center", () => {
-        const [hour, minute, second] = ringUniforms(state).handInner;
-        for (const inner of [hour, minute, second])
-            assert.ok(inner >= 0.08 && inner <= 0.12, `inner ${inner}`);
-    });
-
-    test("one pixel is one pixel of the dial", () => {
-        assert.equal(ringUniforms(state).pixel, 1 / 200);
-    });
+    const ring = {
+        swell: 0.05, presence: 1, handFlash: 0.5,
+        handAngles: Float64Array.of(Math.PI / 2, 0, 0), handInner: Float64Array.of(0.1, 0.1, 0.1),
+        handLengths: Float64Array.of(0.52, 0.78, 0.88), handAmplitudes: Float64Array.of(0.05, 0.02, 0.01),
+        handWidths: Float64Array.of(0.02, 0.013, 0.007), handGlows: Float64Array.of(1, 0.3, 0.2),
+        handPhases: Float64Array.of(1, 2, 3),
+        kickAges: Float64Array.of(0.5, 100, 100, 100, 100, 100, 100, 100),
+        kickPowers: Float64Array.of(0.8, 0, 0, 0, 0, 0, 0, 0),
+        kickSeeds: Float64Array.of(3, 0, 0, 0, 0, 0, 0, 0),
+    };
+    const u = ringUniforms(frame, ring, 200);
 
     test("sets every uniform the plugin sets, and no others", () => {
-        assert.deepEqual(Object.keys(ringUniforms(state)).sort(), pluginUniforms().sort());
+        assert.deepEqual(Object.keys(u).sort(), pluginUniforms().sort());
+    });
+
+    test("the hands as the core gives them: hour, minute, second, in a vec4", () => {
+        assert.deepEqual(u.handAngle, [Math.PI / 2, 0, 0, 0]);
+        assert.deepEqual(u.handInner, [0.1, 0.1, 0.1, 0]);
+        assert.deepEqual(u.handLength, [0.52, 0.78, 0.88, 0]);
+        assert.deepEqual(u.handAmp, [0.05, 0.02, 0.01, 0]);
+        assert.deepEqual(u.handWidth, [0.02, 0.013, 0.007, 0]);
+        assert.deepEqual(u.handGlow, [1, 0.3, 0.2, 0]);
+        assert.deepEqual(u.handPhase, [1, 2, 3, 0]);
+        assert.equal(u.handFlash, 0.5);
+    });
+
+    test("the ring's motion, the frame's clock, flow, treble, kick and look settings", () => {
+        assert.deepEqual([u.swell, u.presence], [0.05, 1]);
+        assert.deepEqual([u.time, u.flow, u.treble, u.kick, u.intensity, u.bassStretch], [100, 2, 0.3, 0.4, 1.2, 1.4]);
+    });
+
+    test("one pixel is one pixel of the dial, and the dial is the plugin's", () => {
+        assert.equal(u.pixel, 1 / 200);
+        assert.ok(Math.abs(u.dial - 0.68) < 1e-9, `dial ${u.dial}`);
     });
 
     test("the bands go in quads, bass first", () => {
-        const u = ringUniforms(state);
         assert.deepEqual(u.b0, [0, 1 / 31, 2 / 31, 3 / 31]);
         assert.deepEqual(u.b7, [28 / 31, 29 / 31, 30 / 31, 1]);
     });
 
-    test("kicks fill the shader's slots, a played-out kick and missing ones empty", () => {
-        const u = ringUniforms(state);
+    test("the Lock Ring's Kick slots fill the shader's, in quads", () => {
         assert.deepEqual(u.kickPower0, [0.8, 0, 0, 0]);
-        assert.deepEqual(u.kickAge0.slice(0, 1), [0.5]);
+        assert.deepEqual(u.kickAge0, [0.5, 100, 100, 100]);
         assert.deepEqual(u.kickSeed0, [3, 0, 0, 0]);
         assert.deepEqual(u.kickPower1, [0, 0, 0, 0]);
-    });
-
-    test("time wraps at 1200 s like the plugin's, and the dial is the plugin's", () => {
-        const u = ringUniforms(state);
-        assert.ok(Math.abs(u.time - 100) < 1e-9, `time ${u.time}`);
-        assert.ok(Math.abs(u.dial - 0.68) < 1e-9, `dial ${u.dial}`);
     });
 });

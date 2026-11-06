@@ -1,0 +1,22 @@
+[package]
+name = "visualizer-core"
+version = "0.1.0"
+edition = "2021"
+description = "The per-frame logic of the Bar Visualizer and the Lock Ring (ADR 0007)"
+publish = false
+
+[lib]
+name = "visualizer_core"
+# rlib for the tests, staticlib and cdylib for C (include/visualizer_core.h), cdylib for WASM.
+crate-type = ["rlib", "staticlib", "cdylib"]
+
+[dependencies]
+serde_json = "1"
+# The same math natively and in WASM, to the last bit (src/kick.rs).
+libm = "0.2"
+
+# The wasm-bindgen API (src/wasm.rs). Pinned exactly: the wasm-bindgen CLI that build-wasm.sh
+# runs must be this same version.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "=0.2.127"
+js-sys = "0.3"

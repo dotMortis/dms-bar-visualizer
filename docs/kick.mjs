@@ -1,4 +1,5 @@
-// Kick detection, shared by the visualizer (audio/AudioPipeline.qml) and the demo (index.html) so they can't drift.
+// Kick detection, shared by both visualizers (audio/AudioPipeline.qml) until they run the core (core/), as the demo
+// (index.html) already does: the core is its port, held to the same Kicks.
 // Plain ECMAScript that QML, browsers and node all load. In docs/, as GitHub Pages serves only that.
 
 // cava's layout, which audio/AudioPipeline.qml configures it with: 32 bands from 30 Hz to 14 kHz, bass first.
@@ -86,6 +87,20 @@ export function bandAt(hz) {
         }
     });
     return best;
+}
+
+// One line of cava's raw ascii output (BANDS integers 0..1000, each followed by ";") as the bands
+// in 0..1, bass first; null for a line with fewer bands. The capture's lines are parsed only here,
+// whatever runs as the capture.
+export function parseBands(line) {
+    const parts = line.split(";");
+    // The ";" after the last band leaves an empty part, so a line one band short still has BANDS.
+    if (parts.length < BANDS || parts[BANDS - 1] === "")
+        return null;
+    const bands = new Array(BANDS);
+    for (let i = 0; i < BANDS; i++)
+        bands[i] = parseInt(parts[i], 10) / 1000;
+    return bands;
 }
 
 // A detector for config.json's kickThreshold, kickLowHz, kickHighHz and kickCooldown, and speed (1 if

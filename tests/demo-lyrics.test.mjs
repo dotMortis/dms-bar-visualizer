@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { DEMO_LINES, DEMO_LOOP, createDemoLyrics } from "../docs/demo-lyrics.mjs";
+import { DEMO_LETTERS, DEMO_LINES, DEMO_LOOP, DEMO_LYRICS, createDemoLyrics, createDemoReadings } from "../docs/demo-lyrics.mjs";
 
 const START = 50_000; // ms, the page clock when the demo starts
 const at = seconds => START + seconds * 1000;
@@ -74,5 +74,35 @@ describe("the demo's Lyric Words", () => {
         };
         assert.deepEqual(everyWord("ribbons-or-hands"), new Set(["ribbon", "hand"]));
         assert.deepEqual(everyWord("ribbons"), new Set(["ribbon"]));
+    });
+});
+
+// The bar view's Lyric Words come from the core (core/src/lyric_words.rs): the page hands it the
+// demo song as DMS's lyrics, the letters to measure, and position readings on the demo's clock.
+describe("the demo song for the core", () => {
+    test("is DMS's lyrics.get reply, its synced lines the demo lines", () => {
+        assert.deepEqual(JSON.parse(DEMO_LYRICS), { found: true, synced: DEMO_LINES });
+    });
+
+    test("its letters are every letter of its lines, once each, no spaces", () => {
+        const letters = Array.from(DEMO_LETTERS);
+        assert.equal(new Set(letters).size, letters.length);
+        assert.ok(letters.every(c => !/\s/.test(c)));
+        for (const line of DEMO_LINES)
+            for (const c of line.x.replace(/\s/g, ""))
+                assert.ok(letters.includes(c), c);
+    });
+
+    test("readings come once a second and at each loop's start, the loop's position in seconds", () => {
+        const read = createDemoReadings(START / 1000);
+        const at = seconds => read(START / 1000 + seconds);
+        assert.equal(at(0), 0);
+        assert.equal(at(0.5), null);
+        assert.equal(at(1), 1);
+        assert.equal(at(1.5), null);
+        assert.ok(Math.abs(at(2.25) - 2.25) < 1e-9);
+        assert.ok(Math.abs(at(DEMO_LOOP - 0.1) - (DEMO_LOOP - 0.1)) < 1e-9);
+        // The loop starts again: a reading at once, back at the top.
+        assert.ok(Math.abs(at(DEMO_LOOP + 0.05) - 0.05) < 1e-9);
     });
 });

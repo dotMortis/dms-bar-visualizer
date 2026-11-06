@@ -1,0 +1,129 @@
+#!/usr/bin/python3 -I
+"""Real cava's own CPU, % of one core, over the harness's window (one loop of the reference track,
+from harness/scenarios.mjs) after 5 s of warm-up: what the replay harness's stand-in capture doesn't
+cost and cava does (docs/performance.md, "Real cava").
+
+  harness/cava-cost fifo            the reference track, synthesised by tests/fixtures/record.py, fed
+                                    in real time through a fifo, with record.py's cava config (the
+                                    visualizer's, its input swapped to that fifo)
+  harness/cava-cost pulse <source>  the visualizer's cava config as it is (method=pulse) on a pulse
+                                    source, e.g. an idle sink's monitor for Silence
+
+cava's stdout is read and dropped line by line, as qs's SplitParser reads it. Prints one JSON line:
+cava's user, system and total % of one core (its process, all its threads) and its lines a second.
+Needs cava, node and python3 with numpy. Not a test: compare runs made back to back.
+"""
+import importlib.util
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+
+sys.dont_write_bytecode = True  # importing tests/fixtures/record.py leaves no __pycache__ in the repo
+HARNESS = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(HARNESS)
+WARMUP = 5.0
+TCK = os.sysconf("SC_CLK_TCK")
+
+
+def window():
+    """One loop of the reference track, s: harness/run's window, from the one formula for it."""
+    out = subprocess.run(["node", os.path.join(HARNESS, "scenarios.mjs"), "music"], check=True,
+                         capture_output=True, text=True).stdout
+    return float(re.search(r"^LOOP_LENGTH=(.+)$", out, re.M).group(1))
+
+
+def ticks(pid):
+    with open(f"/proc/{pid}/stat") as f:
+        fields = f.read().rsplit(")", 1)[1].split()
+    return int(fields[11]), int(fields[12])  # utime, stime
+
+
+def load_record():
+    spec = importlib.util.spec_from_file_location("record", os.path.join(REPO, "tests/fixtures/record.py"))
+    record = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(record)
+    return record
+
+
+def pulse_conf(record, source):
+    """record.py's config with its [input] back to the visualizer's: pulse, on `source`."""
+    conf, n = re.subn(r"\[input\]\n(?:.+\n)+?\n", f"[input]\nmethod=pulse\nsource={source}\n\n", record.CAVA_CONF)
+    assert n == 1, "record.py's CAVA_CONF has no [input] section"
+    return conf
+
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] not in ("fifo", "pulse") or (sys.argv[1] == "pulse" and len(sys.argv) < 3):
+        sys.exit(__doc__)
+    mode = sys.argv[1]
+    measure_s = window()
+    record = load_record()
+    tmp = tempfile.mkdtemp()
+    conf = os.path.join(tmp, "cava.conf")
+    if mode == "fifo":
+        import numpy as np
+        track = record.steady_house()
+        buf = track.buf * min(1, 0.98 / max(1e-9, np.max(np.abs(track.buf))))
+        pcm = (np.clip(buf, -1, 1) * 32767).astype("<i2")
+        stereo = np.repeat(pcm[:, None], 2, axis=1).tobytes()
+        fifo = os.path.join(tmp, "audio.fifo")
+        os.mkfifo(fifo)
+        with open(conf, "w") as f:
+            f.write(record.CAVA_CONF.format(fifo=fifo))
+    else:
+        with open(conf, "w") as f:
+            f.write(pulse_conf(record, sys.argv[2]))
+    cava = subprocess.Popen(["cava", "-p", conf], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                            stderr=subprocess.DEVNULL)
+    count = [0]
+
+    def read():
+        for _ in iter(cava.stdout.readline, b""):
+            count[0] += 1
+
+    threading.Thread(target=read, daemon=True).start()
+    stop = threading.Event()
+    if mode == "fifo":
+        def feed():
+            sr, chunk, n = record.SR, 256, len(pcm)
+            with open(fifo, "wb", buffering=0) as audio:
+                start = time.monotonic()
+                i = 0
+                while not stop.is_set():
+                    delay = start + i / sr - time.monotonic()
+                    if delay > 0:
+                        time.sleep(delay)
+                    j = i % n
+                    audio.write(stereo[j * 4:min(n, j + chunk) * 4])
+                    i += min(chunk, n - j)
+        threading.Thread(target=feed, daemon=True).start()
+    try:
+        time.sleep(WARMUP)
+        u0, s0 = ticks(cava.pid)
+        c0, t0 = count[0], time.monotonic()
+        time.sleep(measure_s)
+        u1, s1 = ticks(cava.pid)
+        c1, t1 = count[0], time.monotonic()
+    finally:
+        stop.set()
+        cava.kill()
+        cava.wait(2)
+        for f in os.listdir(tmp):
+            os.remove(os.path.join(tmp, f))
+        os.rmdir(tmp)
+    dt = t1 - t0
+    print(json.dumps({"mode": mode, "input": sys.argv[2] if mode == "pulse" else "steady_house via fifo",
+                      "loadavg": open("/proc/loadavg").read().split()[0],
+                      "window_s": round(dt, 3),
+                      "cava_user_pct": round((u1 - u0) / TCK / dt * 100, 2),
+                      "cava_system_pct": round((s1 - s0) / TCK / dt * 100, 2),
+                      "cava_pct": round(((u1 - u0) + (s1 - s0)) / TCK / dt * 100, 2),
+                      "lines_per_s": round((c1 - c0) / dt, 1)}))
+
+
+main()

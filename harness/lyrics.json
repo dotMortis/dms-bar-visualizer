@@ -1,0 +1,7 @@
+[
+    {"t":1,"e":4,"x":"Neon rivers light the night","w":[{"t":1,"e":1.5,"x":"Neon "},{"t":1.5,"e":1.75,"x":"ri"},{"t":1.75,"e":2,"x":"vers "},{"t":2,"e":2.5,"x":"light "},{"t":2.5,"e":3,"x":"the "},{"t":3,"e":4,"x":"night"}]},
+    {"t":5,"e":8.5,"x":"Every heartbeat sets the sky alight","group":2},
+    {"t":6.5,"e":8.5,"x":"so bright","background":true,"group":2},
+    {"t":13,"e":16.5,"x":"Ride the wave, we never fall","w":[{"t":13,"e":13.5,"x":"Ride "},{"t":13.5,"e":14,"x":"the "},{"t":14,"e":14.5,"x":"wave, "},{"t":14.5,"e":15,"x":"we "},{"t":15,"e":15.25,"x":"nev"},{"t":15.25,"e":15.5,"x":"er "},{"t":15.5,"e":16.5,"x":"fall"}]},
+    {"t":17,"e":20.5,"x":"Dancing on the edge of sound"}
+]

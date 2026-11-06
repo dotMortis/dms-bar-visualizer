@@ -1,0 +1,350 @@
+#!/bin/bash
+# The replay harness: runs a visualizer as it ships, in its own qs, on a recorded input, and measures it.
+#
+#   harness/run [options] <scenario>
+#
+#   scenarios   music              the reference track (harness/reference.json), the Active Player
+#                                  playing it; no Lyric Words (no DMS)
+#               music_lyrics       music with Lyric Words: the same, with a stand-in DMS answering the
+#                                  bar's lyrics request with the fixed timed lyrics (harness/lyrics.json)
+#               silence_no_player  Silence: cava's silence, no Active Player
+#               silence_paused     Silence: cava's silence, the Active Player paused
+#               silence_playing    Silence: cava's silence while the Active Player reports playing
+#                                  (a silent track, "Silence"; the stand-in DMS has no lyrics for it)
+#               (the list: harness/scenarios.mjs)
+#   options     --host HOST    what runs: bar = the Bar Visualizer (shell.qml), the default;
+#                              lock = the Lock Ring, loaded as DMS loads it in a test qs
+#                              (harness/lockhost), with a stand-in for DMS's lyrics service in
+#                              place of the DMS socket;
+#                              floor, floor-pipe, floor-parse = Quickshell's floor (harness/floor):
+#                              the bar's window and REV's viz.frag with no script per frame, qs not
+#                              reading the capture, reading it, or parsing it (use --commit v0.10.0)
+#               --commit REV   measure REV (e.g. v0.10.0) instead of this working tree
+#               --warmup S     seconds before measuring (default 5)
+#               --loops N      whole loops of the track to measure over (default 1, 24.05 s)
+#               --out DIR      where logs and result.json go (default: a new /tmp/bvh-out.* dir)
+#               --cpu-only     CPU alone, without the measures below (they cost about half a point)
+#               --record FILE  screen-record the window to FILE (.mp4) instead of measuring: the run
+#                              shows on a stage of its own, a headless Hyprland, in place of the
+#                              desktop, so FILE holds the visualizer's window and nothing else
+#                              (wf-recorder, libx264). No result.json. harness/record does two commits.
+#
+#   measures    cpu            % of one core, qs + capture + children
+#               frames         frames rendered and late ones (over 1.5 refreshes apart), Qt's GPU
+#                              frame time (QSG_RENDER_TIMING, QSG_RHI_PROFILE in qs.log)
+#               gpu            GPU busy, from the DRM driver's fdinfo
+#               profile        perf.data and profile.txt: where the CPU time goes (needs perf)
+#
+# Only the inputs are swapped: bin/cava stands in for cava (first on PATH), bin/pactl answers the
+# sink probe with the scenario's streams, not the desktop's (the real pactl still runs), player
+# stands in for the Active Player (an MPRIS player on the run's own session bus, the only one
+# there), dms stands in for DMS's socket where a scenario has one (in the run's runtime dir),
+# lockhost for the parts of DMS the Lock Ring uses (--host lock), and the run gets its own
+# runtime dir, config dir (default settings), cache and session bus, so it can't see or touch
+# the user's live visualizers, DMS, players or config.json. qs runs in a transient systemd scope, so
+# CPU is the scope's cgroup: qs, its capture and every short-lived child (sh, pactl), as % of one
+# core like htop. Everything it starts is stopped when it exits (harness/setup.sh, which
+# harness/check-kicks shares). That the replayed input reaches the Kick detector is checked by
+# harness/check-kicks, not here.
+#
+# Needs: quickshell, systemd --user with cgroup v2, dbus-run-session, busctl, node, python3 with
+# python-dbus and python-gobject, qsb (qt6-shadertools); for --record, Hyprland, wf-recorder and
+# ffprobe. Shows the visualizer on the desktop for the run's length, so the screen must stay
+# unlocked: while the session is locked the compositor draws none of it, and a run refuses to
+# start (or fails) then (not with --record: the stage draws however the desktop is). A run with
+# music that rendered no frame fails too. Not a test: CPU depends on the machine and what else
+# runs, so compare runs made back to back.
+set -euo pipefail
+
+HARNESS=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO=$(dirname "$HARNESS")
+# shellcheck source=lib.sh
+. "$HARNESS/lib.sh"
+# shellcheck source=setup.sh
+. "$HARNESS/setup.sh"
+# shellcheck source=stage.sh
+. "$HARNESS/stage.sh"
+HOST=bar COMMIT="" WARMUP=5 LOOPS=1 OUT="" CPU_ONLY=0 RECORD="" SCENARIO=""
+
+while (($#)); do
+    case $1 in
+        --host) HOST=$2; shift ;;
+        --commit) COMMIT=$2; shift ;;
+        --warmup) WARMUP=$2; shift ;;
+        --loops) LOOPS=$2; shift ;;
+        --out) OUT=$2; shift ;;
+        --cpu-only) CPU_ONLY=1 ;;
+        --record) RECORD=$2; shift ;;
+        -h | --help) show_help "$0"; exit 0 ;;
+        -*) die "unknown option $1" ;;
+        *) [[ -z $SCENARIO ]] || die "one scenario at a time"; SCENARIO=$1 ;;
+    esac
+    shift
+done
+[[ -n $SCENARIO ]] || die "which scenario? (see --help)"
+
+# --- Hosts: what runs. Each sets, from TREE (the code under test):
+#   SHELL_DIR       the qs config dir
+#   RECORD_WINDOW   the layer-shell namespace of the window --record cuts to
+# and where a scenario's DMS (DMS=1) comes from:
+#   DMS_SOCKET      1: the stand-in DMS socket (harness/dms) runs, for a scenario with DMS
+#   LYRICS_LOG      where its stand-in logs each lyrics lookup (` lyrics.get ... -> found|none`)
+#   LYRICS_FROM     what the report calls that stand-in
+#   LYRICS_NONE     what the report says for a scenario without DMS
+# The stand-in DMS socket, in the run's runtime dir, where the bar looks for DMS's.
+lyrics_from_dms_socket() {
+    DMS_SOCKET=$DMS LYRICS_LOG=$DMS_LOG LYRICS_FROM="the stand-in DMS" LYRICS_NONE="no DMS"
+}
+host_bar() {
+    SHELL_DIR=$TREE RECORD_WINDOW=bar-visualizer
+    lyrics_from_dms_socket
+}
+# The Lock Ring in a test qs (never the live DMS or its lock screen): harness/lockhost/shell.qml,
+# with the plugin from TREE, and stand-ins for the parts of DMS it imports. A scenario with a DMS
+# gets its stand-in lyrics service, which serves the same timed lyrics in the same process as DMS's
+# and logs to qs.log; one without gets a DMS without that service (as before DMS 2.0), so the Lock
+# Ring loads no Lyric Words, as the bar has none without DMS.
+host_lock() {
+    SHELL_DIR=$RUN/lock RECORD_WINDOW=lock-ring-harness
+    DMS_SOCKET=0 LYRICS_LOG=$OUT/qs.log LYRICS_FROM="the stand-in lyrics service" \
+        LYRICS_NONE="a DMS without its lyrics service"
+    cp -r "$HARNESS/lockhost" "$SHELL_DIR"
+    if ((!DMS)); then
+        rm -r "$SHELL_DIR/Services"
+        sed -i '/^import qs\.Services$/d' "$SHELL_DIR/shell.qml"
+    fi
+}
+# Quickshell's floor (harness/floor/shell.qml): the bar's window and the tree's viz.frag with no
+# script per frame. floor: qs doesn't read the capture; floor-pipe: it reads every line and does
+# nothing with it; floor-parse: it parses every line as v0.10.0 did (BVH_FLOOR_MODE).
+host_floor_mode() {
+    SHELL_DIR=$RUN/floor RECORD_WINDOW=bar-visualizer
+    lyrics_from_dms_socket
+    mkdir -p "$SHELL_DIR"
+    cp "$HARNESS/floor/shell.qml" "$SHELL_DIR/"
+    ln -s "$TREE/shaders/viz.frag.qsb" "$SHELL_DIR/viz.frag.qsb"
+    export BVH_FLOOR_MODE=$1
+}
+host_floor() { host_floor_mode floor; }
+host_floor-pipe() { host_floor_mode pipe; }
+host_floor-parse() { host_floor_mode parse; }
+
+declare -F "host_$HOST" >/dev/null || die "no host '$HOST'"
+[[ -n $RECORD ]] || ! session_locked || die "the screen is locked: nothing the run shows would be drawn; unlock it (and keep it unlocked) first"
+
+# --- Setup (harness/setup.sh) ---------------------------------------------------------------------
+setup_init
+setup_scenario "$SCENARIO"
+setup_tree "$COMMIT"
+
+# What install.sh builds: the shaders (gitignored), compiled where missing or older than their source.
+QSB=$(command -v qsb || echo /usr/lib/qt6/bin/qsb)
+for frag in "$TREE"/shaders/*.frag "$TREE"/lock-ring/shaders/*.frag; do
+    [[ -e $frag && ! ${frag}.qsb -nt $frag ]] || continue
+    "$QSB" --glsl "100 es,120,150" --hlsl 50 --msl 12 -o "$frag.qsb" "$frag"
+done
+"host_$HOST"
+
+setup_env
+setup_epoch "$WARMUP" "$LOOPS"
+setup_bus
+
+# The compositor qs shows on: the desktop's, or the stage's (--record, harness/stage.sh).
+SHOW_RUNTIME=$DESKTOP_RUNTIME
+if [[ -n $RECORD ]]; then
+    stage_start
+    SHOW_RUNTIME=$STAGE
+    export WAYLAND_DISPLAY=wayland-1 HYPRLAND_INSTANCE_SIGNATURE=$STAGE_SIG
+fi
+setup_show "$SHOW_RUNTIME"
+
+# --- Measures: set up before qs starts (optional), begin before the window, end after it, report
+# after the run. Each report prints its lines and writes its result.json fields (one JSON object)
+# to $RUN/<measure>.json, merged into result.json in the measures' order. ----------------------------
+ticks() { { sed 's/.*) //' "/proc/$1/stat" 2>/dev/null || true; } | awk '{ print $12 + $13 }'; }   # utime + stime
+cpu_stat() { awk -v k="$1" '$1 == k { print $2 }' "$QS_CGROUP/cpu.stat"; }
+# us of CPU over ns of wall time, as % of one core.
+of_core() { awk -v u="$1" -v t="$2" 'BEGIN { printf "%.1f", u * 1000 / t * 100 }'; }
+
+measure_cpu_begin() {
+    CPU_U0=$(cpu_stat usage_usec) CPU_USER0=$(cpu_stat user_usec) CPU_SYS0=$(cpu_stat system_usec) CPU_T0=$(date +%s%N)
+    declare -gA TICKS0=() NAME=()
+    local p
+    for p in $(pids); do TICKS0[$p]=$(ticks "$p"); NAME[$p]=$(comm "$p"); done
+}
+measure_cpu_end() {
+    CPU_U1=$(cpu_stat usage_usec) CPU_USER1=$(cpu_stat user_usec) CPU_SYS1=$(cpu_stat system_usec) CPU_T1=$(date +%s%N)
+    declare -gA TICKS1=()
+    local p
+    for p in $(pids); do TICKS1[$p]=$(ticks "$p"); NAME[$p]=${NAME[$p]:-$(comm "$p")}; done
+}
+measure_cpu_report() {
+    local hz ns qs=0 capture=0 p d
+    hz=$(getconf CLK_TCK) ns=$((CPU_T1 - CPU_T0))
+    # Processes alive for the whole window, by name; whatever else ran in it (sh, pactl, a capture
+    # restarted mid-window) is the rest of the total.
+    for p in "${!TICKS1[@]}"; do
+        [[ -n ${TICKS0[$p]:-} && -n ${TICKS1[$p]} ]] || continue
+        d=$(((${TICKS1[$p]} - ${TICKS0[$p]}) * 1000000 / hz))
+        case ${NAME[$p]} in qs) qs=$((qs + d)) ;; cava) capture=$((capture + d)) ;; esac
+    done
+    local total=$((CPU_U1 - CPU_U0)) rest
+    rest=$((total - qs - capture < 0 ? 0 : total - qs - capture))
+    local pct user sys pqs pcap prest
+    pct=$(of_core "$total" "$ns") user=$(of_core $((CPU_USER1 - CPU_USER0)) "$ns") sys=$(of_core $((CPU_SYS1 - CPU_SYS0)) "$ns")
+    pqs=$(of_core "$qs" "$ns") pcap=$(of_core "$capture" "$ns") prest=$(of_core "$rest" "$ns")
+    echo "cpu      $pct % of one core (qs + capture + children), user $user, system $sys"
+    echo "         qs $pqs, capture $pcap, other (sh, pactl, ...) $prest"
+    "$NODE" "$HARNESS/result.mjs" "$RUN/cpu.json" n:cpu_pct="$pct" n:cpu_user_pct="$user" n:cpu_system_pct="$sys" \
+        n:cpu_qs_pct="$pqs" n:cpu_capture_pct="$pcap" n:cpu_other_pct="$prest"
+}
+
+# Frame timing and GPU frame time, from Qt's own render-loop log in qs.log: QSG_RENDER_TIMING logs
+# each frame the render loop renders, per window, QSG_RHI_PROFILE adds the GPU's time for it
+# (timestamp queries). Late is measured against the display's refresh (hyprctl).
+measure_frames_setup() { export QSG_RENDER_TIMING=1 QSG_RHI_PROFILE=1; }
+measure_frames_begin() { FRAMES_T0=$(now) FRAMES_UTC_OFFSET=$(date +%z); }   # qs logs local time, no zone
+measure_frames_end() { FRAMES_T1=$(now); }
+measure_frames_report() {
+    local monitors=()
+    hyprctl -j monitors > "$RUN/monitors.json" 2>/dev/null && monitors=(--monitors "$RUN/monitors.json")
+    local music=()
+    ((SILENT)) || music=(--music)   # with music the visualizer moves: no frame means nothing was drawn
+    "$NODE" "$HARNESS/frames.mjs" "$OUT/qs.log" "$FRAMES_T0" "$FRAMES_T1" --utc-offset "$FRAMES_UTC_OFFSET" "${monitors[@]}" "${music[@]}" --json "$RUN/frames.json" || exit 1
+}
+
+# GPU busy: the DRM driver's per-client engine time (/proc/<pid>/fdinfo of each /dev/dri fd), for
+# every process in the scope, over the window.
+gpu_snapshot() {
+    local p fd
+    echo "time $(date +%s%N)"
+    for p in $(pids); do
+        for fd in /proc/"$p"/fd/*; do
+            [[ $(readlink "$fd" 2>/dev/null) == /dev/dri/* ]] || continue
+            echo "fdinfo $p ${fd##*/}"
+            cat "/proc/$p/fdinfo/${fd##*/}" 2>/dev/null || true
+        done
+    done
+}
+measure_gpu_begin() { gpu_snapshot > "$RUN/gpu0.txt"; }
+measure_gpu_end() { gpu_snapshot > "$RUN/gpu1.txt"; }
+measure_gpu_report() { "$NODE" "$HARNESS/gpu.mjs" "$RUN/gpu0.txt" "$RUN/gpu1.txt" --json "$RUN/gpu.json"; }
+
+# The CPU profile: perf samples every process in the scope (qs's threads, the capture, sh, pactl)
+# in the window only, user space only (all perf_event_paranoid 2 allows). perf must be qs's
+# parent (ptrace_scope 1), so it wraps the launch and stays out of the scope's cgroup; its control
+# fifo switches sampling on and off. QML's JIT names its functions in /tmp/perf-<pid>.map, which
+# moves to the output dir after the report.
+PERF=0
+# On exit (harness/setup.sh's cleanup): QML's JIT map, if the run failed before the report.
+cleanup_more() { local p; for p in ${PERF_QS:-}; do rm -f "/tmp/perf-$p.map"; done; }
+measure_profile_setup() {
+    command -v perf >/dev/null || { echo "harness: no perf on PATH, so no CPU profile" >&2; return 0; }
+    rm -f "$OUT/perf.data"   # not kept as perf.data.old
+    mkfifo "$RUN/perf.ctl" "$RUN/perf.ack"
+    QS_WRAP=(perf record -q -e cycles:u -F 1999 -g --user-callchains -N -D -1
+        --control "fifo:$RUN/perf.ctl,$RUN/perf.ack" -o "$OUT/perf.data" --)
+    export QV4_PROFILE_WRITE_PERF_MAP=1
+    PERF=1
+}
+perf_ctl() {
+    timeout 5 sh -c 'echo "$1" > "$2" && head -c 4 "$3" > /dev/null' sh "$1" "$RUN/perf.ctl" "$RUN/perf.ack" \
+        || echo "harness: perf didn't $1 sampling" >&2
+}
+measure_profile_begin() {
+    ((PERF)) || return 0
+    local p
+    PERF_QS=""
+    for p in $(pids); do if [[ $(comm "$p") == qs ]]; then PERF_QS+=" $p"; fi; done
+    perf_ctl enable
+}
+measure_profile_end() { ((PERF)) || return 0; perf_ctl disable; }
+measure_profile_report() {
+    ((PERF)) || return 0
+    wait "$QS_JOB" 2>/dev/null || true   # perf writes perf.data once qs is gone
+    local report=(perf report -i "$OUT/perf.data" --stdio --no-children -g none)
+    "${report[@]}" -q --sort comm,dso -F sample,period,comm,dso --percent-limit 0 -t $'\t' > "$RUN/parts.tsv" 2>/dev/null
+    "$NODE" "$HARNESS/profile.mjs" "$RUN/parts.tsv" --json "$RUN/profile.json" > "$RUN/parts.txt"
+    {
+        cat "$RUN/parts.txt"
+        echo; "${report[@]}" --sort comm,dso 2>/dev/null
+        echo; "${report[@]}" --sort comm,dso,sym --percent-limit 0.2 2>/dev/null
+    } > "$OUT/profile.txt"
+    if command -v inferno-flamegraph >/dev/null && command -v inferno-collapse-perf >/dev/null; then
+        perf script -i "$OUT/perf.data" 2>/dev/null | inferno-collapse-perf | inferno-flamegraph > "$OUT/profile.svg" || true
+    fi
+    local p
+    for p in $PERF_QS; do if [[ -e /tmp/perf-$p.map ]]; then mv "/tmp/perf-$p.map" "$OUT/"; fi; done
+    cat "$RUN/parts.txt"
+    echo "         $OUT/perf.data, $OUT/profile.txt"
+}
+
+# The recording (--record): wf-recorder on the stage's output, cut to the visualizer's window, over
+# the window. It runs in its own scope, outside qs's.
+measure_record_begin() {
+    stage_ctl -j layers > "$RUN/layers.json"
+    local region
+    region=$("$NODE" "$HARNESS/stage.mjs" region "$RUN/layers.json" "$RECORD_WINDOW") \
+        || die "no $RECORD_WINDOW window on the stage (see $OUT/qs.log)"
+    WAYLAND_DISPLAY=$STAGE/wayland-1 systemd-run --user --scope --unit="$ID-rec" -q \
+        wf-recorder -y -o STAGE -g "$region" -c libx264 -p crf=18 -r 60 -f "$RECORD" > "$OUT/record.log" 2>&1 &
+    REC_JOB=$!
+}
+measure_record_end() {
+    systemctl --user kill -s INT "$ID-rec.scope" 2>/dev/null || true
+    wait "$REC_JOB" 2>/dev/null || true
+}
+
+MEASURES=(cpu frames gpu profile)
+((!CPU_ONLY)) || MEASURES=(cpu)
+[[ -z $RECORD ]] || MEASURES=(record)
+
+# --- The run --------------------------------------------------------------------------------------
+QS_WRAP=()
+for m in "${MEASURES[@]}"; do
+    if declare -F "measure_${m}_setup" > /dev/null; then "measure_${m}_setup"; fi
+done
+start_qs "$SHELL_DIR"
+
+sleep_until "$HARNESS_EPOCH"
+[[ -n $(pids) ]] || die "qs isn't running (see $OUT/qs.log)"
+for m in "${MEASURES[@]}"; do "measure_${m}_begin"; done
+sleep_until "$(window_end)"
+for m in "${MEASURES[@]}"; do "measure_${m}_end"; done
+end_inputs
+LOCKED=0
+! session_locked || LOCKED=1
+stop_run
+
+report_head "$SCENARIO on $HOST"
+((!LOCKED)) || { echo "FAILED: the screen was locked at the end of the window, so nothing the run showed was drawn"; exit 1; }
+report_capture
+report_player
+# The stand-ins answer from the fixed lyrics only: allowNetwork reaches nothing.
+ASKED=$(grep -c ' lyrics\.get ' "$LYRICS_LOG" || true)
+if ((!DMS)); then
+    echo "lyrics   $LYRICS_NONE"
+else
+    ((ASKED)) || { echo "FAILED: the visualizer never asked $LYRICS_FROM for lyrics (see $LYRICS_LOG, $OUT/qs.log)"; exit 1; }
+    FOUND=$(grep -c ' lyrics\.get .* -> found$' "$LYRICS_LOG" || true)
+    echo "lyrics   $LYRICS_FROM, asked $ASKED time(s) for \"$PLAYER_TITLE\": $( ((FOUND)) && echo "the timed lyrics (harness/lyrics.json)" || echo "none found")"
+fi
+if [[ -n $RECORD ]]; then
+    [[ -s $RECORD ]] || { echo "FAILED: nothing was recorded (see $OUT/record.log)"; exit 1; }
+    IFS=, read -r W H N < <(ffprobe -v error -count_frames -select_streams v:0 \
+        -show_entries stream=width,height,nb_read_frames -of csv=p=0 "$RECORD")
+    ((${N:-0} > 0)) || { echo "FAILED: the recording has no frame (see $OUT/record.log)"; exit 1; }
+    echo "record   $RECORD: ${W}x$H, $N frames"
+    exit
+fi
+
+PARTS=()
+for m in "${MEASURES[@]}"; do
+    "measure_${m}_report"
+    [[ ! -e $RUN/$m.json ]] || PARTS+=("@$RUN/$m.json")
+done
+"$NODE" "$HARNESS/result.mjs" "$OUT/result.json" \
+    s:scenario="$SCENARIO" s:host="$HOST" s:commit="$REV" b:dirty="$DIRTY" s:tree="$TREE_DESC" s:track="$TRACK" \
+    s:player="$PLAYER" s:player_title="$PLAYER_TITLE" n:dms="$DMS" n:lyrics_requests="$ASKED" n:window_s="$WINDOW" \
+    n:warmup_s="$WARMUP" s:loadavg="$LOAD" n:capture_starts="$STARTS" "${PARTS[@]}"
+echo "out      $OUT"

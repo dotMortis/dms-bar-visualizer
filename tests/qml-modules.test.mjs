@@ -24,10 +24,15 @@ function qmlFiles(dir) {
     });
 }
 
+// Every QML file: the Bar Visualizer's, the Lock Ring's and the harness's (its hosts and stand-ins,
+// which Qt loads in a measured run just the same).
+const QML_DIRS = ["audio", "lyrics", "lock-ring", "harness"];
+const allQml = () => [path.join(ROOT, "shell.qml"), ...QML_DIRS.flatMap(d => qmlFiles(path.join(ROOT, d)))];
+
 // Every .mjs a QML file imports, resolved on the path as written (as QML does, not via symlinks).
 function importedModules() {
     const modules = new Set();
-    for (const file of [path.join(ROOT, "shell.qml"), ...qmlFiles(path.join(ROOT, "audio")), ...qmlFiles(path.join(ROOT, "lyrics")), ...qmlFiles(path.join(ROOT, "lock-ring"))]) {
+    for (const file of allQml()) {
         for (const [, rel] of fs.readFileSync(file, "utf8").matchAll(/^import\s+"([^"]+\.m?js)"/gm))
             modules.add(path.resolve(path.dirname(file), rel));
     }
@@ -66,12 +71,13 @@ QtObject {
 }
 
 describe("modules the QML imports", { skip: !QML && "Qt's qml runner isn't installed" }, () => {
-    test("finds the Lock Ring's and the Bar Visualizer's modules", () => {
+    test("finds the Lock Ring's, the Bar Visualizer's and the harness's modules", () => {
         const rel = importedModules().map((m) => path.relative(ROOT, m));
         assert.ok(rel.includes("lock-ring/kicks.mjs"), rel.join(", "));
         assert.ok(rel.includes("docs/config.mjs"), rel.join(", "));
         assert.ok(rel.includes("docs/lyric-words.mjs"), rel.join(", "));
         assert.ok(rel.includes("docs/bar-words.mjs"), rel.join(", "));
+        assert.ok(rel.includes("harness/lockhost/Services/lyrics.mjs"), rel.join(", "));
     });
 
     for (const module of importedModules()) {
@@ -89,7 +95,7 @@ const ITEM_PROPERTIES = ["layer", "parent", "data", "children", "resources", "st
 
 describe("QML ids", () => {
     test("none is named like an Item's own property", () => {
-        const files = [path.join(ROOT, "shell.qml"), ...["audio", "lyrics", "lock-ring"].flatMap(d => qmlFiles(path.join(ROOT, d)))];
+        const files = allQml();
         const clashes = files.flatMap(file => Array.from(fs.readFileSync(file, "utf8").matchAll(/^\s*id:\s*(\w+)\s*$/gm))
             .filter(m => ITEM_PROPERTIES.includes(m[1]))
             .map(m => `${path.relative(ROOT, file)}: id ${m[1]}`));

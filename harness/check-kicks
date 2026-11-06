@@ -1,0 +1,62 @@
+#!/bin/bash
+# The replay harness's cheap check: the replayed input really reaches the Kick detector. The tree's
+# own audio pipeline (audio/AudioPipeline.qml), alone in a bare qs (harness/kicks/shell.qml, no
+# window), runs on the reference track as harness/run's music scenario feeds it, and must fire the
+# Kicks the kick-replay tests expect for the track, loop by loop (harness/kicks.mjs).
+#
+#   harness/check-kicks [options]
+#
+#   options     --commit REV   check REV (e.g. v0.10.0) instead of this working tree
+#               --loops N      whole loops of the track to check (default 1, 24.05 s)
+#               --out DIR      where the logs go (default: a new /tmp/bvh-out.* dir)
+#
+# It runs as harness/run does (harness/setup.sh): the fake cava first on PATH, the stand-in Active
+# Player on a private session bus, its own runtime, config and cache dirs, qs in a transient systemd
+# scope, everything stopped when it exits. It shows nothing, so the screen's lock doesn't matter.
+# Exits 1 if any loop's Kicks are off. Not a test (only its Kick comparison is, in node --test).
+#
+# Needs: quickshell, systemd --user, dbus-run-session, busctl, node, python3 with python-dbus and
+# python-gobject.
+set -euo pipefail
+
+HARNESS=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO=$(dirname "$HARNESS")
+# shellcheck source=lib.sh
+. "$HARNESS/lib.sh"
+# shellcheck source=setup.sh
+. "$HARNESS/setup.sh"
+COMMIT="" LOOPS=1 OUT=""
+
+while (($#)); do
+    case $1 in
+        --commit) COMMIT=$2; shift ;;
+        --loops) LOOPS=$2; shift ;;
+        --out) OUT=$2; shift ;;
+        -h | --help) show_help "$0"; exit 0 ;;
+        *) die "unknown argument $1 (see --help)" ;;
+    esac
+    shift
+done
+
+setup_init
+setup_scenario music
+setup_tree "$COMMIT"
+DMS_SOCKET=0   # music has no DMS
+setup_env
+setup_epoch 5 "$LOOPS"
+setup_bus
+setup_show "$DESKTOP_RUNTIME"
+
+start_qs "$HARNESS/kicks"
+sleep_until "$HARNESS_EPOCH"
+[[ -n $(pids) ]] || die "qs isn't running (see $OUT/qs.log)"
+sleep_until "$(window_end)"
+end_inputs
+sleep 0.3   # a short tail so the window's last Kicks reach the log
+stop_run
+
+report_head "kick check: $SCENARIO on the tree's audio pipeline"
+report_capture
+report_player
+echo "lyrics   no DMS"
+"$NODE" "$HARNESS/kicks.mjs" "$OUT/qs.log" "$LOOPS" "$REFERENCE"

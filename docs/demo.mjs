@@ -6,11 +6,26 @@
 // over when switching, as it does on the desktop: both visualizers read the same file (ADR 0004).
 // "Export config.json" downloads them as they are.
 import { DEFAULTS as CONFIG } from "./config.mjs";
-import { handPoses } from "./lock-ring/hands.mjs";
-import { kickSlots } from "./lock-ring/kicks.mjs";
 import { DIAL_RATIO } from "./lock-ring/ring.mjs";
 
 export const VIEWS = ["bar", "ring"];
+
+// cava's layout, which the page's sources stand in for: 32 bands from 30 Hz to 14 kHz, bass first;
+// and how many Kick slots the shaders take. The core's (core/tests/glyphs.rs checks them).
+export const BANDS = 32;
+export const LOW_HZ = 30;
+export const HIGH_HZ = 14000;
+export const KICK_SLOTS = 8;
+
+// Where each field of a glyph instance sits in the core's glyphs().data (core/src/glyph.rs's Glyph,
+// core/src/wasm.rs): glyph i starts at i * stride; color and core are r, g, b; copies holds three
+// copies, each copySize numbers from copyColor (r, g, b), copyDx, copyDy and copyOpacity on.
+// core/tests/glyphs.rs checks them against the core's.
+export const GLYPH = {
+    letter: 0, word: 1, x: 2, y: 3, angle: 4, scale: 5, pivotX: 6, pivotY: 7, color: 8, core: 11, opacity: 14,
+    glow: 15, glowSpread: 16, blur: 17, white: 18, em: 19, glowRadius: 20, copyBlur: 21, copies: 22,
+    copyColor: 0, copyDx: 3, copyDy: 4, copyOpacity: 5, copySize: 6, stride: 40,
+};
 
 // A fresh copy of config.json's defaults, for the sliders to change.
 export function defaults() {
@@ -63,6 +78,18 @@ const RING = [
     slider("lockRing.kickCooldownPercent", 0, 300, 5, "The Lock Ring's kick cooldown, in % of kickCooldown"),
 ];
 
+// The settings both views run on, as config.json's text for the core's configure(): the sliders'
+// values as they are. The core applies the Lock Ring's percentages itself (ADR 0005) once it is
+// the Lock Ring kind (coreKind()).
+export function coreSettings(values) {
+    return JSON.stringify(values);
+}
+
+// The core's kind for `view` (setKind()): the Lock Ring's for the ring view, else the bar's.
+export function coreKind(view) {
+    return view === "ring" ? "lock-ring" : "bar";
+}
+
 // The view a URL hash opens: #ring for the Lock Ring, anything else the Bar Visualizer.
 export function viewFromHash(hash) {
     return hash === "#ring" ? "ring" : "bar";
@@ -82,36 +109,44 @@ export function ringSide(ringSize, pageWidth, pageHeight) {
 // The dial's radius as a fraction of half the widget (LockRing.qml: dialRadius = size * DIAL_RATIO).
 export const DIAL = DIAL_RATIO / 0.5;
 
-// The ring shader's uniforms, by name, as LockRing.qml binds them, from the pipeline's state:
-// bands (32, bass first), time, flow, treble, kick, the last kicks (kickAges/kickPowers/kickSeeds),
-// the ring's motion (swell, presence, lock-ring/ring.mjs) and the look settings. The hands come
-// from the local time `now`, the hand motion's `handLevels` and `handPhases` (hands.mjs
-// createHandMotion()), the kick `flash` (kicks.mjs handFlash()) and the handWaves setting;
-// `dialRadius` is the dial's radius in pixels. A vec4 is an array of 4.
-export function ringUniforms(state) {
+// The ring shader's uniforms, by name, as LockRing.qml binds them: straight from the core's frame()
+// (`frame`: bands, time, flow, treble, kick, intensity, bassStretch) and lockRing() (`ring`: the
+// ring's motion, the hands, the shader's Kick slots), the core being the Lock Ring kind with the
+// local time set. `dialRadius` is the dial's radius in pixels. A vec4 is an array of 4; the hands'
+// are hour, minute, second and 0.
+export function ringUniforms(frame, ring, dialRadius) {
     const quad = (arr, i) => [arr[i] ?? 0, arr[i + 1] ?? 0, arr[i + 2] ?? 0, arr[i + 3] ?? 0];
-    const slots = kickSlots(state.kickAges, state.kickPowers, state.kickSeeds);
     const u = {
-        time: state.time % 1200, flow: state.flow, treble: state.treble, kick: state.kick ?? 0,
-        swell: state.swell, presence: state.presence, dial: DIAL,
-        intensity: state.intensity, bassStretch: state.bassStretch,
-        pixel: 1 / state.dialRadius, handFlash: state.flash,
+        time: frame.time, flow: frame.flow, treble: frame.treble, kick: frame.kick,
+        swell: ring.swell, presence: ring.presence, dial: DIAL,
+        intensity: frame.intensity, bassStretch: frame.bassStretch,
+        pixel: 1 / dialRadius, handFlash: ring.handFlash,
+        handAngle: quad(ring.handAngles, 0), handInner: quad(ring.handInner, 0), handLength: quad(ring.handLengths, 0),
+        handAmp: quad(ring.handAmplitudes, 0), handWidth: quad(ring.handWidths, 0), handGlow: quad(ring.handGlows, 0),
+        handPhase: quad(ring.handPhases, 0),
     };
-    const poses = handPoses(state.now, state.handLevels, { flash: state.flash, strength: state.handWaves });
-    const perHand = (key, scale = 1) => [poses.hour[key] * scale, poses.minute[key] * scale, poses.second[key] * scale, 0];
-    u.handAngle = perHand("angle", Math.PI / 180);
-    u.handInner = perHand("inner");
-    u.handLength = perHand("length");
-    u.handAmp = perHand("amplitude");
-    u.handWidth = perHand("width");
-    u.handGlow = perHand("glow");
-    const phases = state.handPhases ?? {};
-    u.handPhase = [phases.hour ?? 0, phases.minute ?? 0, phases.second ?? 0, 0];
-    for (const [name, arr] of [["kickAge", slots.ages], ["kickPower", slots.powers], ["kickSeed", slots.seeds]]) {
+    for (const [name, arr] of [["kickAge", ring.kickAges], ["kickPower", ring.kickPowers], ["kickSeed", ring.kickSeeds]]) {
         u[`${name}0`] = quad(arr, 0);
         u[`${name}1`] = quad(arr, 4);
     }
     for (let i = 0; i < 8; i++)
-        u[`b${i}`] = quad(state.values, i * 4);
+        u[`b${i}`] = quad(frame.bands, i * 4);
     return u;
+}
+
+// The local time of day at `date`, in seconds since local midnight: what the core's
+// setLocalTime() takes for the Lock Ring's Hands.
+export function localSeconds(date) {
+    return date.getHours() * 3600 + date.getMinutes() * 60 + date.getSeconds() + date.getMilliseconds() / 1000;
+}
+
+// How the Digital Time takes a Shockwave's hit, from the core's lockRing() (`ring`), shaped as
+// lock-ring/clock.mjs timeHit() gives it, for drawing: each split copy (in `colors`, TIME_HIT's
+// split colors) with its offset and opacity, the glow's opacity and scale, the flare to white.
+export function timeHitOf(ring, colors) {
+    return {
+        copies: colors.map((color, i) => ({ color, offset: ring.timeCopyOffsets[i], opacity: ring.timeCopyOpacity })),
+        glow: { opacity: ring.timeGlowOpacity, scale: ring.timeGlowScale },
+        white: ring.timeWhite,
+    };
 }

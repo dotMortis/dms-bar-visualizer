@@ -176,24 +176,22 @@
 </footer>
 
 <script type="module">
-// The visualizer's own kick detector, shared with audio/AudioPipeline.qml.
-import { BANDS, HIGH_HZ, LOW_HZ, createKickDetector } from "./kick.mjs";
+// The core (core/, ADR 0007), built to WASM by core/build-wasm.sh docs/wasm: the Kicks, band
+// averages and Kick level, and as the Lock Ring kind the ring's motion, Hands, Hour Points and
+// Digital Time, as the visualizers will run them. The Pages Action builds it.
+import initCore, { Visualizer } from "./wasm/visualizer_core.js";
 // The views and their sliders (demo.mjs). The Lock Ring view runs the
 // plugin's own modules and shader (lock-ring/), which live here because Pages publishes only docs/.
-import { lockRingSettings } from "./config.mjs";
-import { defaults, ringSide, ringUniforms, setValueAt, slidersFor, valueAt, viewFromHash } from "./demo.mjs";
+import {
+  BANDS, GLYPH, HIGH_HZ, KICK_SLOTS, LOW_HZ, coreKind, coreSettings, defaults, localSeconds, ringSide, ringUniforms, setValueAt, slidersFor,
+  timeHitOf, valueAt, viewFromHash,
+} from "./demo.mjs";
 import { toWebGL } from "./webgl.mjs";
-import { DIAL_RATIO, createRingMotion } from "./lock-ring/ring.mjs";
-import { handFlash, shockwaveCrossing } from "./lock-ring/kicks.mjs";
-import { createHandMotion } from "./lock-ring/hands.mjs";
-import { TIME_FONT, TIME_HIT, TIME_RADIUS, TIME_TOP, formatTime, timeHit } from "./lock-ring/clock.mjs";
-import { handPoses } from "./lock-ring/hands.mjs";
-import { WORD_FONT, WORD_LOOK, wordLook, wordPlacement } from "./lock-ring/lyrics.mjs";
-// The demo's own timed lines, looping on the demo's clock through the shared Lyric Words module.
-import { createDemoLyrics } from "./demo-lyrics.mjs";
-// What rides the bar's Ribbons: their color and Shockwave crossings, and the Lyric Words' look.
-import { ribbonColor, shockwaveCrossing as barCrossing } from "./bar-ribbons.mjs";
-import { LOOK as BAR_LOOK, layWord, rowWidths, wordLook as barWordLook } from "./bar-words.mjs";
+import { DIAL_RATIO } from "./lock-ring/ring.mjs";
+import { TIME_FONT, TIME_HIT, TIME_TOP, formatTime } from "./lock-ring/clock.mjs";
+// The demo's own timed lines, looping on the demo's clock, through the core for both views.
+import { DEMO_LETTERS, DEMO_LOOP, DEMO_LYRICS, createDemoReadings } from "./demo-lyrics.mjs";
+await initCore();
 const RING_FRAG = fetch("./lock-ring/ring.frag").then(r => {
   if (!r.ok) throw new Error(`ring.frag: HTTP ${r.status}`);
   return r.text();
@@ -392,43 +390,49 @@ void main() {
 const cfg = defaults();
 let use24Hour = true;
 let view = viewFromHash(location.hash);
-// The settings the view runs on: the Lock Ring's are the bar's with its percentages applied, as in
-// lock-ring/LockAudio.qml.
-const live = () => view === "ring" ? lockRingSettings(cfg) : cfg;
-// Call after any change to cfg or the view.
-const configureKicks = () => kickDetector.configure(live());
+// Call after any change to cfg or the view. One core for both views, as one Kick detector served
+// both before: its running state carries over when the view or a slider changes. As the Lock Ring
+// kind it applies the Lock Ring's percentages itself (ADR 0005).
+const configureKicks = () => {
+  core.configure(coreSettings(cfg));
+  core.setKind(coreKind(view));
+};
 
-const kickDetector = createKickDetector(cfg);
+const core = new Visualizer();
+// The demo's sources always play: no Active Player to follow, so never Silence but "silent".
+core.setPlayer("playing");
+// What the sources fill: one capture frame, 32 bands in 0..1, bass first.
+const input = new Float64Array(BANDS);
 const st = {
-  values: new Float32Array(BANDS), bass: 0, mid: 0, treble: 0, kick: 0,
-  time: 0, flow: 0, kickCount: 0,
-  // Same ring buffer as kickTimes/kickPowers/kickSeeds in audio/AudioPipeline.qml.
-  kickTimes: new Array(8).fill(-100), kickPowers: new Float32Array(8), kickSeeds: new Float32Array(8),
+  // The core's frame, as of its last call (readCore()): the bands, bass/mid/treble, the Kick level,
+  // the animation clock (wrapped at 1200 s), the wave phase (flow) and the Kick slots.
+  values: new Float32Array(BANDS), bass: 0, mid: 0, treble: 0, kick: 0, time: 0, flow: 0,
+  kickAges: new Float32Array(KICK_SLOTS), kickPowers: new Float32Array(KICK_SLOTS), kickSeeds: new Float32Array(KICK_SLOTS),
+  kickCount: 0,
   inset: cfg.spacing, cornerRadius: cfg.radius,
 };
 
-const avg = (from, to) => { let s = 0; for (let i = from; i < to; i++) s += st.values[i]; return s / (to - from); };
+// The core's frame into st. frame() hands out the same object every call, updated in place
+// (core/src/wasm.rs). Returns it.
+function readCore() {
+  const f = core.frame();
+  st.values.set(f.bands);
+  st.bass = f.bass; st.mid = f.mid; st.treble = f.treble; st.kick = f.kick;
+  st.time = f.time; st.flow = f.flow; st.kickCount = f.kickCount;
+  st.kickAges.set(f.kickAges); st.kickPowers.set(f.kickPowers); st.kickSeeds.set(f.kickSeeds);
+  return f;
+}
 
-// Same as onValuesChanged in audio/AudioPipeline.qml. now is the page clock in seconds: the detector follows the
-// music in real time at any frame rate and speed, and scales kickCooldown by cfg.speed itself.
+// Same as onValuesChanged in audio/AudioPipeline.qml: the core takes the capture frame. now is the
+// page clock in seconds: the core follows the music in real time at any frame rate and speed, and
+// scales kickCooldown by cfg.speed itself; its Kicks pop the Lyric Words too.
 function onValues(now) {
-  st.bass = avg(0, 6);
-  st.mid = avg(6, 16);
-  st.treble = avg(16, BANDS);
-  const hit = kickDetector.push(st.values, now);
-  if (!hit) return;
-  st.kick = 1;
-  st.kickCount = (st.kickCount + 1) % 1000;
-  const slot = st.kickCount % 8;
-  st.kickTimes[slot] = st.time;
-  st.kickPowers[slot] = hit.power;
-  st.kickSeeds[slot] = st.kickCount;
-  ringLyrics.kick(hit.power, now * 1000);
-  barLyrics.kick(hit.power, now * 1000);
+  core.pushBands(input, now);
+  readCore();
 }
 
 // ---- Audio sources ----------------------------------------------------------------
-// Each source fills st.values with 32 bands in 0..1 (bass first), like cava's raw output.
+// Each source fills input with 32 bands in 0..1 (bass first), like cava's raw output.
 
 // Procedural loop: no audio at all, so it runs without a user gesture.
 const demo = {
@@ -444,16 +448,20 @@ const demo = {
       const bassv = Math.exp(-s * 6) * (0.25 + 0.75 * k);
       const mids = 0.28 * (0.5 + 0.5 * Math.sin(s * 11 - t * 3.1)) * Math.exp(-Math.abs(s - 0.35) * 4);
       const highs = (0.12 * tr + 0.25 * hat) * (0.5 + 0.5 * Math.sin(s * 23 + t * 9.4)) * smooth(0.45, 0.9, s);
-      st.values[i] = Math.min(1, bassv + mids + highs + 0.02 * Math.random());
+      input[i] = Math.min(1, bassv + mids + highs + 0.02 * Math.random());
     }
   },
 };
-// The Lock Ring view's Lyric Words: the demo song, sung on the procedural loop's beat, landing on
-// Ribbons or Hands as on the Lock Ring (lock-ring/LockLyrics.qml).
-const ringLyrics = createDemoLyrics({ start: demo.start * 1000, placement: "ribbons-or-hands", seed: Date.now() % 1000003 });
-// The bar view's: the same song on the same clock, landing on its Ribbons only, as on the Bar
-// Visualizer (lyrics/BarLyrics.qml).
-const barLyrics = createDemoLyrics({ start: demo.start * 1000, placement: "ribbons", seed: (Date.now() + 1) % 1000003 });
+// The Lyric Words: the demo song, sung on the procedural loop's beat, from the core
+// (core/src/bar_lyrics.rs), which shows them as the view's kind does: on the bar's Ribbons, or
+// one Lyric Line at a time on the Lock Ring's Ribbons or Hands (a view change clears them). The
+// core times them on its own clock (the display frames' dt) from position readings, once a second
+// and at each loop's start (lyrics/BarLyrics.qml and lock-ring/LockLyrics.qml read the Active
+// Player's), and pops them harder with its own Kicks.
+core.setSeed((Date.now() + 1) % 1000003);
+core.setTrack("demo", DEMO_LOOP);
+core.setLyrics(DEMO_LYRICS);
+const readBarPosition = createDemoReadings(demo.start);
 
 function smooth(a, b, x) { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
 
@@ -495,7 +503,7 @@ function fillFromAnalyser() {
   sens = Math.min(Math.max(sens, 0.05), 200);
   for (let i = 0; i < BANDS; i++) {
     const v = Math.min(1, next[i]);
-    st.values[i] = v >= st.values[i] ? v : st.values[i] * 0.78 + v * 0.22;
+    input[i] = v >= input[i] ? v : input[i] * 0.78 + v * 0.22;
   }
 }
 
@@ -754,9 +762,11 @@ const ringCanvas = document.getElementById("ring");
 const rgl = ringCanvas.getContext("webgl2", { premultipliedAlpha: true, alpha: true, antialias: false });
 let ringProg = null;
 const ringU = [];   // { name, type, loc }
-const ringMotion = createRingMotion();
-const handMotion = createHandMotion();
-const ring = { swell: 0, presence: 0, flash: 0, timeCrossing: 0, handLevels: { bass: 0, mid: 0, treble: 0 }, handPhases: {}, words: [] };
+// The core's lockRing(), as of the last frame (readRing()).
+let ringState = null;
+function readRing() {
+  ringState = core.lockRing();
+}
 
 function shaderOf(g, type, src) {
   const sh = g.createShader(type);
@@ -790,13 +800,7 @@ function drawRing() {
   resize(ringCanvas);
   rgl.viewport(0, 0, ringCanvas.width, ringCanvas.height);
   rgl.clearColor(0, 0, 0, 0); rgl.clear(rgl.COLOR_BUFFER_BIT);
-  const values = ringUniforms({
-    values: st.values, time: st.time, flow: st.flow, treble: st.treble, kick: st.kick,
-    swell: ring.swell, presence: ring.presence, intensity: live().intensity, bassStretch: cfg.bassStretch,
-    kickAges: st.kickTimes.map(t => st.time - t), kickPowers: st.kickPowers, kickSeeds: st.kickSeeds,
-    now: new Date(), handLevels: ring.handLevels, handPhases: ring.handPhases, flash: ring.flash, handWaves: cfg.lockRing.handWaves,
-    dialRadius: Math.min(ringCanvas.width, ringCanvas.height) * DIAL_RATIO,
-  });
+  const values = ringUniforms(core.frame(), ringState, Math.min(ringCanvas.width, ringCanvas.height) * DIAL_RATIO);
   values.qt_Opacity = 1;
   for (const { name, type, loc } of ringU) {
     const v = values[name];
@@ -825,7 +829,7 @@ function drawFace() {
 
   const text = formatTime(new Date(), { use24Hour });
   const em = Math.max(10 * dpr, size * TIME_FONT), top = dial * TIME_TOP;
-  const hit = timeHit(ring.timeCrossing);
+  const hit = timeHitOf(ringState, TIME_HIT.split.map(([color]) => color));
   fctx.font = `500 ${em}px Inter, "Segoe UI", Roboto, Ubuntu, system-ui, sans-serif`;
   fctx.textAlign = "center"; fctx.textBaseline = "top";
   // The chromatic split, softened as MultiEffect's blur does.
@@ -858,162 +862,113 @@ function drawFace() {
   fctx.fillStyle = `rgb(${mix(180)} ${mix(190)} ${mix(254)} / .85)`;
   fctx.fillText(text, 0, top);
 
-  drawWords(size);
+  drawWords();
   fctx.restore();
 }
 
-// The Lyric Words LockRing.qml draws over the shader (lyrics.mjs): each on its Ribbon, bent along
-// its curve, or on its Hand, lying along it, in the colour there with a bright core. It pops in
-// oversized with a flash, dissolves with its line, and splits into the Shockwave's colors and
-// flares with a glow as a front crosses it, as the digital time does. Drawn around the dial's
-// center (fctx is translated there).
+// The Lyric Words, from the core's glyph instances (core/src/glyph.rs), as the visualizers draw
+// them over their shaders. Each glows in its color with a bright core, pops in oversized with a
+// flash, flares and splits into the Shockwave's colors as a front crosses it, and blurs away as its
+// line dissolves. On the bar (lyrics/LyricWordsLayer.qml) each rides its Ribbon letter by letter
+// across the bar's full width; on the Lock Ring (LockRing.qml) each lies on its Ribbon, bent along
+// its curve, or on its Hand, around the dial's center.
 const WORD_FAMILY = `Inter, "Segoe UI", Roboto, Ubuntu, system-ui, sans-serif`;
-const rgbOf = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
-const mixRgb = (a, b, k) => a.map((v, i) => Math.round(v + (b[i] - v) * k));
-const cssRgb = c => `rgb(${c.join(" ")})`;
-const WHITE = [255, 255, 255];
-function drawWords(size) {
-  if (ring.words.length === 0) return;
-  const kickAges = st.kickTimes.map(t => st.time - t);
-  const scene = {
-    dialRadius: size * DIAL_RATIO, values: st.values, flow: st.flow, time: st.time % 1200, treble: st.treble,
-    swell: ring.swell, kick: st.kick, bassStretch: cfg.bassStretch,
-    kickAges, kickPowers: st.kickPowers, kickSeeds: st.kickSeeds,
-    poses: handPoses(new Date(), ring.handLevels, { flash: ring.flash, strength: cfg.lockRing.handWaves }),
-    phases: ring.handPhases,
-  };
-  fctx.textAlign = "center"; fctx.textBaseline = "middle";
-  for (const word of ring.words) {
-    const em = Math.max(8, size * WORD_FONT * word.size);
-    fctx.font = `600 ${em}px ${WORD_FAMILY}`;
-    const chars = Array.from(word.text);
-    const place = wordPlacement(word.spot, chars.map(c => fctx.measureText(c).width), scene);
-    const look = wordLook(word, shockwaveCrossing(place.radius, kickAges, st.kickPowers, st.kickSeeds, place.theta));
-    if (look.opacity <= 0) continue;
-    const glow = rgbOf(place.color);
-    const out = Math.max(1, Math.hypot(place.x, place.y)), outX = place.x / out, outY = place.y / out;
-    // The letters, each on its spot along the curve, shifted by (dx, dy) from the word's middle.
-    const letters = (dx, dy) => place.glyphs.forEach((g, i) => {
-      fctx.save();
-      fctx.translate(g.x - place.x + dx, g.y - place.y + dy);
-      fctx.rotate(g.rotation * Math.PI / 180);
-      fctx.fillText(chars[i], 0, 0);
-      fctx.restore();
-    });
-    fctx.save();
-    fctx.translate(place.x, place.y);
-    fctx.scale(look.scale, look.scale);
-    // The Shockwave's chromatic split, pushed outward, behind the word.
-    fctx.filter = `blur(${TIME_HIT.soften * em}px)`;
-    for (const copy of look.hit.copies) {
-      if (copy.opacity <= 0) continue;
-      fctx.globalAlpha = look.opacity * copy.opacity;
-      fctx.fillStyle = copy.color;
-      letters(outX * copy.offset * em, outY * copy.offset * em);
-    }
-    const blur = look.blur > 0 ? `blur(${look.blur * WORD_LOOK.glow.radius * em}px)` : "none";
-    // Its glow in its colour (toward the Shockwave's glow as it crosses), spread as MultiEffect's
-    // shadowScale does: the letters are drawn far off to the left and only their shadow is
-    // shifted back.
-    const spread = look.hit.glow.scale + WORD_LOOK.glow.spread, away = 10 * face.width;
-    fctx.filter = blur;
-    fctx.save();
-    fctx.scale(spread, spread);
-    fctx.globalAlpha = look.opacity;
-    fctx.fillStyle = "black";
-    fctx.shadowColor = cssRgb(mixRgb(glow, rgbOf(TIME_HIT.glow.color), look.hit.glow.opacity * 0.6));
-    fctx.shadowBlur = WORD_LOOK.glow.radius * em;
-    fctx.shadowOffsetX = away * look.scale * spread;
-    letters(-away, 0);
-    fctx.restore();
-    // The letters: a bright core in its colour, flaring toward white as it lands and as a front
-    // crosses it, blurring away as it dissolves.
-    fctx.globalAlpha = look.opacity;
-    fctx.fillStyle = cssRgb(mixRgb(mixRgb(glow, WHITE, WORD_LOOK.core), WHITE, look.white));
-    letters(0, 0);
-    fctx.restore();
+const rgba = (c, a = 1) => `rgb(${c.map(v => Math.round(Math.min(1, Math.max(0, v)) * 255)).join(" ")} / ${a})`;
+// How each view's host blurs: LyricWordsLayer.qml's MultiEffect takes whole-pixel blurMax (the
+// copies at 0.4 of it), LockRing.qml's canvas the radii as they are.
+const BAR_BLUR = { glow: r => Math.max(1, Math.round(r)), copy: r => 0.4 * Math.max(1, Math.round(r)), copyFrom: 0.01 };
+const RING_BLUR = { glow: r => r, copy: r => r, copyFrom: 0 };
+
+// The core's glyphs on `c`, already translated to where their x and y count from (the bar's top
+// left, or the dial's center), blurred as `blur` says; `away` is far off the canvas.
+function drawGlyphs(c, blur, away) {
+  const { count, stride, data } = core.glyphs();
+  if (count === 0) return;
+  c.textAlign = "center"; c.textBaseline = "middle";
+  // A word's glyphs come together, and share its look.
+  for (let first = 0; first < count;) {
+    let end = first + 1;
+    while (end < count && data[end * stride + GLYPH.word] === data[first * stride + GLYPH.word]) end++;
+    drawGlyphWord(c, blur, away, data, stride, first, end);
+    first = end;
   }
-  fctx.filter = "none";
-  fctx.globalAlpha = 1;
+  c.filter = "none";
+  c.globalAlpha = 1;
 }
 
-// The Lyric Words lyrics/LyricWordsLayer.qml draws over the bar's shader (bar-words.mjs): each
-// rides its Ribbon letter by letter across the bar's full width, filling most of its thickness,
-// tilted with the wave. It glows in its Ribbon's color with a bright core, pops in oversized with
-// a flash, flares and splits into the Shockwave's colors as a front crosses it, and blurs away as
-// its line dissolves. Over the shader, under the widgets.
+// The glyphs first..end of data, one word.
+function drawGlyphWord(c, blur, away, data, stride, first, end) {
+  const at = k => data[first * stride + k];
+  const rgb = k => [at(k), at(k + 1), at(k + 2)];
+  const em = at(GLYPH.em), pivotX = at(GLYPH.pivotX), pivotY = at(GLYPH.pivotY), scale = at(GLYPH.scale);
+  const opacity = at(GLYPH.opacity), glow = at(GLYPH.glow);
+  c.font = `600 ${em}px ${WORD_FAMILY}`;
+  const letters = (dx, dy) => {
+    for (let i = first; i < end; i++) {
+      const g = i * stride;
+      c.save();
+      c.translate(data[g + GLYPH.x] - pivotX + dx, data[g + GLYPH.y] - pivotY + dy);
+      c.rotate(data[g + GLYPH.angle] * Math.PI / 180);
+      c.fillText(String.fromCodePoint(data[g + GLYPH.letter]), 0, 0);
+      c.restore();
+    }
+  };
+  c.save();
+  c.translate(pivotX, pivotY);
+  c.scale(scale, scale);
+  // The chromatic split, behind the word: copies in the Shockwave's colors, pushed outward, softly
+  // blurred.
+  c.filter = `blur(${blur.copy(at(GLYPH.copyBlur))}px)`;
+  for (let k = 0; k < 3; k++) {
+    const copy = GLYPH.copies + k * GLYPH.copySize;
+    if (at(copy + GLYPH.copyOpacity) <= blur.copyFrom) continue;
+    c.globalAlpha = opacity * at(copy + GLYPH.copyOpacity);
+    c.fillStyle = rgba(rgb(copy + GLYPH.copyColor));
+    letters(at(copy + GLYPH.copyDx), at(copy + GLYPH.copyDy));
+  }
+  // The word: its glow, spread as MultiEffect's shadowScale does (the letters drawn far off to the
+  // left, only their shadow shifted back), then its bright core, both blurring out as it dissolves.
+  const glowRadius = blur.glow(at(GLYPH.glowRadius));
+  c.filter = at(GLYPH.blur) > 0 ? `blur(${at(GLYPH.blur) * glowRadius}px)` : "none";
+  c.globalAlpha = opacity;
+  const spread = at(GLYPH.glowSpread);
+  c.save();
+  c.scale(spread, spread);
+  c.fillStyle = "black";
+  c.shadowColor = rgba(rgb(GLYPH.color), Math.min(1, glow));
+  c.shadowBlur = glowRadius;
+  c.shadowOffsetX = away * scale * spread;
+  letters(-away, 0);
+  c.restore();
+  c.fillStyle = rgba(rgb(GLYPH.core));
+  letters(0, 0);
+  c.restore();
+}
+
+// The Lock Ring's, over its shader around the dial's center (fctx is translated there).
+function drawWords() {
+  drawGlyphs(fctx, RING_BLUR, 10 * face.width);
+}
+
+// The bar's, over its shader, under the widgets.
 const wordsCanvas = document.getElementById("words");
 const wctx = wordsCanvas.getContext("2d");
-const rgba = (c, a = 1) => `rgb(${c.map(v => Math.round(Math.min(1, Math.max(0, v)) * 255)).join(" ")} / ${a})`;
-function drawBarWords(words) {
-  resize(wordsCanvas);
-  const width = wordsCanvas.width, height = wordsCanvas.height;
-  wctx.clearRect(0, 0, width, height);
-  if (words.length === 0) return;
-  const inputs = {
-    width, height, values: st.values, time: st.time, kick: st.kick, treble: st.treble, flow: st.flow,
-    bassStretch: cfg.bassStretch, kickAges: st.kickTimes.map(t => st.time - t), kickPowers: st.kickPowers,
-  };
-  const em = Math.max(8, Math.round(height * BAR_LOOK.font));
-  wctx.font = `600 ${em}px ${WORD_FAMILY}`;
-  wctx.textAlign = "center"; wctx.textBaseline = "middle";
+// The font's measures the core lays the words out with, in ems: the demo song's letters, measured
+// at 100 px. Again once the web font has loaded.
+function measureLetters() {
+  const size = 100;
+  wctx.font = `600 ${size}px ${WORD_FAMILY}`;
   const box = wctx.measureText("Hg");
-  const clearance = ((box.fontBoundingBoxAscent + box.fontBoundingBoxDescent) || 1.2 * em) * 0.32;
-  for (const word of words) {
-    const chars = Array.from(word.text);
-    const row = rowWidths(word.spot, c => wctx.measureText(c).width, em);
-    const glyphs = layWord(word.spot, chars.map(c => wctx.measureText(c).width), { ...inputs, clearance }, row);
-    if (glyphs.length === 0) continue;
-    const middle = (glyphs[0].x + glyphs[glyphs.length - 1].x) / 2;
-    const middleY = glyphs.reduce((a, g) => a + g.y, 0) / glyphs.length;
-    const look = barWordLook(word, barCrossing(middle, inputs));
-    const opacity = Math.min(1, look.opacity);
-    if (opacity <= 0) continue;
-    const hue = ribbonColor(middle, word.spot.ribbon, inputs);
-    // The bright core: the Ribbon's color, most of the way to white, all the way in a flash.
-    const whiten = 0.55 + 0.45 * look.white;
-    const core = hue.map(c => c + (1 - c) * whiten);
-    // The split goes outward, away from the bar's center.
-    const outward = middle < width / 2 ? -1 : 1;
-    const letters = dx => glyphs.forEach((g, i) => {
-      wctx.save();
-      wctx.translate(g.x - middle + dx, g.y - middleY);
-      wctx.rotate(g.angle * Math.PI / 180);
-      wctx.fillText(chars[i], 0, 0);
-      wctx.restore();
-    });
-    wctx.save();
-    wctx.translate(middle, middleY);
-    wctx.scale(look.scale, look.scale);
-    // The chromatic split, behind the word: copies in the Shockwave's colors, softly blurred.
-    wctx.filter = `blur(${0.4 * Math.max(1, Math.round(0.08 * em))}px)`;
-    for (const copy of look.copies) {
-      if (copy.opacity <= 0.01) continue;
-      wctx.globalAlpha = opacity * copy.opacity;
-      wctx.fillStyle = copy.color;
-      letters(copy.offset * em * outward);
-    }
-    // The word: its glow in its Ribbon's color, spread as MultiEffect's shadowScale does (the
-    // letters drawn far off to the left, only their shadow shifted back), then its bright core,
-    // both blurring out as it dissolves.
-    const glowRadius = Math.max(1, Math.round(0.45 * em));
-    wctx.filter = look.blur > 0 ? `blur(${look.blur * glowRadius}px)` : "none";
-    wctx.globalAlpha = opacity;
-    const spread = 1 + 0.06 * Math.max(0, look.glow - 0.5), away = 10 * width;
-    wctx.save();
-    wctx.scale(spread, spread);
-    wctx.fillStyle = "black";
-    wctx.shadowColor = rgba(hue, Math.min(1, look.glow));
-    wctx.shadowBlur = glowRadius;
-    wctx.shadowOffsetX = away * look.scale * spread;
-    letters(-away);
-    wctx.restore();
-    wctx.fillStyle = rgba(core);
-    letters(0);
-    wctx.restore();
-  }
-  wctx.filter = "none";
-  wctx.globalAlpha = 1;
+  const lineHeight = ((box.fontBoundingBoxAscent + box.fontBoundingBoxDescent) || 1.2 * size) / size;
+  const advances = Float64Array.from(Array.from(DEMO_LETTERS), c => wctx.measureText(c).width / size);
+  core.setLetters(DEMO_LETTERS, advances, lineHeight);
+}
+measureLetters();
+document.fonts?.ready.then(measureLetters);
+function drawBarWords() {
+  resize(wordsCanvas);
+  wctx.clearRect(0, 0, wordsCanvas.width, wordsCanvas.height);
+  drawGlyphs(wctx, BAR_BLUR, 10 * wordsCanvas.width);
 }
 
 // ---- Readouts ------------------------------------------------------------------------
@@ -1054,25 +1009,26 @@ function frame() {
     nextBands = t + 1 / 60;
   }
 
-  st.time += dt * cfg.speed;
-  st.flow += dt * cfg.speed * (8 * st.bass + 4 * st.mid + 6 * st.kick);
-  st.kick *= Math.exp(-dt * cfg.kickDecay);
+  // The bar's size, which the core lays the Lyric Words out on.
+  resize(wordsCanvas);
+  core.setBarSize(wordsCanvas.width, wordsCanvas.height);
+  // The Lock Ring's side, which the core lays its Lyric Words out on, around the dial's center.
+  resize(face);
+  core.setRingSize(Math.min(face.width, face.height));
+  // The Lock Ring's Hands show the local time; as the Lock Ring kind (the ring view) the core also
+  // steps the ring's and the hands' motion, as LockAudio.qml did.
+  core.setLocalTime(localSeconds(new Date()));
+  core.advance(dt);   // the clock and flow run, the Kick level fades at kickDecay, the Kicks age, the words move on
+  const reading = readBarPosition(now);
+  if (reading !== null) core.setPosition(reading, 1);
+  const f = readCore();
+  readRing();
 
   // Ease the corner radius like the Behavior in shell.qml (the inset eases via CSS).
   const targetR = maxBox.checked ? 0 : cfg.radius;
   st.cornerRadius += (targetR - st.cornerRadius) * (1 - Math.exp(-dt * 18));
   document.getElementById("bar").style.borderRadius = `${st.cornerRadius}px`;
 
-  // The Lock Ring's motion, hand motion and hand flash, as LockAudio.qml steps them.
-  const levels = { bass: st.bass, mid: st.mid, treble: st.treble };
-  const m = ringMotion.step(levels, dt);
-  ring.swell = m.swell; ring.presence = m.presence;
-  const h = handMotion.step(levels, dt, cfg.speed);
-  ring.handLevels = h.levels; ring.handPhases = h.phases;
-  const kickAges = st.kickTimes.map(t => st.time - t);
-  ring.flash = handFlash(kickAges, st.kickPowers, cfg.kickDecay);
-  ring.timeCrossing = shockwaveCrossing(TIME_RADIUS, kickAges, st.kickPowers, st.kickSeeds, Math.PI);  // the time sits at 6 o'clock
-  ring.words = ringLyrics.words(now * 1000);
 
   if (view === "ring") {
     drawRing();
@@ -1081,16 +1037,18 @@ function frame() {
     const dpr = resize();
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.uniform1f(U.time, st.time); gl.uniform1f(U.bass, st.bass); gl.uniform1f(U.mid, st.mid);
-    gl.uniform1f(U.treble, st.treble); gl.uniform1f(U.kick, st.kick);
-    gl.uniform1f(U.radius, st.cornerRadius * dpr); gl.uniform1f(U.intensity, cfg.intensity);
-    gl.uniform1f(U.bassStretch, cfg.bassStretch); gl.uniform1f(U.flow, st.flow);
-    gl.uniform1fv(U.kickAges, st.kickTimes.map(t => st.time - t));
-    gl.uniform1fv(U.kickPowers, st.kickPowers); gl.uniform1fv(U.kickSeeds, st.kickSeeds);
+    // Everything but the bar's geometry (radius, res) straight from the core's frame.
+    gl.uniform1f(U.time, f.time); gl.uniform1f(U.bass, f.bass); gl.uniform1f(U.mid, f.mid);
+    gl.uniform1f(U.treble, f.treble); gl.uniform1f(U.kick, f.kick);
+    gl.uniform1f(U.intensity, f.intensity); gl.uniform1f(U.bassStretch, f.bassStretch);
+    gl.uniform1f(U.flow, f.flow);
+    gl.uniform1fv(U.kickAges, f.kickAges); gl.uniform1fv(U.kickPowers, f.kickPowers);
+    gl.uniform1fv(U.kickSeeds, f.kickSeeds);
+    gl.uniform1fv(U.bands, f.bands);
+    gl.uniform1f(U.radius, st.cornerRadius * dpr);
     gl.uniform2f(U.res, canvas.width, canvas.height);
-    gl.uniform1fv(U.bands, st.values);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    drawBarWords(barLyrics.words(now * 1000));
+    drawBarWords();
   }
   readouts();
   requestAnimationFrame(frame);

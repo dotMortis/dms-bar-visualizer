@@ -1,0 +1,52 @@
+#!/usr/bin/python3 -I
+# The harness's stand-in for cava, first on PATH, so the visualizer's own `exec cava -p <conf>` runs
+# this instead (any commit that launches cava through PATH, no change to it). Prints a recorded
+# fixture's lines (tests/fixtures/*.txt, as record.py wrote them from real cava) at their recorded
+# times, looping, on a timeline anchored to HARNESS_EPOCH, not to its own start: a restart (the
+# visualizer restarts cava whenever its source changes) picks the track up where it was.
+#
+# Env: HARNESS_FIXTURE   the fixture to replay
+#      HARNESS_EPOCH     wall-clock s at which the track is at its first frame (default: now)
+#      HARNESS_LOOP      the loop length in s: harness/kicks.mjs replayTrack().length, from harness/run
+#      HARNESS_SILENT=1  print what cava prints on silence instead: 5 s of all-zero lines at 60 fps
+#                        (its sleep_timer=5), then nothing
+#      HARNESS_LOG       a file each start is logged to, with its argv
+import os
+import sys
+import time
+
+epoch = float(os.environ.get("HARNESS_EPOCH") or time.time())
+if os.environ.get("HARNESS_LOG"):
+    with open(os.environ["HARNESS_LOG"], "a") as log:
+        log.write(f"start {time.time():.3f} argv={sys.argv[1:]}\n")
+
+out = sys.stdout
+try:
+    if os.environ.get("HARNESS_SILENT") == "1":
+        for _ in range(300):
+            out.write("0;" * 32 + "\n")
+            out.flush()
+            time.sleep(1 / 60)
+        while True:
+            time.sleep(3600)
+
+    with open(os.environ["HARNESS_FIXTURE"]) as f:
+        lines = f.read().splitlines()[1:]  # after the JSON header
+    frames = [(float(t), raw) for t, raw in (line.split(" ", 1) for line in lines)]
+    first = frames[0][0]
+    length = float(os.environ["HARNESS_LOOP"])  # one formula for it, harness/kicks.mjs
+
+    loop = (time.time() - epoch) // length  # negative before the epoch: the warm-up plays the track's end
+    while True:
+        base = epoch + loop * length
+        loop += 1
+        for t, raw in frames:
+            wait = base + (t - first) - time.time()
+            if wait < -0.05:  # started (or fell) behind: skip to now rather than catch up
+                continue
+            if wait > 0:
+                time.sleep(wait)
+            out.write(raw + "\n")
+            out.flush()
+except (BrokenPipeError, KeyboardInterrupt):
+    pass
