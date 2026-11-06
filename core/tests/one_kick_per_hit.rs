@@ -12,22 +12,19 @@ fn sixteenth_note_kick_pairs_further_apart_than_kick_cooldown_fire_as_two_kicks(
         // kick comes while the 16th still rings.
         let fixture = fixture("double_kick");
         let onsets = &fixture.onsets;
-        let pairs: Vec<(f64, f64)> =
-            onsets.windows(2).filter(|w| w[1] - w[0] < 0.2).map(|w| (w[0], w[1])).collect();
+        let pairs: Vec<(f64, f64)> = onsets.windows(2).filter(|w| w[1] - w[0] < 0.2).map(|w| (w[0], w[1])).collect();
         assert_eq!(pairs.len(), 10);
         assert!(pairs.iter().all(|(a, b)| b - a > settings.kick_cooldown));
         let missed = score(onsets, &times(&replay(&fixture.frames, settings))).missed;
-        let lost: Vec<f64> =
-            pairs.iter().flat_map(|&(a, b)| [a, b]).filter(|t| missed.contains(t)).collect();
+        let lost: Vec<f64> = pairs.iter().flat_map(|&(a, b)| [a, b]).filter(|t| missed.contains(t)).collect();
         assert!(lost.is_empty(), "at {config}, onsets of a pair without a Kick: {lost:?}");
     }
 }
 
 // The demo's slider, every step below 0.15. At 0.05, zoo3 loses its onset at 7.81 s: a bass
 // note swelling by 0.06 of the peak fires just before it, and holds back the Kick after it.
-const THRESHOLDS: [f64; 20] = [
-    0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.35, 0.3, 0.25, 0.2, 0.15, 0.14, 0.13, 0.12, 0.11, 0.1, 0.09, 0.08, 0.07, 0.06,
-];
+const THRESHOLDS: [f64; 20] =
+    [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.35, 0.3, 0.25, 0.2, 0.15, 0.14, 0.13, 0.12, 0.11, 0.1, 0.09, 0.08, 0.07, 0.06];
 
 fn lowering_fires_more_hits_and_none_twice(kick_cooldown: f64) {
     for scenario in tracks() {

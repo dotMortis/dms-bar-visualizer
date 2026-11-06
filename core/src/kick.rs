@@ -195,6 +195,7 @@ impl KickDetector {
 
     /// One frame: the bands in 0..1 and when they came, in real seconds (a step back counts as
     /// none). The Kick's power (0.5..1) when one fires.
+    #[allow(clippy::needless_range_loop)] // indexes several arrays in step, as docs/kick.mjs does
     pub fn push(&mut self, values: &[f64; BANDS], time: f64) -> Option<f64> {
         let (from, to) = (self.from, self.to);
         // The averages and the peak take in the last frame for as long as it was shown, so a

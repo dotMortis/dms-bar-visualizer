@@ -125,7 +125,12 @@ fn a_hit_louder_than_the_recent_kicks_fires_at_full_power_steady_ones_weaker() {
                 "{scenario} at {config}, steady: {:?}",
                 kicks_at(&steady)
             );
-            assert_eq!(louder.power, 1.0, "{scenario} at {config}, first Kick 12 dB louder: {:?}", kicks_at(&[*louder]));
+            assert_eq!(
+                louder.power,
+                1.0,
+                "{scenario} at {config}, first Kick 12 dB louder: {:?}",
+                kicks_at(&[*louder])
+            );
         }
     }
 }
@@ -139,7 +144,11 @@ fn a_hit_quieter_than_the_recent_kicks_fires_weaker() {
         before.sort_by(f64::total_cmp);
         let quieter = kicks.iter().find(|k| k.time > 12.0).unwrap();
         let median = before[before.len() / 2];
-        assert!(quieter.power < median, "at {config}, first Kick after the drop {:?}, median before {median}", kicks_at(&[*quieter]));
+        assert!(
+            quieter.power < median,
+            "at {config}, first Kick after the drop {:?}, median before {median}",
+            kicks_at(&[*quieter])
+        );
     }
 }
 

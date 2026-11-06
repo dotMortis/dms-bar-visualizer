@@ -20,7 +20,10 @@ fn fires_the_kicks_it_fires_at_60_fps(fps: f64) {
             let at60 = times(&replay(frames, settings));
             let at_fps = times(&replay(&at_frame_rate(frames, fps), settings));
             let (missing, extra) = (unmatched(&at60, &at_fps), unmatched(&at_fps, &at60));
-            assert!(missing.is_empty(), "{scenario} at {config}: Kicks at 60 fps that don't fire at {fps} Hz: {missing:?}");
+            assert!(
+                missing.is_empty(),
+                "{scenario} at {config}: Kicks at 60 fps that don't fire at {fps} Hz: {missing:?}"
+            );
             assert!(extra.is_empty(), "{scenario} at {config}: Kicks only at {fps} Hz: {extra:?}");
             assert_eq!(at_fps.len(), at60.len(), "{scenario} at {config}: Kicks at 60 fps fire more than once");
         }

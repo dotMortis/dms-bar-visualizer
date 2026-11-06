@@ -106,9 +106,10 @@ impl Visualizer {
         }
     }
 
-    /// One display frame, dt seconds after the last. A negative or NaN dt counts as none.
+    /// One display frame, dt seconds after the last. A negative or NaN dt counts as none, an
+    /// infinite one as the longest finite one.
     pub fn advance(&mut self, dt: f64) {
-        let dt = if dt > 0.0 { dt } else { 0.0 };
+        let dt = if dt > 0.0 { dt.min(f64::MAX) } else { 0.0 };
         self.frame.kick *= (-dt * self.settings.kick_decay).exp();
     }
 

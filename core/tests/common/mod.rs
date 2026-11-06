@@ -218,7 +218,11 @@ fn median(mut xs: Vec<f64>) -> f64 {
     }
     xs.sort_by(f64::total_cmp);
     let mid = xs.len() / 2;
-    if xs.len() % 2 == 1 { xs[mid] } else { (xs[mid - 1] + xs[mid]) / 2.0 }
+    if xs.len() % 2 == 1 {
+        xs[mid]
+    } else {
+        (xs[mid - 1] + xs[mid]) / 2.0
+    }
 }
 
 /// A budget of missed, doubled and stray Kicks and of median latency in ms.
@@ -247,7 +251,7 @@ pub fn over_budget(result: &Score, budget: Budget) -> Vec<String> {
         }
     }
     let latency = (result.latency * 1000.0).round();
-    if !(latency <= budget.latency as f64) {
+    if latency.is_nan() || latency > budget.latency as f64 {
         over.push(format!("median latency {latency} ms > {} ms", budget.latency));
     }
     over

@@ -40,7 +40,10 @@ fn v0_10_0s_defaults_are_the_defaults() {
 #[test]
 fn a_key_of_the_wrong_type_gets_its_default_and_unknown_keys_are_ignored() {
     let defaults = kicks_on("{}");
-    assert_eq!(kicks_on(r#"{"kickThreshold": "0.2", "kickLowHz": null, "speed": [2], "kickCooldown": true}"#), defaults);
+    assert_eq!(
+        kicks_on(r#"{"kickThreshold": "0.2", "kickLowHz": null, "speed": [2], "kickCooldown": true}"#),
+        defaults
+    );
     assert_eq!(kicks_on(r#"{"kickThresholds": 0.2, "lockRing": 5, "extra": {"kickThreshold": 0.2}}"#), defaults);
     // Not an object at all: nothing in it.
     assert_eq!(kicks_on("[0.2]"), defaults);
