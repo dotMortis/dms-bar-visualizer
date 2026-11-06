@@ -172,9 +172,15 @@ report_head() {
     echo "harness  $1, $TREE_DESC"
     echo "window   $LOOPS x $TRACK ($WINDOW s) after a ${WARMUP} s warm-up, load avg $LOAD"
 }
+# The capture runs only while the Active Player plays (#54): with none, or a paused one, it not
+# running is right (a commit from before #54 captures anyway, which is reported, not failed).
 report_capture() {
+    STARTS=$(grep -cs '^start' "$HARNESS_LOG" || true); STARTS=${STARTS:-0}
+    if [[ $PLAYER != Playing ]]; then
+        echo "capture  $( ((CAPTURE_ALIVE)) && echo alive || echo "not running"), started $STARTS time(s) (no playing player)"
+        return
+    fi
     ((CAPTURE_ALIVE)) || { echo "FAILED: the capture wasn't running at the end of the window (see $OUT/capture.log, $OUT/qs.log)"; exit 1; }
-    STARTS=$(grep -c '^start' "$HARNESS_LOG" || true)
     echo "capture  alive, started $STARTS time(s)$( ((SILENT)) && echo ", silent")"
 }
 # The stand-in is the only player on the run's bus, so the visualizer reading it means it's the
