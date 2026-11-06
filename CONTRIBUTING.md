@@ -16,7 +16,8 @@ How the pieces fit together, and how to change them. For installing and using th
 | `audio/AudioPipeline.qml` | The shared audio pipeline: follows the Active Player, runs cava, detects Kicks |
 | `lock-ring/` | The Lock Ring plugin (`LockRing.qml`, `LockAudio.qml`, `LockLyrics.qml`, `plugin.json`) |
 | `docs/` | The live demo (GitHub Pages), plus the plain-JS modules both visualizers and the demo import |
-| `docs/kick.mjs` | The one Kick detector |
+| `core/` | The Rust core ([ADR 0007](docs/adr/0007-no-script-in-the-per-frame-hot-path.md)): one `Visualizer` with all per-frame logic, so far the Kicks, bass/mid/treble and the Kick level. It replaces the JS modules below as later steps of spec #41 wire it in |
+| `docs/kick.mjs` | The Kick detector the visualizers and demo still run, until they run `core/` |
 | `docs/config.mjs` | The defaults of every `config.json` key |
 | `docs/bar-ribbons.mjs` | The Bar Visualizer's Ribbons: each one's height and color at any x across the bar, and the Shockwaves crossing it |
 | `docs/bar-words.mjs` | The Bar Visualizer's Lyric Words: each letter on its Ribbon, and their pop, flare and dissolve |
@@ -93,6 +94,14 @@ node --test
 ```
 
 Needs only node, nothing to install. Besides the Lock Ring's modules, the install scripts and the packages, it runs a replay suite that holds the Kick detector to account. The suite plays real cava output, recorded from synthesized tracks with known kick onsets, through `docs/kick.mjs`. It fails when a track gets more missed, doubled or stray Kicks, or a later median Kick, than its budget allows, and prints those numbers per track for the default and a sensitive setting. Other tests check that Kicks and their power don't depend on the volume, that Kicks come back soon after a 12 dB drop and after a cava restart, and that `kickLowHz` and `kickHighHz` select the bands cava puts those frequencies in.
+
+The Rust core has its own tests, which need only the Rust toolchain:
+
+```sh
+cargo test --manifest-path core/Cargo.toml
+```
+
+They hold `core/`'s `Visualizer` to the same budgets on the same `tests/fixtures`, plus the frame-rate, one-kick-per-hit, volume and speed tests, and the hot path's rules: after `configure`, `push_bands`, `advance` and `frame` never allocate, and no input makes a call panic.
 
 With Qt's `qml` runner installed (`qt6-declarative`), `tests/qml-modules.test.mjs` also loads every `.mjs` the QML imports through Qt's own JS engine. That engine rejects some syntax node accepts, object spread `{ ...x }` among it, and a module it rejects takes the whole plugin down with it. Without `qml` that test is skipped.
 
