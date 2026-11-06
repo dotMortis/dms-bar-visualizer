@@ -104,3 +104,22 @@ fn paused_or_without_a_player_the_words_stand_still() {
     run(&mut visualizer, 1.0);
     assert!(!visualizer.frame().animating, "no player");
 }
+
+#[test]
+fn on_the_lock_ring_the_words_animate_until_their_line_has_dissolved_and_stand_still_when_paused() {
+    // The Lock Ring's line dissolves from its end (12 s) over 0.6 s; the bar's would linger 2.5 s.
+    let mut visualizer = singing(5.0);
+    visualizer.set_kind(visualizer_core::Kind::LockRing);
+    run(&mut visualizer, 7.3);
+    assert!(!visualizer.lyric_words().is_empty());
+    assert!(visualizer.frame().animating, "dissolving");
+    run(&mut visualizer, 0.4);
+    assert!(visualizer.lyric_words().is_empty());
+    assert!(!visualizer.frame().animating, "the line is gone");
+    let mut visualizer = singing(11.0);
+    visualizer.set_kind(visualizer_core::Kind::LockRing);
+    run(&mut visualizer, 0.1);
+    visualizer.set_player(Player::Paused);
+    run(&mut visualizer, 1.0);
+    assert!(!visualizer.frame().animating, "paused");
+}
