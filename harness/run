@@ -1,0 +1,221 @@
+#!/bin/bash
+# The replay harness: runs a visualizer as it ships, in its own qs, on a recorded input, and measures it.
+#
+#   harness/run [options] <scenario>
+#
+#   scenarios   music          the reference track (harness/kicks.mjs REFERENCE_TRACK), no Lyric Words
+#   options     --host bar     what runs: bar = the Bar Visualizer (shell.qml), the default
+#               --commit REV   measure REV (e.g. v0.10.0) instead of this working tree
+#               --warmup S     seconds before measuring (default 5)
+#               --loops N      whole loops of the track to measure over (default 1, 24.05 s)
+#               --out DIR      where logs and result.json go (default: a new /tmp/bvh-out.* dir)
+#               --check-kicks  the cheap check instead of measuring: the tree's own audio pipeline
+#                              on the replayed input must give the Kicks the kick-replay tests expect
+#
+# Only the inputs are swapped: bin/cava stands in for cava (first on PATH), and the run gets its own
+# runtime dir, config dir (default settings), cache and session bus, so it can't see or touch the
+# user's live visualizers, DMS, players or config.json. qs runs in a transient systemd scope, so
+# CPU is the scope's cgroup: qs, its capture and every short-lived child (sh, pactl), as % of one
+# core like htop. Everything it starts is stopped when it exits.
+#
+# Needs: quickshell, systemd --user with cgroup v2, dbus-run-session, node, python3, qsb
+# (qt6-shadertools). Shows the visualizer on the desktop for the run's length. Not a test: CPU
+# depends on the machine and what else runs, so compare runs made back to back.
+set -euo pipefail
+
+HARNESS=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO=$(dirname "$HARNESS")
+HOST=bar COMMIT="" WARMUP=5 LOOPS=1 OUT="" CHECK_KICKS=0 SCENARIO=""
+
+die() { echo "harness: $*" >&2; exit 2; }
+
+while (($#)); do
+    case $1 in
+        --host) HOST=$2; shift ;;
+        --commit) COMMIT=$2; shift ;;
+        --warmup) WARMUP=$2; shift ;;
+        --loops) LOOPS=$2; shift ;;
+        --out) OUT=$2; shift ;;
+        --check-kicks) CHECK_KICKS=1 ;;
+        -h | --help) sed -n '2,/^set /p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
+        -*) die "unknown option $1" ;;
+        *) [[ -z $SCENARIO ]] || die "one scenario at a time"; SCENARIO=$1 ;;
+    esac
+    shift
+done
+[[ -n $SCENARIO ]] || die "which scenario? (see --help)"
+
+# --- Scenarios: the input. Each sets FIXTURE (the band stream) and SILENT (1: cava's silence
+# instead). Later: the Active Player and the lyrics.
+scenario_music() { FIXTURE=$REPO/tests/fixtures/$REFERENCE.txt SILENT=0; }
+
+# --- Hosts: what runs. Each sets SHELL_DIR, the qs config dir, from TREE (the code under test).
+host_bar() { SHELL_DIR=$TREE; }
+# The tree's own AudioPipeline in a bare shell that logs each Kick against the epoch.
+host_kicks() {
+    SHELL_DIR=$RUN/kicks
+    mkdir -p "$SHELL_DIR"
+    cat > "$SHELL_DIR/shell.qml" <<EOF
+import QtQuick
+import Quickshell
+import "file://$TREE/audio"
+ShellRoot {
+    AudioPipeline {
+        confPath: Quickshell.env("XDG_RUNTIME_DIR") + "/harness-kicks-cava.conf"
+        onKicked: power => console.log("KICK " + (Date.now() / 1000 - Number(Quickshell.env("HARNESS_EPOCH"))).toFixed(4) + " " + power.toFixed(3))
+    }
+}
+EOF
+}
+
+declare -F "scenario_$SCENARIO" >/dev/null || die "no scenario '$SCENARIO'"
+declare -F "host_$HOST" >/dev/null || die "no host '$HOST'"
+((CHECK_KICKS)) && HOST=kicks
+
+# --- Setup ----------------------------------------------------------------------------------------
+ID=bvh-$$
+# Short: the Wayland socket's path in it must fit in 108 bytes.
+RUN=$(mktemp -d /tmp/bvh.XXXXXX)
+TREE=$REPO
+OUT=${OUT:-$(mktemp -d /tmp/bvh-out.XXXXXX)}
+mkdir -p "$OUT"
+cleanup() {
+    systemctl --user stop "$ID-qs.scope" "$ID-aux.scope" 2>/dev/null || true
+    rm -rf "$RUN"
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM
+
+# systemd-run --user --scope puts the scopes here.
+APP_SLICE=/sys/fs/cgroup/user.slice/user-$(id -u).slice/user@$(id -u).service/app.slice
+CG=$APP_SLICE/$ID-qs.scope
+
+# The real node, not a version manager's shim: those read the user's config dirs, which the run swaps.
+NODE=$(node -p process.execPath)
+read -r REFERENCE LOOP_LENGTH < <("$NODE" --input-type=module -e "
+    import { REFERENCE_TRACK, replayTrack } from '$HARNESS/kicks.mjs';
+    console.log(REFERENCE_TRACK, replayTrack(REFERENCE_TRACK).length.toFixed(6));")
+[[ -n ${LOOP_LENGTH:-} ]] || die "couldn't read the reference track from kicks.mjs"
+"scenario_$SCENARIO"
+
+# The code under test: this working tree, or REV exported from git (nothing in the checkout changes).
+if [[ -n $COMMIT ]]; then
+    REV=$(git -C "$REPO" rev-parse --verify "$COMMIT^{commit}") || die "no commit $COMMIT"
+    TREE=$RUN/tree
+    mkdir -p "$TREE"
+    git -C "$REPO" archive "$REV" | tar -x -C "$TREE"
+    TREE_DESC="$(git -C "$REPO" describe --tags --always "$REV") ($REV)"
+else
+    REV=$(git -C "$REPO" rev-parse HEAD)
+    TREE_DESC="working tree at $(git -C "$REPO" describe --tags --always --dirty)"
+fi
+
+# What install.sh builds: the shaders (gitignored), compiled where missing or older than their source.
+QSB=$(command -v qsb || echo /usr/lib/qt6/bin/qsb)
+for frag in "$TREE"/shaders/*.frag "$TREE"/lock-ring/shaders/*.frag; do
+    [[ -e $frag && ! ${frag}.qsb -nt $frag ]] || continue
+    "$QSB" --glsl "100 es,120,150" --hlsl 50 --msl 12 -o "$frag.qsb" "$frag"
+done
+"host_$HOST"
+
+# The run's own runtime dir, linking back only to the compositor, PipeWire and systemd. Pulse is
+# reached by its socket: pactl refuses a symlinked pulse/ dir.
+RT=/run/user/$(id -u)
+for f in "${WAYLAND_DISPLAY:-wayland-1}" hypr pipewire-0 systemd; do
+    [[ -e $RT/$f ]] && ln -s "$RT/$f" "$RUN/$f"
+done
+chmod 700 "$RUN"
+mkdir -p "$RUN/config/bar-visualizer" "$RUN/cache" "$RUN/state" "$RUN/data"
+echo '{}' > "$RUN/config/bar-visualizer/config.json"   # every setting at its default
+
+export XDG_RUNTIME_DIR=$RUN XDG_CONFIG_HOME=$RUN/config XDG_CACHE_HOME=$RUN/cache \
+    XDG_STATE_HOME=$RUN/state XDG_DATA_HOME=$RUN/data \
+    PULSE_SERVER=unix:$RT/pulse/native PATH=$HARNESS/bin:$PATH NO_AT_BRIDGE=1 \
+    HARNESS_FIXTURE=$FIXTURE HARNESS_SILENT=$SILENT HARNESS_LOOP=$LOOP_LENGTH HARNESS_LOG=$OUT/capture.log
+: > "$HARNESS_LOG"
+
+# A private session bus, held open in its own scope (the stand-ins will run there too).
+systemd-run --user --scope --unit="$ID-aux" -q \
+    dbus-run-session --config-file="$HARNESS/bus.conf" -- \
+    sh -c 'echo "$DBUS_SESSION_BUS_ADDRESS" > "$XDG_RUNTIME_DIR/bus.addr"; exec sleep infinity' \
+    > "$OUT/aux.log" 2>&1 &
+for _ in $(seq 50); do [[ -s $RUN/bus.addr ]] && break; sleep 0.1; done
+[[ -s $RUN/bus.addr ]] || die "the private session bus didn't start (see $OUT/aux.log)"
+export DBUS_SESSION_BUS_ADDRESS=$(cat "$RUN/bus.addr")
+
+# The epoch: the track is at its first frame when the window opens, so every window holds the
+# same whole loops; the warm-up plays the track's end.
+now() { date +%s.%N; }
+sleep_until() { local s; s=$(awk -v t="$1" -v n="$(now)" 'BEGIN { d = t - n; print (d > 0 ? d : 0) }'); sleep "$s"; }
+export HARNESS_EPOCH=$(awk -v n="$(now)" -v w="$WARMUP" 'BEGIN { printf "%.6f", n + w }')
+WINDOW=$(awk -v l="$LOOP_LENGTH" -v n="$LOOPS" 'BEGIN { printf "%.6f", l * n }')
+
+systemd-run --user --scope --unit="$ID-qs" -q qs -p "$SHELL_DIR" --no-color --log-times > "$OUT/qs.log" 2>&1 &
+
+# --- Measures: begin before the window, end after it, report after the run. -----------------------
+pids() { cat "$CG/cgroup.procs" 2>/dev/null; }
+comm() { cat "/proc/$1/comm" 2>/dev/null; }
+ticks() { sed 's/.*) //' "/proc/$1/stat" 2>/dev/null | awk '{ print $12 + $13 }'; }   # utime + stime
+usage() { awk -v k="$1" '$1 == k { print $2 }' "$CG/cpu.stat"; }
+
+measure_cpu_begin() {
+    CPU_U0=$(usage usage_usec) CPU_USER0=$(usage user_usec) CPU_SYS0=$(usage system_usec) CPU_T0=$(date +%s%N)
+    declare -gA TICKS0=() NAME=()
+    local p
+    for p in $(pids); do TICKS0[$p]=$(ticks "$p"); NAME[$p]=$(comm "$p"); done
+}
+measure_cpu_end() {
+    CPU_U1=$(usage usage_usec) CPU_USER1=$(usage user_usec) CPU_SYS1=$(usage system_usec) CPU_T1=$(date +%s%N)
+    declare -gA TICKS1=()
+    local p
+    for p in $(pids); do TICKS1[$p]=$(ticks "$p"); NAME[$p]=${NAME[$p]:-$(comm "$p")}; done
+    CAPTURE_ALIVE=0
+    for p in "${!TICKS1[@]}"; do [[ ${NAME[$p]} == cava ]] && CAPTURE_ALIVE=1; done
+}
+measure_cpu_report() {
+    local hz ns pct user sys qs=0 cap=0 p d
+    hz=$(getconf CLK_TCK) ns=$((CPU_T1 - CPU_T0))
+    of_core() { awk -v u="$1" -v t="$ns" 'BEGIN { printf "%.1f", u * 1000 / t * 100 }'; }   # us over the window
+    # Processes alive for the whole window, by name; whatever else ran in it (sh, pactl, a capture
+    # restarted mid-window) is the rest of the total.
+    for p in "${!TICKS1[@]}"; do
+        [[ -n ${TICKS0[$p]:-} ]] || continue
+        d=$(((${TICKS1[$p]} - ${TICKS0[$p]}) * 1000000 / hz))
+        case ${NAME[$p]} in qs) qs=$((qs + d)) ;; cava) cap=$((cap + d)) ;; esac
+    done
+    local total=$((CPU_U1 - CPU_U0))
+    pct=$(of_core "$total") user=$(of_core $((CPU_USER1 - CPU_USER0))) sys=$(of_core $((CPU_SYS1 - CPU_SYS0)))
+    local pqs pcap prest
+    pqs=$(of_core "$qs") pcap=$(of_core "$cap") prest=$(of_core $((total - qs - cap < 0 ? 0 : total - qs - cap)))
+    echo "cpu      $pct % of one core (qs + capture + children), user $user, system $sys"
+    echo "         qs $pqs, capture $pcap, other (sh, pactl, ...) $prest"
+    RESULT_JSON+="\"cpu_pct\": $pct, \"cpu_user_pct\": $user, \"cpu_system_pct\": $sys, \"cpu_qs_pct\": $pqs, \"cpu_capture_pct\": $pcap, \"cpu_other_pct\": $prest, "
+}
+MEASURES=(cpu)
+
+# --- The run --------------------------------------------------------------------------------------
+LOAD=$(cut -d' ' -f1-3 /proc/loadavg)
+sleep_until "$HARNESS_EPOCH"
+[[ -n $(pids) ]] || die "qs isn't running (see $OUT/qs.log)"
+for m in "${MEASURES[@]}"; do "measure_${m}_begin"; done
+sleep_until "$(awk -v e="$HARNESS_EPOCH" -v w="$WINDOW" 'BEGIN { printf "%.6f", e + w }')"
+for m in "${MEASURES[@]}"; do "measure_${m}_end"; done
+# A short tail so the window's last Kicks reach the log.
+((CHECK_KICKS)) && sleep 0.3
+systemctl --user stop "$ID-qs.scope" "$ID-aux.scope" 2>/dev/null || true
+
+STARTS=$(grep -c '^start' "$HARNESS_LOG" || true)
+echo "harness  $SCENARIO on $HOST, $TREE_DESC"
+echo "window   $LOOPS x $REFERENCE ($WINDOW s) after a ${WARMUP} s warm-up, load avg $LOAD"
+((CAPTURE_ALIVE)) || { echo "FAILED: the capture wasn't running at the end of the window (see $OUT/capture.log, $OUT/qs.log)"; exit 1; }
+echo "capture  alive, started $STARTS time(s)"
+
+if ((CHECK_KICKS)); then
+    "$NODE" "$HARNESS/kicks.mjs" "$OUT/qs.log" "$LOOPS" "$REFERENCE"
+    exit
+fi
+
+RESULT_JSON="{\"scenario\": \"$SCENARIO\", \"host\": \"$HOST\", \"commit\": \"$REV\", \"tree\": \"$TREE_DESC\", \"track\": \"$REFERENCE\", \"window_s\": $WINDOW, \"warmup_s\": $WARMUP, \"loadavg\": \"$LOAD\", \"capture_starts\": $STARTS, "
+for m in "${MEASURES[@]}"; do "measure_${m}_report"; done
+echo "${RESULT_JSON%, }}" > "$OUT/result.json"
+echo "out      $OUT"

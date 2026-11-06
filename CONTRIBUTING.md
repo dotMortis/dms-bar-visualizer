@@ -26,6 +26,7 @@ How the pieces fit together, and how to change them. For installing and using th
 | `packaging/aur/` | The two Arch packages' PKGBUILDs |
 | `assets/` | The README's animations: the generated SVGs, the animated WebPs rendered from them, and both scripts |
 | `tests/` | `node --test` suites |
+| `harness/` | The replay harness: measures a visualizer on a recorded input (see Measuring) |
 
 GitHub Pages publishes only `docs/` and doesn't follow symlinks, so every file the demo needs lives there. `lock-ring/` links to them (`lock-ring/shaders/ring.frag`, `lock-ring/*.mjs`, `lock-ring/docs/`, `lock-ring/audio/`). Edit the files under `docs/` and `audio/`, not the links.
 
@@ -37,7 +38,7 @@ Both visualizers capture audio with [cava](https://github.com/karlstav/cava), se
 - mono, raw ASCII output, `noise_reduction=8`: light smoothing on purpose, so transients punch
 - the source is the `.monitor` of the sink the Active Player plays to, falling back to the newest playing stream, then the default output
 
-The pipeline writes cava's config to `$XDG_RUNTIME_DIR/bar-visualizer-cava.conf` for the Bar Visualizer, and to `$XDG_RUNTIME_DIR/lock-ring-cava.conf` for the Lock Ring. `docs/kick.mjs` turns the bands into Kicks.
+The pipeline writes cava's config to `$XDG_RUNTIME_DIR/bar-visualizer-cava.conf` for the Bar Visualizer, and to `$XDG_RUNTIME_DIR/lock-ring-cava.conf` for the Lock Ring. The command it runs is its `captureCommand`; whatever runs there, `parseBands` in `docs/kick.mjs` turns its lines into bands, and the rest of that module turns the bands into Kicks.
 
 ## Layers
 
@@ -101,6 +102,18 @@ With Qt's `qml` runner installed (`qt6-declarative`), `tests/qml-modules.test.mj
 python3 tests/fixtures/record.py              # list the scenarios
 python3 tests/fixtures/record.py all          # re-record all of them (about 4 minutes)
 ```
+
+## Measuring
+
+```sh
+harness/run music                      # CPU of the Bar Visualizer on the reference track
+harness/run --commit v0.10.0 music     # the same for another commit
+harness/run --check-kicks music        # check the replayed input reaches the Kick detector
+```
+
+The replay harness runs the Bar Visualizer as it ships, in its own `qs`, but in place of cava it replays a recorded band stream from `tests/fixtures` (the reference track, `steady_house`). After a warm-up it measures whole loops of the track and prints CPU as % of one core, as htop shows it, for `qs`, its capture and every process they start together. The run gets its own runtime dir, config dir (every setting at its default), cache and session bus, so it never sees the live visualizers, DMS, your players or your `config.json`; it does show the visualizer on the desktop while it runs. `--check-kicks` runs the tree's audio pipeline on the same input and checks it fires the Kicks the replay tests expect for the track, loop by loop. `harness/run --help` lists the options.
+
+It isn't a test and isn't part of `node --test` (only its Kick comparison is): CPU depends on the machine and what else runs on it, so compare runs made back to back on an idle desktop. It needs Quickshell, a systemd user session with cgroup v2, `dbus-run-session`, node, python3 and `qsb`.
 
 ## The README's animations
 
